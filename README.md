@@ -4,7 +4,7 @@
 
 ## 文档
 
-`docs/` 是 VitePress 文档站，按模块拆分的指南与参考，本地启动方式见下。
+`docs/` 是 VitePress 文档站，按模块拆分的指南与参考。在线地址：**<https://violateer.github.io/doc-template/>**（GitHub Pages 从 `docs/` 构建），本地启动方式见下。
 
 发布物只有 `doc-template-core` 与 `doc-template-spring-boot-starter`。`backend/doc-template-example` 是作者自用的示例宿主，**不在包范围内**；`frontend/doc-template-ui` 是内嵌管理页的源码，**产物随 Starter JAR 发布**，源码本身不单独发包。
 

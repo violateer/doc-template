@@ -11,7 +11,7 @@
     <description>Spring Boot Starter for document template rendering: template and version management, data
         blocks, generation records, PDF export, pluggable authentication and a built-in admin UI.
     </description>
-    <url>https://github.com/violateer/doc-template</url>
+    <url>https://violateer.github.io/doc-template/</url>
 
     <licenses>
         <license>
