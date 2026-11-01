@@ -2,10 +2,12 @@
 #
 # 站点地址：https://violateer.github.io/doc-template/
 #
-# 两个要点：
+# 三个要点：
 #   1. 这是**项目站点**，挂在 /doc-template/ 下，构建时必须传 DOCS_BASE=/doc-template/，
 #      否则 index.html 里的 /assets/... 会指向根路径，整站白屏。
 #   2. 改完文档直接推 main，workflow 会自动构建部署，不需要额外的发布步骤。
+#   3. 前置条件：仓库 Settings → Pages → Source 必须选 "GitHub Actions"。
+#      这一步只能手动做（或用带 admin 权限的 PAT），工作流自己启用不了。
 name: Docs
 
 on:
@@ -30,11 +32,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: docs/package-lock.json
 
@@ -46,12 +48,12 @@ jobs:
           npm ci
           npm run build
 
-      - uses: actions/configure-pages@v5
-        with:
-          # 首次运行自动把仓库的 Pages 源切成 GitHub Actions，省掉手动去设置页点一遍
-          enablement: true
+      # 不要加 enablement: true —— 它要求一个非 GITHUB_TOKEN 的令牌（PAT 或 App），
+      # 用默认令牌会直接报 Resource not accessible by integration。
+      # Pages 的源需要在仓库 Settings → Pages 里手动选一次 "GitHub Actions"。
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/.vitepress/dist
 
@@ -63,4 +65,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
