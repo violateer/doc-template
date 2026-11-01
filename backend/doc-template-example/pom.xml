@@ -1,0 +1,66 @@
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.violateer</groupId>
+        <artifactId>doc-template-parent</artifactId>
+        <version>0.1.0</version>
+    </parent>
+    <artifactId>doc-template-example</artifactId>
+
+    <name>Vio Doc Template :: Example</name>
+    <description>示例宿主，不在发布范围内。</description>
+
+    <properties>
+        <!-- 示例宿主永远不进 Central 的 bundle；也不为它生成 sources/javadoc，省一轮构建时间 -->
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.violateer</groupId>
+            <artifactId>doc-template-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!--
+          只在 IDE 里直接跑 example 时需要：那时 classpath 指向 Starter 的 target/classes，
+          里面还是未重定位的 net.sf.jsqlparser。跑打包后的 Starter jar 时用不到这行
+          （jar 里已内置重定位副本），所以它只属于这个示例工程，不属于发布物。
+        -->
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>4.9</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!--
+              发布插件按 reactor 收集产物，maven.deploy.skip 对它不起作用，
+              要排除某个模块必须用 skipPublishing（插件自己的开关）。
+            -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>示例登录 · Vio Doc Template</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: radial-gradient(900px 500px at 15% 0%, #ede9fe 0%, #f8fafc 55%, #f1f5f9 100%);
+      color: #1e293b;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .card {
+      width: 100%;
+      max-width: 380px;
+      padding: 32px 28px 26px;
+      background: #fff;
+      border: 1px solid #ede9fe;
+      border-radius: 18px;
+      box-shadow: 0 24px 60px -28px rgba(91, 61, 240, 0.45), 0 2px 10px rgba(15, 23, 42, 0.05);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+    .brand svg { width: 34px; height: 34px; flex: none; }
+    .brand-name { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: #64748b; text-transform: uppercase; }
+    h1 { margin: 0 0 6px; font-size: 21px; font-weight: 650; letter-spacing: -0.01em; }
+    .sub { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #64748b; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-bottom: 18px; padding: 4px 10px;
+      font-size: 12px; font-weight: 600; color: #5b3df0;
+      background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 999px;
+    }
+    .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #8b5cf6; }
+    .badge.is-none { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+    .badge.is-none .dot { background: #f59e0b; }
+    label { display: block; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #334155; }
+    input {
+      display: block; width: 100%; margin-top: 6px; padding: 10px 12px;
+      font-size: 14px; color: #0f172a;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+      outline: none; transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    input:focus { background: #fff; border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15); }
+    button {
+      width: 100%; margin-top: 6px; padding: 11px 14px;
+      font-size: 14px; font-weight: 600; color: #fff; cursor: pointer;
+      background: linear-gradient(135deg, #8b5cf6, #5b3df0);
+      border: 0; border-radius: 10px;
+      box-shadow: 0 10px 24px -12px rgba(91, 61, 240, 0.9);
+      transition: transform .12s, box-shadow .12s, opacity .12s;
+    }
+    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 28px -12px rgba(91, 61, 240, 0.95); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .ghost {
+      width: auto; margin: 0; padding: 0; color: #5b3df0;
+      background: none; border: 0; box-shadow: none; font-size: 13px; font-weight: 600;
+    }
+    .ghost:hover { text-decoration: underline; transform: none; box-shadow: none; }
+    .error { min-height: 18px; margin: 10px 0 0; font-size: 12.5px; color: #dc2626; }
+    .hint { margin-top: 16px; padding-top: 14px; border-top: 1px dashed #e2e8f0; font-size: 12px; line-height: 1.9; color: #64748b; }
+    .hint code {
+      padding: 1px 5px; font-size: 11.5px; color: #5b3df0;
+      background: #f5f3ff; border-radius: 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .status { display: none; margin-bottom: 16px; padding: 10px 12px; font-size: 13px; border-radius: 10px; }
+    .status.on { display: block; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
+    .status b { font-weight: 650; }
+    .link-row { margin-top: 14px; text-align: center; font-size: 13px; }
+    .link-row a { color: #5b3df0; text-decoration: none; font-weight: 600; }
+    .link-row a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#8b5cf6" />
+            <stop offset="1" stop-color="#5b3df0" />
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="16" fill="url(#g)" />
+        <g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M32 14 12 23l20 9 20-9-20-9Z" />
+          <path d="M12 33l20 9 20-9" />
+          <path d="M12 43l20 9 20-9" />
+        </g>
+      </svg>
+      <span class="brand-name">Vio Doc Template</span>
+    </div>
+
+    <h1>示例登录</h1>
+    <p class="sub">example 模块自带的极简登录，用来演示 <code>doc-template.auth.mode=custom</code>。</p>
+
+    <div class="badge" id="badge"><span class="dot"></span><span id="badgeText">认证模式：检测中</span></div>
+
+    <div class="status" id="status"></div>
+
+    <form id="form" novalidate>
+      <label>用户名
+        <input id="username" name="username" value="admin" autocomplete="username" />
+      </label>
+      <label>密码
+        <input id="password" name="password" type="password" value="Admin@123" autocomplete="current-password" />
+      </label>
+      <button type="submit" id="submit">登录并进入</button>
+      <p class="error" id="error"></p>
+    </form>
+
+    <div class="hint">
+      演示账号：<code>admin / Admin@123</code> · <code>demo / Demo@123</code><br />
+      切换模式：<code>--spring.profiles.active=auth</code> 启用认证，去掉则回到 <code>none</code>。
+    </div>
+
+    <div class="link-row"><a href="/doc-template/">直接进入模板管理 →</a></div>
+  </div>
+
+  <script>
+    const TOKEN_KEY = 'token';
+    const DEFAULT_REDIRECT = '/doc-template/';
+
+    const params = new URLSearchParams(location.search);
+    const redirectTo = safeRedirect(params.get('redirect'));
+    const form = document.getElementById('form');
+    const usernameEl = document.getElementById('username');
+    const passwordEl = document.getElementById('password');
+    const submitEl = document.getElementById('submit');
+    const errorEl = document.getElementById('error');
+    const statusEl = document.getElementById('status');
+    const badgeEl = document.getElementById('badge');
+    const badgeTextEl = document.getElementById('badgeText');
+
+    /** 只允许跳回本站路径，避免被 ?redirect=//evil.com 带走。 */
+    function safeRedirect(raw) {
+      if (!raw) return DEFAULT_REDIRECT;
+      try {
+        const url = new URL(raw, location.origin);
+        if (url.origin !== location.origin) return DEFAULT_REDIRECT;
+        return url.pathname + url.search + url.hash;
+      } catch (e) {
+        return DEFAULT_REDIRECT;
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function renderMode(mode) {
+      const isNone = mode === 'none';
+      badgeEl.className = isNone ? 'badge is-none' : 'badge';
+      badgeTextEl.textContent = '认证模式：' + (mode || '未知') + (isNone ? '（不校验登录态）' : '');
+    }
+
+    async function refresh() {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const headers = token ? { Authorization: 'Bearer ' + token } : {};
+      let data = {};
+      try {
+        const resp = await fetch('/demo/me', { headers });
+        data = await resp.json();
+      } catch (e) {
+        badgeTextEl.textContent = '认证模式：读取失败';
+        return;
+      }
+      renderMode(data.mode);
+      if (data.authenticated) {
+        statusEl.className = 'status on';
+        statusEl.innerHTML =
+          '当前已登录：<b>' + escapeHtml(data.username) + '</b> · ' +
+          '<button type="button" class="ghost" id="logout">退出登录</button>';
+        document.getElementById('logout').addEventListener('click', logout);
+      } else {
+        statusEl.className = 'status';
+        statusEl.textContent = '';
+        localStorage.removeItem(TOKEN_KEY);
+      }
+    }
+
+    async function logout() {
+      const token = localStorage.getItem(TOKEN_KEY);
+      try {
+        await fetch('/demo/logout', {
+          method: 'POST',
+          headers: token ? { Authorization: 'Bearer ' + token } : {}
+        });
+      } catch (e) {
+        /* 忽略：本地清掉 token 就够了 */
+      }
+      localStorage.removeItem(TOKEN_KEY);
+      errorEl.textContent = '';
+      statusEl.className = 'status on';
+      statusEl.textContent = '已退出登录';
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorEl.textContent = '';
+      submitEl.disabled = true;
+      try {
+        const resp = await fetch('/demo/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: usernameEl.value.trim(), password: passwordEl.value })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          errorEl.textContent = data.msg || ('登录失败（HTTP ' + resp.status + '）');
+          return;
+        }
+        localStorage.setItem(TOKEN_KEY, data.tokenValue);
+        location.href = redirectTo;
+      } catch (e) {
+        errorEl.textContent = '请求失败，请确认后端已启动';
+      } finally {
+        submitEl.disabled = false;
+      }
+    });
+
+    refresh();
+  </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+/**
+ * 主题定制：品牌色 + 首页视觉 + 表格/代码块微调
+ */
+
+:root {
+  --vp-c-brand-1: #2f6fed;
+  --vp-c-brand-2: #2559c9;
+  --vp-c-brand-3: #1e4aa8;
+  --vp-c-brand-soft: rgba(47, 111, 237, 0.12);
+
+  --vp-font-family-base: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Noto Sans SC', system-ui, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas,
+    'Courier New', monospace;
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #2f6fed 20%, #14b8a6 85%);
+  --vp-home-hero-image-background-image: linear-gradient(150deg, rgba(47, 111, 237, 0.25), rgba(20, 184, 166, 0.22));
+  --vp-home-hero-image-filter: blur(48px);
+}
+
+.dark {
+  --vp-c-brand-1: #6f9bff;
+  --vp-c-brand-2: #4f83f7;
+  --vp-c-brand-3: #2f6fed;
+  --vp-c-brand-soft: rgba(111, 155, 255, 0.16);
+}
+
+/* 表格：紧凑、表头有底色 */
+.vp-doc table {
+  display: table;
+  width: 100%;
+  font-size: 14px;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background-color: transparent;
+}
+
+.vp-doc th {
+  background-color: var(--vp-c-bg-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/**
+ * 长编码 / 长文件名不要撑破表格。
+ * 表格是 display: table + width: 100%，列宽由内容决定；某个单元格里出现一长串
+ * 不可折行的英文（WordAcceptanceReport、word-acceptance-report.docx）时，
+ * 表格的最小宽度会超过内容区，直接顶到右侧目录上。
+ * 允许在单词内部折行，最小宽度就降下来了，正常内容不受影响。
+ */
+.vp-doc th,
+.vp-doc td {
+  overflow-wrap: anywhere;
+}
+
+/* 引用块：提示语气更明显 */
+.vp-doc blockquote {
+  border-left: 3px solid var(--vp-c-brand-1);
+  background-color: var(--vp-c-brand-soft);
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+}
+
+.vp-doc blockquote > p {
+  color: var(--vp-c-text-1);
+  font-size: 14px;
+}
+
+/* 首页特性卡片 */
+.VPFeature {
+  border-radius: 12px;
+}
+
+/* 代码块圆角与行高 */
+.vp-doc div[class*='language-'] {
+  border-radius: 10px;
+}
+
+/* 侧边栏分组标题 */
+.VPSidebarItem.level-0 > .item > .text {
+  font-weight: 700;
+}

@@ -1,0 +1,16 @@
+**/node_modules/
+**/dist/
+**/target/
+**/.idea/
+**/.vscode/
+*.log
+backend/data/
+# 个人本地配置（真实地址与凭据），团队共用配置见 application-dev.yml
+**/application-local.yml
+# Maven 发布凭据（Central Portal user token），绝不入库
+**/settings-central.xml
+**/settings.xml
+**/.workbuddy-ai
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+docs/.vitepress/*.timestamp-*

@@ -1,0 +1,96 @@
+server:
+  port: 9150
+
+# ============================================================================
+# 这个模块（doc-template-example）扮演「宿主应用」的角色。
+# Starter 本身既不带数据源、也不预设存储：元数据表跑在宿主的 spring.datasource 上，
+# 文件默认落本地磁盘 base-path，配了 doc-template.storage 才走 S3。
+#
+# 本文件只放通用配置（端口、上传大小、登录演示、doc-template 默认值），
+# **不含数据源**：example 必须带 dev 或 local profile 启动，否则会因为缺少 DataSource 启动失败。
+#
+#   1) dev profile（application-dev.yml，进 git，团队/CI 共用）：
+#      连真实 MySQL + 真实对象存储，地址与凭据全部来自环境变量，认证默认开启。
+#        java -jar doc-template-example.jar --spring.profiles.active=dev
+#   2) local profile（application-local.yml，个人文件、不进 git）：
+#      同上但地址写死在文件里，只给自己用。
+#        java -jar doc-template-example.jar --spring.profiles.active=local
+#
+# 两个档位都默认开启认证；想关掉就加 --doc-template.auth.mode=none。
+# 也可以在 IDEA 的 Program arguments 里写对应的 --spring.profiles.active=...
+# ============================================================================
+spring:
+  servlet:
+    multipart:
+      max-file-size: 30MB
+      max-request-size: 35MB
+
+sa-token:
+  token-name: Authorization
+  timeout: 86400
+  # 开 Cookie：页面导航和 iframe 预览这类请求没法自定义 header，只能靠 Cookie 带上会话。
+  # 内嵌管理页的接口请求仍然走 Authorization: Bearer <token>，两种来源 sa-token 都认。
+  is-read-cookie: true
+  is-read-header: true
+  token-prefix: Bearer
+  is-log: false
+  cookie:
+    # 必须显式写 /：sa-token 的 SaCookieConfig.path 默认是 null，不拼 Path 属性，
+    # 浏览器就会把登录接口 /demo/login 的 Cookie 默认限定在 /demo 目录下，
+    # 导致 /doc-template/ 和 /api/doc-template/** 都收不到会话（表现为登录后又跳回登录页）。
+    path: /
+    same-site: Lax
+
+doc-template:
+  auth:
+    mode: none # none | custom；这里放通用默认值，dev / local 两个 profile 里都改成了 custom
+    # 切换方式（不用改文件）：
+    #   --spring.profiles.active=dev       → dev profile 里已配 custom（连真实库）
+    #   --spring.profiles.active=local     → local profile 同理（个人文件，不进 git）
+    #   --doc-template.auth.mode=custom    → 临时在任意档位上覆盖这一项
+    # custom 模式下 DemoDocTemplateAuthorizer 把 Sa-Token 登录态桥接给模块，
+    # 未登录打开 /doc-template/ 会跳到 /demo/login.html（账号 admin/Admin@123、demo/Demo@123），
+    # 登录后自动跳回；未登录调 /api/doc-template/** 返回 401。
+    # user-header: X-User-Id # none 模式下可选：从网关透传的请求头取操作人
+  enabled: true
+  base-path: ./data/doc-template
+  initialize-schema: true
+  # PDF 导出由内置转换引擎（MiniPdf）完成，无需安装 Office/LibreOffice。
+  # 中文字体会自动探测，如需指定可填：
+  # pdf-font: C:/Windows/Fonts/simhei.ttf
+  # pdf-font-name: SimHei
+
+  # 数据源：默认不配置，直接复用上面的 spring.datasource（宿主主库）。
+  # 只有当模板元数据表需要落在另一个库时，才打开下面这段。
+  # datasource:
+  #   url: jdbc:mysql://127.0.0.1:3306/doc_template?useUnicode=true&characterEncoding=utf8&serverTimezone=GMT%2B8
+  #   username: root
+  #   password: ${DOC_TEMPLATE_DB_PASSWORD}
+  #   maximum-pool-size: 5
+  #   connection-timeout: 30000
+
+  # 文件存储：默认不配置 = 存本地磁盘（base-path 目录），开箱即跑，不需要任何外部服务。
+  # 走 S3/MinIO 时由宿主（这个 example 或真实宿主项目）自己配，模块不预设任何 endpoint 和密钥。
+  # 本仓库的 S3 配置放在 application-dev.yml（地址全走环境变量）和 application-local.yml
+  # （个人真实地址，不进 git），都不进这份主配置。
+  # storage:
+  #   type: s3
+  #   endpoint: http://127.0.0.1:9000
+  #   region: us-east-1
+  #   bucket: doc-template
+  #   access-key: ${DOC_S3_ACCESS_KEY}
+  #   secret-key: ${DOC_S3_SECRET_KEY}
+  #   path-style-access: true
+  #   prefix: doc-template
+
+  # 数据块取数（SQL / API / Java Provider）
+  data-block:
+    enabled: true # 关闭后生成时只用请求里手填的参数
+    # 是否允许 SQL 数据源。不推荐使用：配置一条 SQL 就等于把该数据源账号可见的所有表交给配置者。
+    # 模块会做语句白名单校验、只读连接和错误脱敏，但那只是纵深防御，不是安全边界。
+    # 对外系统建议设为 false，改用 JAVA 数据源（Provider 里由业务代码决定查什么）。
+    sql-enabled: true
+    default-max-rows: 500 # SQL 数据块未配置 maxRows 时的默认值
+    default-timeout-ms: 5000 # API 数据块未配置 timeoutMs 时的默认超时
+    max-timeout-ms: 15000 # API 数据块允许配置的最大超时
+    allowed-hosts: [ ] # 允许访问的接口主机，留空不限制；支持 *.example.com 后缀匹配

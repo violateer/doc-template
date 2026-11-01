@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>io.github.violateer</groupId>
+    <artifactId>doc-template-parent</artifactId>
+    <version>0.1.0</version>
+    <packaging>pom</packaging>
+
+    <name>Vio Doc Template</name>
+    <description>Spring Boot Starter for document template rendering: template and version management, data
+        blocks, generation records, PDF export, pluggable authentication and a built-in admin UI.
+    </description>
+    <url>https://github.com/violateer/doc-template</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>violateer</id>
+            <name>violateer</name>
+            <url>https://github.com/violateer</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/violateer/doc-template.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/violateer/doc-template.git</developerConnection>
+        <url>https://github.com/violateer/doc-template</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <modules>
+        <module>doc-template-core</module>
+        <module>doc-template-spring-boot-starter</module>
+        <module>doc-template-example</module>
+    </modules>
+
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <spring-boot.version>3.3.5</spring-boot.version>
+        <hutool.version>5.8.47</hutool.version>
+        <poi.version>5.4.1</poi.version>
+        <minipdf.version>0.4.1</minipdf.version>
+        <awssdk.version>2.29.26</awssdk.version>
+        <!--
+          发布到 Maven Central 用的凭据名，必须与 settings.xml 里 <server><id> 一致。
+          只放 id，不放任何账号口令：凭据在 settings.xml（本地）或 CI Secrets（流水线）里。
+        -->
+        <central.publishing.server.id>central</central.publishing.server.id>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>cn.hutool</groupId>
+                <artifactId>hutool-core</artifactId>
+                <version>${hutool.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.hutool</groupId>
+                <artifactId>hutool-crypto</artifactId>
+                <version>${hutool.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>3.12.0</version>
+                    <configuration>
+                        <!-- 源码里大量中文注释，不因为一个格式瑕疵就卡住整个发布 -->
+                        <doclint>none</doclint>
+                        <failOnError>false</failOnError>
+                        <charset>UTF-8</charset>
+                        <encoding>UTF-8</encoding>
+                        <quiet>true</quiet>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-gpg-plugin</artifactId>
+                    <version>3.2.8</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.sonatype.central</groupId>
+                    <artifactId>central-publishing-maven-plugin</artifactId>
+                    <version>0.12.0</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!-- Central 要求每个 jar 坐标都带 -sources.jar 与 -javadoc.jar，缺一个整批上传就被拒 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+              extensions=true 之后它接管 mvn deploy：把 reactor 里的产物打成 bundle 直接传 Central Portal，
+              不再走 distributionManagement 的 maven2 协议（旧 OSSRH 那套已于 2025-06-30 停用）。
+              autoPublish=false → 传完停在「待发布」，去 central.sonatype.com 点 Publish 才真正对外，
+              给第一次发布留一次人工复核的机会。
+            -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>${central.publishing.server.id}</publishingServerId>
+                    <autoPublish>false</autoPublish>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!--
+          GPG 只在发版时启用：日常 mvn install 不需要私钥，也不该被口令卡住。
+          用法：mvn -Prelease clean deploy
+          口令走环境变量 MAVEN_GPG_PASSPHRASE，不要写进 pom 或 settings.xml 的明文里。
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

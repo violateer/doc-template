@@ -1,0 +1,55 @@
+# ============================================================================
+# 团队/CI 用的调试 profile —— 连接真实 MySQL + 真实对象存储，但地址与凭据全部走参数。
+# 启动方式：
+#   --spring.profiles.active=dev
+#
+# 说明：
+#   1. 这个文件里**不写任何真实地址和凭据**，全部由环境变量（或 -D / 启动参数）提供，
+#      可以直接提交进仓库、给团队和流水线共用。
+#   2. 必须提供的环境变量（缺任何一个都会启动失败并提示 Could not resolve placeholder）：
+#        DOC_DB_URL           JDBC 连接串，例如 jdbc:mysql://127.0.0.1:3306/doc_template?...
+#        DOC_DB_USERNAME      数据库用户名
+#        DOC_DB_PASSWORD      数据库密码
+#        DOC_S3_ENDPOINT      对象存储 API 地址，例如 http://127.0.0.1:9000
+#        DOC_S3_ACCESS_KEY    access key
+#        DOC_S3_SECRET_KEY    secret key
+#      可选：DOC_S3_REGION（默认 us-east-1）、DOC_S3_BUCKET（默认 doc-template）
+#   3. 想连自己的库又不想设环境变量，用 local profile（application-local.yml，
+#      个人本地文件，不进 git）：--spring.profiles.active=local
+#   4. 这里只配 spring.datasource（宿主数据源），doc-template.datasource 依然不配，
+#      所以模板元数据表和业务表在同一个库，SQL 数据块写 primary 或留空即可。
+#   5. 这个文件只属于 example 示例宿主，不会进入 starter 的 jar。
+# ============================================================================
+spring:
+  datasource:
+    url: ${DOC_DB_URL}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DOC_DB_USERNAME}
+    password: ${DOC_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      pool-name: host-pool
+
+doc-template:
+  # 元数据表建在宿主的库里（缺表会自动创建）
+  initialize-schema: true
+
+  # 认证：示例宿主自带极简登录（admin / Admin@123、demo / Demo@123），
+  # 未登录打开 /doc-template/ 会跳到 /demo/login.html，登录后自动跳回；
+  # /api/doc-template/** 未登录返回 401。改成 none 即关闭认证。
+  auth:
+    mode: custom
+
+  # 文件存储：走真实的 MinIO/RustFS。
+  # 不想用 S3 就把整段注释掉，会自动退回本地磁盘（base-path 目录）。
+  storage:
+    type: s3
+    endpoint: ${DOC_S3_ENDPOINT}
+    region: ${DOC_S3_REGION:us-east-1}
+    bucket: ${DOC_S3_BUCKET:doc-template}
+    access-key: ${DOC_S3_ACCESS_KEY}
+    secret-key: ${DOC_S3_SECRET_KEY}
+    path-style-access: true
+    prefix: doc-template

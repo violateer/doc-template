@@ -1,0 +1,2 @@
+io.github.violateer.doctemplate.starter.autoconfigure.DocTemplateAutoConfiguration
+io.github.violateer.doctemplate.starter.auth.DocTemplateAuthAutoConfiguration
