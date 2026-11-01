@@ -10,7 +10,7 @@ backend/data/
 # Maven 发布凭据（Central Portal user token），绝不入库
 **/settings-central.xml
 **/settings.xml
-# 发版凭据（GPG 口令 + Central token），模板见 release.env.example
+# 本地发版凭据（GPG 口令 + Central Portal token），不入库
 release.env
 **/.workbuddy-ai
 docs/.vitepress/dist/
