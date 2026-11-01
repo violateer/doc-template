@@ -2,6 +2,9 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'zh-CN',
+  // GitHub Pages 的项目站点挂在 /doc-template/ 下，资源路径必须带这个前缀，否则整站 404。
+  // 本地 dev 不带这个环境变量，仍然跑在 / 下，不用改配置来回切。
+  base: process.env.DOCS_BASE || '/',
   title: 'Vio Doc Template',
   titleTemplate: ':title · Vio Doc Template',
   description: 'Spring Boot 3 / Java 17 的文档模板引擎 Starter：模板版本、数据块取数、DOCX/XLSX 渲染、内置 PDF 导出、可插拔认证',
