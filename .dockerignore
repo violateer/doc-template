@@ -1,0 +1,15 @@
+# 构建上下文只需要 backend/（Maven 源码）与 deploy/（Dockerfile）。
+# 排除掉体积大又用不上的目录，避免每次构建都往 daemon 传几十上百 MB。
+.git/
+.github/
+docs/
+frontend/
+integration/
+scripts/
+**/target/
+**/node_modules/
+**/dist/
+**/.idea/
+**/.vscode/
+**/application-local.yml
+*.log
