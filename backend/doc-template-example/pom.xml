@@ -49,6 +49,19 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <!--
+                  必须显式绑定 repackage：父 POM 只在 pluginManagement 里管版本，
+                  没有像 spring-boot-starter-parent 那样把 repackage 挂到 package 阶段。
+                  少了这段，mvn package 出来的就是普通 jar（没有 Main-Class），
+                  `java -jar` 报 "no main manifest attribute"。
+                -->
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <!--
               发布插件按 reactor 收集产物，maven.deploy.skip 对它不起作用，
