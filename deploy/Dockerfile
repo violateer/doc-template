@@ -4,11 +4,17 @@
 #   docker build -f deploy/Dockerfile -t doc-template-example:latest .
 #
 # 两段式：
-#   1) build —— Maven + JDK 17 打出可执行 jar（-pl example -am，连带 core / starter）
+#   1) build —— Maven + JDK 17 打出可执行 jar
 #   2) runtime —— 只有 JRE、时区和中文字体，镜像小且能正确导出中文 PDF
+#
+# **Starter 从哪来，由 DOC_TEMPLATE_VERSION 决定**（见下面 ARG 的注释）：
+#   留空      → 用仓库里的源码，`-am` 连带构建 core / starter（本地调试用）
+#   填版本号  → 去中央仓库拉那个**正式版本**，不连带构建（演示站必须用这种）
 #
 # 前端不用在这里构建：`frontend/doc-template-ui` 的产物已经提交进
 # `doc-template-spring-boot-starter/src/main/resources/META-INF/resources/doc-template/`。
+# 所以「填版本号」时前端也一并来自 Central 的那个 jar，仓库里改的前端不会生效——
+# 这正是演示站想要的效果：它验证的就是用户拿到的那份包。
 #
 # 刻意不用 BuildKit 的 cache mount：那需要先拉 `docker/dockerfile` 前端镜像，
 # 内网 / 国内网络下多一个失败点。改成「先 COPY 各模块 pom 预下依赖」，
@@ -22,6 +28,12 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 
 # 国内加速用；留空则走 Maven Central
 ARG MAVEN_MIRROR=https://maven.aliyun.com/repository/public
+
+# Starter 版本：
+#   留空          = 用仓库源码（版本是父 POM 的 SNAPSHOT，构建时连带 core / starter）
+#   0.1.1 这样的  = 从中央仓库拉这个已发布的正式版本
+# **必须是已发布的正式版本**，不要填 -SNAPSHOT；填了没发布过的版本会解析失败。
+ARG DOC_TEMPLATE_VERSION=
 
 WORKDIR /src/backend
 
@@ -47,14 +59,26 @@ COPY backend/doc-template-example/pom.xml doc-template-example/pom.xml
 # 预下载依赖与插件；失败不让整次构建挂掉（下面 package 会补齐缺的部分）
 RUN set -eu; \
     if [ -f /root/build-settings.xml ]; then SETTINGS="-s /root/build-settings.xml"; else SETTINGS=""; fi; \
-    mvn -B $SETTINGS -pl doc-template-example -am -DskipTests dependency:go-offline \
+    if [ -n "$DOC_TEMPLATE_VERSION" ]; then \
+      mvn -B $SETTINGS -pl doc-template-example -Ddoc-template.version="$DOC_TEMPLATE_VERSION" \
+          -DskipTests dependency:go-offline; \
+    else \
+      mvn -B $SETTINGS -pl doc-template-example -am -DskipTests dependency:go-offline; \
+    fi \
       || echo "依赖预下载未完全成功，交由 package 阶段补齐"
 
 COPY backend/ /src/backend/
 
 RUN set -eu; \
     if [ -f /root/build-settings.xml ]; then SETTINGS="-s /root/build-settings.xml"; else SETTINGS=""; fi; \
-    mvn -B $SETTINGS -pl doc-template-example -am -DskipTests package
+    if [ -n "$DOC_TEMPLATE_VERSION" ]; then \
+      echo "===== Starter 取中央仓库版本 $DOC_TEMPLATE_VERSION（不构建 core / starter）====="; \
+      mvn -B $SETTINGS -pl doc-template-example \
+          -Ddoc-template.version="$DOC_TEMPLATE_VERSION" -DskipTests package; \
+    else \
+      echo "===== Starter 取仓库源码（连带构建 core / starter）====="; \
+      mvn -B $SETTINGS -pl doc-template-example -am -DskipTests package; \
+    fi
 
 # ---------------------------------------------------------------------------
 # 2) 运行阶段

@@ -17,6 +17,7 @@
 - 演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。登录页是 example 自带的 `/demo/login.html`，只用于演示，不要照搬进生产宿主。
 - 内置的十套示例模板是**只读**的（改、删会被拒绝，避免演示站被改乱），想试完整流程请自己新建一个模板，其他功能不受限制。
 - 演示站的认证方式是 `custom` + `doc-template.auth.login-page`，未登录访问 `/doc-template/` 会被 302 到登录页，登录后自动跳回原页面。
+- 它构建时**不编译本仓库的 core / starter**，而是按 `DOC_TEMPLATE_VERSION` 去中央仓库拉已发布的正式版本（见 `deploy/Dockerfile`）。所以你看到的就是自己引入依赖后拿到的效果，前端页面也是那个 jar 里带的。
 
 ## 使用前提
 
