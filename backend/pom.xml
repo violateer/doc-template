@@ -57,6 +57,12 @@
           只放 id，不放任何账号口令：凭据在 settings.xml（本地）或 CI Secrets（流水线）里。
         -->
         <central.publishing.server.id>central</central.publishing.server.id>
+        <!--
+          上传后是否自动发布。默认 false：传完停在 Portal 的「待发布」，人工点 Publish 才对外。
+          发布不可撤回、不可覆盖，所以默认留一步人工确认；
+          自动化场景（Jenkins 发版流水线勾了「自动发布」）用 -Dcentral.publishing.auto-publish=true 覆盖。
+        -->
+        <central.publishing.auto-publish>false</central.publishing.auto-publish>
     </properties>
 
     <dependencyManagement>
@@ -167,7 +173,7 @@
                 <extensions>true</extensions>
                 <configuration>
                     <publishingServerId>${central.publishing.server.id}</publishingServerId>
-                    <autoPublish>false</autoPublish>
+                    <autoPublish>${central.publishing.auto-publish}</autoPublish>
                 </configuration>
             </plugin>
         </plugins>
