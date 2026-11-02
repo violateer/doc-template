@@ -10,6 +10,14 @@
 
 发布物只有 `doc-template-core` 与 `doc-template-spring-boot-starter`。`backend/doc-template-example` 是作者自用的示例宿主，**不在包范围内**；`frontend/doc-template-ui` 是内嵌管理页的源码，**产物随 Starter JAR 发布**，源码本身不单独发包。
 
+## 在线演示
+
+不想装环境，直接打开 **<http://www.violateer.top:9150/doc-template>** 就能看到内嵌管理页：模板管理、数据块配置、模拟生成、PDF 导出都是真的在跑，`docs/public/demo` 下的十套示例模板也已经刷好。
+
+- 演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。登录页是 example 自带的 `/demo/login.html`，只用于演示，不要照搬进生产宿主。
+- 内置的十套示例模板是**只读**的（改、删会被拒绝，避免演示站被改乱），想试完整流程请自己新建一个模板，其他功能不受限制。
+- 演示站的认证方式是 `custom` + `doc-template.auth.login-page`，未登录访问 `/doc-template/` 会被 302 到登录页，登录后自动跳回原页面。
+
 ## 使用前提
 
 Starter 与任何业务框架、认证框架、权限体系都无关，也不要求宿主使用特定 ORM。只要满足下面四条就能直接用：

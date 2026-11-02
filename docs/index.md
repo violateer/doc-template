@@ -10,6 +10,9 @@ hero:
       text: 快速开始
       link: /guide/quick-start
     - theme: alt
+      text: 在线演示
+      link: http://www.violateer.top:9150/doc-template
+    - theme: alt
       text: 配置项
       link: /reference/config
 
@@ -27,6 +30,12 @@ features:
   - title: 开箱即跑
     details: 不自带 application.yml、不建连接池、不预设对象存储；复用宿主 DataSource，缺失的表自动创建。
 ---
+
+::: tip 在线演示
+不想装环境，直接打开 **[http://www.violateer.top:9150/doc-template](http://www.violateer.top:9150/doc-template)** 就能试：模板管理、数据块配置、模拟生成、PDF 导出都在真跑，十套示例模板也已经刷好。演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。
+
+内置的十套示例模板在演示站上是**只读**的，想试完整流程请自己新建一个模板。
+:::
 
 ## 发布物范围
 

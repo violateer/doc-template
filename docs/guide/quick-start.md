@@ -1,5 +1,9 @@
 # 快速开始
 
+::: tip 想先看看长什么样
+不用本地起服务，直接打开在线演示 **[http://www.violateer.top:9150/doc-template](http://www.violateer.top:9150/doc-template)**（账号 `admin / Admin@123`）：模板管理、数据块配置、模拟生成、PDF 导出都能直接点。内置的示例模板是只读的，想试完整流程就自己新建一个。
+:::
+
 ## 环境要求
 
 | 依赖 | 版本 |

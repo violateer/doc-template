@@ -44,7 +44,9 @@ export default defineConfig({
     nav: [
       { text: '指南', link: '/guide/quick-start', activeMatch: '/guide/' },
       { text: '参考', link: '/reference/api', activeMatch: '/reference/' },
-      { text: '集成', link: '/guide/integration' }
+      { text: '集成', link: '/guide/integration' },
+      // 外部链接，VitePress 会自动加 target="_blank"；地址是 example 宿主的部署实例
+      { text: '在线演示', link: 'http://www.violateer.top:9150/doc-template' }
     ],
 
     sidebar: {
