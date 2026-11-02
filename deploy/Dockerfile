@@ -61,7 +61,10 @@ RUN set -eu; \
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:17-jre-jammy
 
-# 可选：apt 镜像（国内可填 https://mirrors.aliyun.com/ubuntu），留空用官方源
+# 可选：apt 镜像。只填主机名，**不要带 /ubuntu 路径**——
+# 源地址里的 /ubuntu 是保留的，带路径会拼成 .../ubuntu/ubuntu 直接 404。
+#   国内：https://mirrors.aliyun.com
+#   留空：用镜像自带的 Ubuntu 官方源
 ARG APT_MIRROR=
 
 ENV TZ=Asia/Shanghai \
@@ -73,8 +76,11 @@ ENV TZ=Asia/Shanghai \
 #   /usr/share/fonts/truetype/wqy/wqy-microhei.ttc，正好是这个包装的位置
 RUN set -eu; \
     if [ -n "$APT_MIRROR" ]; then \
-      sed -i "s|http://archive.ubuntu.com|$APT_MIRROR|g; s|http://security.ubuntu.com|$APT_MIRROR|g" \
-        /etc/apt/sources.list; \
+      for f in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do \
+        if [ -f "$f" ]; then \
+          sed -i -E "s#https?://(archive|security|ports)\.ubuntu\.com#$APT_MIRROR#g" "$f"; \
+        fi; \
+      done; \
     fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends curl tzdata fontconfig fonts-wqy-microhei; \
