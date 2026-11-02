@@ -35,7 +35,6 @@ spring:
 doc-template:
   # 元数据表建在宿主的库里（缺表会自动创建）
   initialize-schema: true
-
   # 认证：示例宿主自带极简登录（admin / Admin@123、demo / Demo@123），
   # 未登录打开 /doc-template/ 会跳到 /demo/login.html，登录后自动跳回；
   # /api/doc-template/** 未登录返回 401。改成 none 即关闭认证。
@@ -53,3 +52,8 @@ doc-template:
     secret-key: ${DOC_S3_SECRET_KEY}
     path-style-access: true
     prefix: doc-template
+
+# 演示站：dev 就是对外部署的那一套，内置示例模板只读（编码清单见 application.yml）
+demo:
+  readonly:
+    enabled: true
