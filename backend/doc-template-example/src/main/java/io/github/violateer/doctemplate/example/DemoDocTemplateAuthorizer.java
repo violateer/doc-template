@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.example;
 
+import cn.dev33.satoken.context.SaHolder;
 import cn.dev33.satoken.stp.StpUtil;
 import io.github.violateer.doctemplate.starter.auth.DocTemplateAuthorizer;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +23,16 @@ public class DemoDocTemplateAuthorizer {
     public DocTemplateAuthorizer docTemplateAuthorizer() {
         return () -> {
             Object loginId = StpUtil.getLoginIdDefaultNull();
+            if (loginId == null) {
+                // 页面导航（点链接、iframe 刷新、302 之后重新打开管理页）带不了 Authorization 头，
+                // 只有 Cookie；而配了 token-prefix 时 sa-token 只认「Bearer xxx」这种提交值，
+                // Cookie 里存的却是裸 token，于是被判成未登录——症状是「登录完又被弹回登录页」。
+                // 这里拿裸值再校验一次，仍然走 sa-token 的会话校验，不是「有 Cookie 就放行」。
+                String raw = SaHolder.getRequest().getCookieValue(StpUtil.getTokenName());
+                if (raw != null && !raw.isBlank()) {
+                    loginId = StpUtil.getLoginIdByToken(raw);
+                }
+            }
             return loginId == null ? null : String.valueOf(loginId);
         };
     }
