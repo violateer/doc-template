@@ -677,14 +677,15 @@ java -jar doc-template-example.jar --spring.profiles.active=local  # 地址写�
 
 IDEA 里把同样的参数写进 Program arguments 即可。
 
-**example 里的四个文件**：
+**example 里的三个文件**：
 
 | 文件 | 作用 |
 | --- | --- |
 | `DemoLoginController` | `/demo/login`、`/demo/logout`、`/demo/me`，签发一个极简会话 token |
 | `DemoDocTemplateAuthorizer` | 唯一需要宿主写的东西：把示例会话里的用户标识桥接成 `DocTemplateAuthorizer` |
-| `DemoPageAuthConfig` | 只在 `custom` 模式生效，未登录打开管理页时跳登录页（真实宿主一般由前端路由守卫做） |
 | `static/demo/login.html` | 登录页，登录成功后把 token 写进 `localStorage.token` |
+
+未登录打开管理页时跳登录页，靠的是配置 `doc-template.auth.login-page: /demo/login.html`（Starter 自己 302，宿主不用写拦截器）；换成宿主的登录页就改这一项，见 [认证接入](./docs/guide/auth.md)。
 
 **为什么不用改前端**：内嵌管理页默认就从 `localStorage.token` 读 token，并按 `Authorization: Bearer <token>` 发送；登录页和管理页同源，`localStorage` 共享，登录完直接就能用。示例的会话同时写 Cookie，是为了让页面导航和 iframe 预览这类**无法自定义 header** 的请求也能带上会话。
 

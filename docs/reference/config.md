@@ -19,6 +19,7 @@
 | `mode` | `none` | `none` / `custom`。`custom` 需要宿主注册 `DocTemplateAuthorizer` Bean，否则启动失败 |
 | `anonymous-user` | `anonymous` | 识别不到操作人时写入生成记录的名称 |
 | `user-header` | 空 | 仅 `none` 模式：从该请求头取操作人（网关已完成鉴权时使用） |
+| `login-page` | 空 | 未登录打开管理页时跳转的登录页。留空不跳转；站内路径（`/demo/login.html`）或完整地址（`https://sso.example.com/login`）都支持，跳转时自动追加 `redirect=<原地址>`。仅 `custom` 模式生效 |
 
 ## `doc-template.datasource`
 

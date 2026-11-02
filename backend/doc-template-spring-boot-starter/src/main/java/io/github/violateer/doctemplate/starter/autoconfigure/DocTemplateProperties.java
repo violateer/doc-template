@@ -45,6 +45,14 @@ public class DocTemplateProperties {
         private String anonymousUser = "anonymous";
         /** 可选：none 模式下从该请求头取操作人（仅当网关已完成鉴权时使用）。 */
         private String userHeader;
+        /**
+         * 未登录打开管理页时跳转的登录页，留空表示不跳转（默认）。
+         *
+         * <p>站内路径（{@code /demo/login.html}）和完整地址（{@code https://sso.example.com/login}）都支持，
+         * 跳转时自动追加 {@code redirect=<当前地址>}。只在 {@code mode=custom} 下生效——
+         * {@code none} 模式没有「未登录」这回事。</p>
+         */
+        private String loginPage;
 
         public AuthMode getMode() { return mode; }
         public void setMode(AuthMode mode) { this.mode = mode == null ? AuthMode.NONE : mode; }
@@ -52,6 +60,8 @@ public class DocTemplateProperties {
         public void setAnonymousUser(String anonymousUser) { this.anonymousUser = anonymousUser; }
         public String getUserHeader() { return userHeader; }
         public void setUserHeader(String userHeader) { this.userHeader = userHeader; }
+        public String getLoginPage() { return loginPage; }
+        public void setLoginPage(String loginPage) { this.loginPage = loginPage; }
     }
 
     /**

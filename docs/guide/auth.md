@@ -112,6 +112,31 @@ doc-template:
 
 401 时前端可用 `DOC_TEMPLATE_CONFIG.loginUrl` 指定登录页，自动跳转并带 `redirect` 参数。
 
+## 未登录时跳登录页
+
+配 `doc-template.auth.login-page` 后，未登录打开管理页会 **302 到该地址**，不用宿主自己写拦截器：
+
+```yaml
+doc-template:
+  auth:
+    mode: custom
+    login-page: /demo/login.html                 # 站内页面（示例自带的登录页）
+    # login-page: https://sso.example.com/login  # 或者外部统一登录
+```
+
+| 取值 | 行为 |
+| --- | --- |
+| 留空（默认） | 不跳转，页面照常打开，接口返回 401 由前端提示 |
+| 站内路径 | 302 到该路径，自动带 `?redirect=<原地址>` |
+| 完整地址 | 同上，用于接公司 SSO / 统一认证 |
+
+两条实现细节，接自有登录页时值得知道：
+
+- **只跳页面，不跳静态资源**。`/doc-template/assets/*.js|css` 照常返回，否则登录页自己的脚本都加载不出来。
+- **`index.html` 会被注入 `window.DOC_TEMPLATE_CONFIG.loginUrl`**，所以「页面已经打开、会话中途过期」时前端也会跳登录页，而不是只弹一串 401。
+
+`mode: none` 下不生效——没有认证就没有「未登录」这回事。
+
 ## 启动行为对照
 
 | 配置 | 缺少 | 启动行为 |

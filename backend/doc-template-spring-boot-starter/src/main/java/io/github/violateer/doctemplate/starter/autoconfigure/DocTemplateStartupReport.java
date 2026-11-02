@@ -109,7 +109,10 @@ final class DocTemplateStartupReport implements SmartInitializingSingleton {
         DocTemplateGuard guard = guardProvider.getIfAvailable();
         if (guard == null) return "未装配";
         if (guard.mode() == AuthMode.NONE) return "none · 不校验登录态";
-        return guard.mode().name().toLowerCase(Locale.ROOT) + " · 身份来源 " + guard.authorizerName();
+        String base = guard.mode().name().toLowerCase(Locale.ROOT) + " · 身份来源 " + guard.authorizerName();
+        // 跳不跳登录页直接影响「打开管理页会看到什么」，值得出现在摘要里
+        String loginPage = properties.getAuth().getLoginPage();
+        return loginPage == null || loginPage.isBlank() ? base : base + " · 登录页 " + loginPage.trim();
     }
 
     /**

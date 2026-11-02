@@ -26,6 +26,15 @@ public class DocTemplateGuard {
         }
     }
 
+    /**
+     * 当前请求是否已有身份。{@link AuthMode#NONE} 下恒为 {@code true}——不启用认证就没有「未登录」。
+     *
+     * <p>与 {@link #requireLogin()} 的区别是不抛异常，供「未登录就跳登录页」这类分支判断使用。</p>
+     */
+    public boolean isAuthenticated() {
+        return mode == AuthMode.NONE || authorizer.currentUser() != null;
+    }
+
     /** 生成记录里记录的操作人；识别不到时用匿名标识兜底。 */
     public String currentUser() {
         String user = authorizer.currentUser();

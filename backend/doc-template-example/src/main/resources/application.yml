@@ -52,6 +52,13 @@ doc-template:
     # 未登录打开 /doc-template/ 会跳到 /demo/login.html（账号 admin/Admin@123、demo/Demo@123），
     # 登录后自动跳回；未登录调 /api/doc-template/** 返回 401。
     # user-header: X-User-Id # none 模式下可选：从网关透传的请求头取操作人
+    #
+    # 未登录时跳哪个登录页：
+    #   留空            → 不跳转，页面照常打开（接口 401 由前端自己提示）
+    #   /demo/login.html → 站内页面，也就是本示例自带的那个登录页（当前配置）
+    #   https://sso.example.com/login → 完整地址，接公司统一登录时用
+    # 跳转时会自动带上 ?redirect=<原地址>，登录页读它决定登录后回到哪。
+    login-page: /demo/login.html
   enabled: true
   base-path: ./data/doc-template
   initialize-schema: true
