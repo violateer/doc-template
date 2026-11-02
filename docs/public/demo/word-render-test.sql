@@ -14,7 +14,7 @@
 -- 前置条件：
 --   * MySQL 8 / MariaDB，已建好 doc_template / doc_template_data_block（Starter 会自动建）；
 --   * form 块不依赖任何业务表，执行完就能生成文档；
---   * demoProvider / demoApi 依赖 doc-template-example 已启动，且端口是 8080（不是就改 url）。
+--   * demoProvider / demoApi 依赖 doc-template-example 已启动，且端口是 9150（不是就改 url）。
 -- 可重复执行：唯一键 (template_id, block_code)，重跑会覆盖成同一份配置。
 -- ============================================================================
 
@@ -44,6 +44,9 @@ VALUES
      '{"orderNo":"$request.orderNo"}', 10, 'ENABLED'),
 
     -- API：URL 和 body 可以同时传参
+    --   地址写 host.docker.internal:9150：演示站跑在容器里，这个请求是服务端自己发出去的，
+    --   走宿主机映射端口最稳（compose 里已加 extra_hosts: host-gateway）。
+    --   本机直接 mvn spring-boot:run 时把它改成 http://127.0.0.1:9150 即可。
     --   url 里的 {orderNo} 走路径、${channel} 走查询串（两种写法都认）；
     --   body 里的 ${channel} 也会替换，整串就是一个 ${name} 时还能直接塞对象 / 数组；
     --   resultPath=data 只取响应里的业务部分，接口会把收到的 body 回显在 request_body 里。
@@ -51,7 +54,7 @@ VALUES
     --   所以「模拟生成」的补齐参数里会出现 channel，填什么就传什么；
     --   想让 API 块也用生成时传的单号，把 orderNo 的值改成 $request.orderNo 即可。
     (@template_id, 'demoApi', '演示订单（API 接口）', 'API',
-     '{"url":"http://localhost:8080/demo/api/orders/{orderNo}?name=${channel}","method":"POST","timeoutMs":5000,"resultPath":"data","headers":{"X-Demo-Source":"doc-template"},"body":{"channel":"${channel}","remark":"body 传参示例"}}',
+     '{"url":"http://host.docker.internal:9150/demo/api/orders/{orderNo}?name=${channel}","method":"POST","timeoutMs":5000,"resultPath":"data","headers":{"X-Demo-Source":"doc-template"},"body":{"channel":"${channel}","remark":"body 传参示例"}}',
      '{"orderNo":"DEMO-2026-0001","channel":"$request.channel"}', 20, 'ENABLED')
 ON DUPLICATE KEY UPDATE
     block_name         = VALUES(block_name),

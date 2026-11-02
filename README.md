@@ -81,7 +81,7 @@ mvn clean package
 mvn -pl doc-template-example -am spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-打开 `http://localhost:8080/doc-template/`。示例默认开启认证，首次访问会跳到 `/demo/login.html`；该演示登录只用于 example 模块，切勿复制到生产宿主。
+打开 `http://localhost:9150/doc-template/`。示例默认开启认证，首次访问会跳到 `/demo/login.html`；该演示登录只用于 example 模块，切勿复制到生产宿主。
 
 检查 Provider：`GET /api/doc-template/system/providers`。
 
@@ -314,7 +314,7 @@ scripts\seed-demo.bat                 # Windows
 scripts/seed-demo.sh                  # Linux / macOS
 ```
 
-只需要 Node 18+（脚本只用内置 `fetch`，不用 `npm install`），不需要 MySQL 客户端——全程走 `/api/doc-template/**` 接口。先把服务跑起来（example 默认 `http://localhost:8080`），再执行脚本即可。
+只需要 Node 18+（脚本只用内置 `fetch`，不用 `npm install`），不需要 MySQL 客户端——全程走 `/api/doc-template/**` 接口。先把服务跑起来（example 默认 `http://localhost:9150`），再执行脚本即可。
 
 ```bash
 scripts/seed-demo.bat --dry-run       # 只解析并打印要写什么，不调接口
@@ -324,7 +324,7 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 
 | 参数 | 说明 |
 | --- | --- |
-| `-b, --base-url <url>` | 服务地址，默认 `http://localhost:8080` |
+| `-b, --base-url <url>` | 服务地址，默认 `http://localhost:9150` |
 | `-t, --token <token>` | 直接用已有 token，跳过 `/demo/login` |
 | `--username` / `--password` | 登录账号，默认 `admin` / `Admin@123`（example 的演示账号） |
 | `--only <codes>` | 只刷指定模板，逗号分隔 |
@@ -559,7 +559,7 @@ doc-template:
 
 ## 直接访问页面与认证
 
-后端启动后访问 `http://localhost:8080/doc-template/`。页面路由：`/doc-template/#/templates`（模板管理，数据块在模板编辑弹窗的第二个 Tab 中维护）、`/doc-template/#/generate-records`（生成记录）。如果端口不是 8080，请替换为实际端口。
+后端启动后访问 `http://localhost:9150/doc-template/`。页面路由：`/doc-template/#/templates`（模板管理，数据块在模板编辑弹窗的第二个 Tab 中维护）、`/doc-template/#/generate-records`（生成记录）。如果端口不是 9150，请替换为实际端口。
 
 ### 认证方式
 

@@ -52,7 +52,7 @@ doc-template:
   # storage    整段不配 = 文件落 ./data/doc-template
 ```
 
-启动后访问 `http://localhost:8080/doc-template/`：
+启动后访问 `http://localhost:9150/doc-template/`：
 
 - 模板管理：`/doc-template/#/templates`
 - 生成记录：`/doc-template/#/generate-records`
@@ -74,7 +74,7 @@ doc-template:
 
 ```bash
 # 已注册的 Provider 列表（数据块 JAVA 类型下拉项来源）
-curl http://localhost:8080/api/doc-template/system/providers
+curl http://localhost:9150/api/doc-template/system/providers
 ```
 
 启动日志里会打印一块配置摘要，数据源、存储、认证、管理页一眼可对照：
@@ -90,7 +90,7 @@ curl http://localhost:8080/api/doc-template/system/providers
   数据源     宿主数据源(dataSource) · MySQL 8.0.36
   文件存储   本地磁盘 /app/data/doc-template（默认）
   认证       none · 不校验登录态
-  管理页     http://localhost:8080/doc-template/
+  管理页     http://localhost:9150/doc-template/
   数据块     启用 · SQL 取数启用 · 默认 500 行 / 5000ms
   元数据表   缺失，已自动创建
 ========================================================================

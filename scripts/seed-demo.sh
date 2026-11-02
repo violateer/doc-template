@@ -4,7 +4,7 @@
 #
 #  用法：
 #    scripts/seed-demo.sh
-#    scripts/seed-demo.sh --base-url http://localhost:8080
+#    scripts/seed-demo.sh --base-url http://localhost:9150
 #    scripts/seed-demo.sh --dry-run
 #    scripts/seed-demo.sh --only WordStandard,ExcelDataRows
 #

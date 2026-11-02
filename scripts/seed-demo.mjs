@@ -54,7 +54,7 @@ const USAGE = `
   scripts/seed-demo.sh         [选项]      Linux / macOS
 
 选项：
-  -b, --base-url <url>   服务地址，默认 http://localhost:8080
+  -b, --base-url <url>   服务地址，默认 http://localhost:9150
   -t, --token <token>    直接用已有 token，不调登录接口
       --username <name>  登录账号，默认 admin
       --password <pwd>   登录密码，默认 Admin@123
@@ -72,7 +72,7 @@ const USAGE = `
 
 function parseArgs(argv) {
   const opts = {
-    baseUrl: process.env.DOC_TEMPLATE_BASE_URL || 'http://localhost:8080',
+    baseUrl: process.env.DOC_TEMPLATE_BASE_URL || 'http://localhost:9150',
     token: process.env.DOC_TEMPLATE_TOKEN || '',
     username: process.env.DOC_TEMPLATE_USERNAME || 'admin',
     password: process.env.DOC_TEMPLATE_PASSWORD || 'Admin@123',

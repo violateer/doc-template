@@ -68,8 +68,8 @@ DocTemplateAuthorizer docTemplateAuthorizer() {
 ```ts
 server: {
   proxy: {
-    '/api/doc-template': { target: 'http://127.0.0.1:8080', changeOrigin: true },
-    '/doc-template': { target: 'http://127.0.0.1:8080', changeOrigin: true }
+    '/api/doc-template': { target: 'http://127.0.0.1:9150', changeOrigin: true },
+    '/doc-template': { target: 'http://127.0.0.1:9150', changeOrigin: true }
   }
 }
 ```
@@ -77,8 +77,8 @@ server: {
 生产 Nginx：
 
 ```nginx
-location /doc-template/ { proxy_pass http://127.0.0.1:8080/doc-template/; }
-location /api/doc-template/ { proxy_pass http://127.0.0.1:8080/api/doc-template/; }
+location /doc-template/ { proxy_pass http://127.0.0.1:9150/doc-template/; }
+location /api/doc-template/ { proxy_pass http://127.0.0.1:9150/api/doc-template/; }
 ```
 
 同源访问是最省事的做法：预览/下载、Cookie、`localStorage` 全都自然对齐。

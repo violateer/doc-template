@@ -11,7 +11,7 @@
 | `/doc-template/#/generate-records` | 生成记录 |
 | `/doc-template/#/dicts` | 数据字典，维护枚举值 → 显示名 |
 
-端口不是 8080 时替换为实际端口。
+端口不是 9150 时替换为实际端口。
 
 ## 页面能力
 

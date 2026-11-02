@@ -13,6 +13,10 @@ services:
     image: "${IMAGE_NAME:-doc-template-example}:${IMAGE_TAG:-latest}"
     container_name: "${CONTAINER_NAME:-doc-template-example}"
     restart: unless-stopped
+    # 让容器里能解析 host.docker.internal：演示模板的 API 数据块要回调宿主机的 9150 端口。
+    # Docker Desktop（Win/Mac）本来就有这条，Linux 上必须显式加，host-gateway 指向宿主机网关。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${HOST_PORT:-9150}:9150"
     environment:

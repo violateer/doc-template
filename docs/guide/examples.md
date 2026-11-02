@@ -38,11 +38,11 @@ scripts\seed-demo.bat          # Windows
 scripts/seed-demo.sh           # Linux / macOS
 ```
 
-只需要 Node 18+，不需要 MySQL 客户端：全程走 `/api/doc-template/**` 接口。先把服务跑起来（example 默认 `http://localhost:8080`），再执行脚本。
+只需要 Node 18+，不需要 MySQL 客户端：全程走 `/api/doc-template/**` 接口。先把服务跑起来（example 默认 `http://localhost:9150`），再执行脚本。
 
 | 参数 | 说明 |
 | --- | --- |
-| `-b, --base-url <url>` | 服务地址，默认 `http://localhost:8080` |
+| `-b, --base-url <url>` | 服务地址，默认 `http://localhost:9150` |
 | `-t, --token <token>` | 直接用已有 token，跳过 `/demo/login` |
 | `--username` / `--password` | 登录账号，默认 `admin` / `Admin@123`（example 的演示账号） |
 | `--only <codes>` | 只刷指定模板，逗号分隔，如 `WordStandard,ExcelDataRows` |
@@ -104,7 +104,7 @@ ${form.title:数据块渲染测试}                  ← 居中加粗标题，�
 | --- | --- | --- | --- |
 | `form` | SQL | `select '数据块渲染测试' as title, '示例数据：这条 SQL 不查任何表' as info`，`single=true` | 标题与信息。**不查任何表**，直接给两列假数据；换成真实查询时保证结果里有 `title` / `info` 即可 |
 | `demoProvider` | JAVA | `{"provider":"demoOrder"}`，参数映射 `orderNo → $request.orderNo` | 调 example 的 `DemoOrderProvider`，不传 `orderNo` 时回落到 `SO-2026-0001` |
-| `demoApi` | API | `POST http://localhost:8080/demo/api/orders/{orderNo}?name=${channel}`，`body: {"channel":"${channel}"}`，`resultPath=data`，参数映射 `orderNo` 常量 + `channel → $request.channel` | 调 example 的 `DemoApiController`，同时演示 URL 传参（路径 `{orderNo}` + 查询串 `${channel}`）和 body 传参；响应里的 `request_header` / `request_query` / `request_body` 会回显收到的东西 |
+| `demoApi` | API | `POST http://host.docker.internal:9150/demo/api/orders/{orderNo}?name=${channel}`，`body: {"channel":"${channel}"}`，`resultPath=data`，参数映射 `orderNo` 常量 + `channel → $request.channel` | 调 example 的 `DemoApiController`，同时演示 URL 传参（路径 `{orderNo}` + 查询串 `${channel}`）和 body 传参；响应里的 `request_header` / `request_query` / `request_body` 会回显收到的东西。地址按「服务端在容器里回调宿主机」写的，本机 `mvn spring-boot:run` 时改成 `http://127.0.0.1:9150` |
 
 ::: tip 「补齐参数」为什么只列出部分键
 模拟生成里的补齐参数，只取参数映射中**以 `$request.` 开头的值**——那才是这次生成要传进来的入参。写死的常量（如 `demoApi` 的 `orderNo`）配置里已经有值了，不会再让你填。
