@@ -2,22 +2,7 @@
 
 面向 Spring Boot 3 / 4、Java 17 与 Vue 3 + Naive UI 的可复用文档模板引擎工程。Starter 的静态管理界面随 JAR 发布，宿主前端可以通过 iframe 打开；REST API 的认证是可插拔的（无认证 / 宿主已有认证体系桥接进来），模块不另建登录系统，也不做权限码校验。
 
-## 文档
-
-`docs/` 是 VitePress 文档站，按模块拆分的指南与参考。在线地址：**<https://violateer.github.io/doc-template/>**，想直接上手可以看 [快速开始](https://violateer.github.io/doc-template/guide/quick-start.html)。
-
-各版本的能力变化见 [CHANGELOG.md](./CHANGELOG.md)。
-
-发布物只有 `doc-template-core` 与 `doc-template-spring-boot-starter`。`backend/doc-template-example` 是作者自用的示例宿主，**不在包范围内**；`frontend/doc-template-ui` 是内嵌管理页的源码，**产物随 Starter JAR 发布**，源码本身不单独发包。
-
-## 在线演示
-
-不想装环境，直接打开 **<http://www.violateer.top:9150/doc-template>** 就能看到内嵌管理页：模板管理、数据块配置、模拟生成、PDF 导出都是真的在跑，`docs/public/demo` 下的十套示例模板也已经刷好。
-
-- 演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。登录页是 example 自带的 `/demo/login.html`，只用于演示，不要照搬进生产宿主。
-- 内置的十套示例模板是**只读**的（改、删会被拒绝，避免演示站被改乱），想试完整流程请自己新建一个模板，其他功能不受限制。
-- 演示站的认证方式是 `custom` + `doc-template.auth.login-page`，未登录访问 `/doc-template/` 会被 302 到登录页，登录后自动跳回原页面。
-- 它构建时**不编译本仓库的 core / starter**，而是按 `DOC_TEMPLATE_VERSION` 去中央仓库拉已发布的正式版本（见 `deploy/Dockerfile`）。所以你看到的就是自己引入依赖后拿到的效果，前端页面也是那个 jar 里带的。
+**文档站**：<https://violateer.github.io/doc-template/> · **在线演示**：<http://www.violateer.top:9150/doc-template>
 
 ## 使用前提
 
@@ -38,7 +23,7 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 <dependency>
   <groupId>io.github.violateer</groupId>
   <artifactId>doc-template-spring-boot-starter</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 </dependency>
 ```
 
@@ -51,6 +36,8 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 - `backend/doc-template-example`：独立示例应用，连真实 MySQL 并自动建表，并提供仅供本地示例使用的 `/demo/login`。
 - `frontend/doc-template-ui`：内嵌管理页源码（Vue 3 + Naive UI）。`vite build` 的输出目录直接指向 Starter 的 `META-INF/resources/doc-template/`，产物随 JAR 发布。
 - `integration/README.md`：宿主集成、认证接入与代理说明。
+
+发布物只有 `doc-template-core` 与 `doc-template-spring-boot-starter`：`backend/doc-template-example` 是作者自用的示例宿主，**不在包范围内**；`frontend/doc-template-ui` 是内嵌管理页的源码，**产物随 Starter JAR 发布**，源码本身不单独发包。各版本的能力变化见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 数据持久层
 
@@ -844,9 +831,9 @@ example **不自带内存库**，必须带 `dev` 或 `local` 启动（不带 pro
 # 连真实库本地调试（团队共用档，先设好环境变量）
 mvn -pl doc-template-example -am spring-boot:run -Dspring-boot.run.profiles=dev
 # 或者
-java -jar doc-template-example/target/doc-template-example-0.1.0.jar --spring.profiles.active=dev
+java -jar doc-template-example/target/doc-template-example-0.1.1.jar --spring.profiles.active=dev
 # 自己的机器：地址写在 application-local.yml 里，直接跑
-java -jar doc-template-example/target/doc-template-example-0.1.0.jar --spring.profiles.active=local
+java -jar doc-template-example/target/doc-template-example-0.1.1.jar --spring.profiles.active=local
 ```
 
 `dev` 档的连接串与凭据全部来自环境变量，缺任何一项都会启动失败并提示 `Could not resolve placeholder`：

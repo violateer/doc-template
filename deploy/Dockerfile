@@ -56,7 +56,12 @@ COPY backend/doc-template-core/pom.xml doc-template-core/pom.xml
 COPY backend/doc-template-spring-boot-starter/pom.xml doc-template-spring-boot-starter/pom.xml
 COPY backend/doc-template-example/pom.xml doc-template-example/pom.xml
 
-# 预下载依赖与插件；失败不让整次构建挂掉（下面 package 会补齐缺的部分）
+# 预下载依赖与插件，只为让下面那层命中缓存（pom 没变时省一次全量下载）。
+#
+# **这一步允许失败**，而且是故意允许的：阿里云是拉取式代理，某个新发布的文件第一次被请求时
+# 会先返回 404、同时回源去中央仓库抓，抓完下一次请求才 200。刚发完版就构建演示站，
+# 这里撞 404 是正常的，不能因此判定整次构建失败。
+# 真正的解析在下一步的 package 里做，那里带 -U，会忽略这里留下的「找不到」负缓存。
 RUN set -eu; \
     if [ -f /root/build-settings.xml ]; then SETTINGS="-s /root/build-settings.xml"; else SETTINGS=""; fi; \
     if [ -n "$DOC_TEMPLATE_VERSION" ]; then \
@@ -65,19 +70,23 @@ RUN set -eu; \
     else \
       mvn -B $SETTINGS -pl doc-template-example -am -DskipTests dependency:go-offline; \
     fi \
-      || echo "依赖预下载未完全成功，交由 package 阶段补齐"
+      || echo "依赖预下载未完全成功（新版本首次构建时常见），由下面带 -U 的 package 阶段补齐"
 
 COPY backend/ /src/backend/
 
+# -U 不能去掉：上面 go-offline 若撞上阿里云的 404，Maven 会把「该坐标不存在」写进 ~/.m2 的
+# 负缓存，而同一次构建的两步共用同一层文件系统。没有 -U 时 package 会直接沿用那个结论，
+# 报错是 "was not found ... during a previous attempt. This failure was cached"，
+# 看起来像版本不存在，实际是缓存里的旧结论。
 RUN set -eu; \
     if [ -f /root/build-settings.xml ]; then SETTINGS="-s /root/build-settings.xml"; else SETTINGS=""; fi; \
     if [ -n "$DOC_TEMPLATE_VERSION" ]; then \
       echo "===== Starter 取中央仓库版本 $DOC_TEMPLATE_VERSION（不构建 core / starter）====="; \
-      mvn -B $SETTINGS -pl doc-template-example \
+      mvn -B -U $SETTINGS -pl doc-template-example \
           -Ddoc-template.version="$DOC_TEMPLATE_VERSION" -DskipTests package; \
     else \
       echo "===== Starter 取仓库源码（连带构建 core / starter）====="; \
-      mvn -B $SETTINGS -pl doc-template-example -am -DskipTests package; \
+      mvn -B -U $SETTINGS -pl doc-template-example -am -DskipTests package; \
     fi
 
 # ---------------------------------------------------------------------------

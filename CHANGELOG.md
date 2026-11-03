@@ -12,6 +12,8 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-02
+
 ### 新增
 
 - **未登录跳登录页**：新增配置 `doc-template.auth.login-page`。未登录打开管理页时直接 302 到指定地址，站内路径与外部统一登录地址都支持，跳转自动带 `redirect` 参数；管理页内会话中途失效时也会跳转。留空则保持原行为（不跳转，接口 401 由前端提示）。静态资源不参与跳转。
@@ -32,5 +34,6 @@
 - **运行接入**：复用宿主 `DataSource` 或配置独立库；MySQL 8 / MariaDB 自动建表；文件存储支持本地磁盘与 S3 兼容对象存储；同时兼容 Spring Boot 3.x / 4.x 的 Servlet Web 应用。
 - **内嵌管理界面**：模板、数据块、字典、生成记录的管理页随 JAR 发布，可 iframe 嵌入或同源部署。
 
-[Unreleased]: https://github.com/violateer/doc-template/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/violateer/doc-template/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/violateer/doc-template/releases/tag/v0.1.1
 [0.1.0]: https://github.com/violateer/doc-template/releases/tag/v0.1.0
