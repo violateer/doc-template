@@ -4,7 +4,7 @@
 
 `doc-template-spring-boot-starter` 的 `resources` 目录里**没有任何 `application.yml`**，启动时也不会创建连接池。它只做两件事：
 
-1. 从宿主容器里拿一个现成的 `DataSource`，用它建 Mapper、建元数据表、跑 SQL 数据块；
+1. 从宿主容器里拿一个现成的 `DataSource`，用它读写元数据表、跑 SQL 数据块；
 2. 文件存储也不预设外部服务 —— 宿主不配 `doc-template.storage` 时落本地磁盘，配了 `s3` 才连对象存储。
 
 所以打包发布出去的 jar 天然是「零外部依赖配置」的，宿主配什么它就用什么。

@@ -69,7 +69,7 @@ POST /api/doc-template/templates/{id}/generate
 | --- | --- | --- |
 | 持久层 | Spring JDBC | `JdbcTemplate` + 手写 SQL，分页用 `COUNT` + `LIMIT/OFFSET`；不依赖任何 ORM，宿主用什么都行 |
 | JSON | Jackson | 输出 `SNAKE_CASE`，`LocalDateTime` 固定 `yyyy-MM-dd HH:mm:ss`；**不引入 Fastjson** |
-| 工具库 | Hutool | 判空、文件名、摘要、类型转换，不再手写 |
+| 工具库 | Hutool | 判空、文件名、摘要、类型转换 |
 | SQL 解析 | JSqlParser 4.9 | 数据块只放行 `Select`；打包时重定位到 `io.github.violateer.doctemplate.internal.jsqlparser`，与宿主自带的 jsqlparser 互不干扰 |
 | 文档渲染 | Apache POI | DOCX / XLSX 读写 |
 | PDF | MiniPdf | 纯 Java，无命令行依赖 |

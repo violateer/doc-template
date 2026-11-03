@@ -60,13 +60,13 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 
 ## 序列化与工具库
 
-JSON 序列化统一使用 Jackson（Spring 官方内置）；**项目不引入 Fastjson**，也没有任何 `com.alibaba.fastjson` 依赖。实体转 Map、参数解析都走 `support/DocTemplateJson`：
+JSON 序列化统一使用 Jackson（Spring 官方内置），**不引入 Fastjson**。实体转 Map、参数解析都走 `support/DocTemplateJson`：
 
 - 输出使用 `SNAKE_CASE` 命名，与前端字段一致；
 - `LocalDateTime` 固定序列化为 `yyyy-MM-dd HH:mm:ss` 字符串，不会退化成 `[2026,10,27,11,23,9]` 这种时间戳数组；
 - 需要定制时可通过 `DocTemplateJson.mapper()` 拿到同一个 `ObjectMapper`。
 
-通用工具方法使用 [Hutool](https://hutool.cn/)（`hutool-core` + `hutool-crypto`），不再手写判空、摘要、文件名解析等代码：
+通用工具方法使用 [Hutool](https://hutool.cn/)（`hutool-core` + `hutool-crypto`），判空、摘要、文件名解析等都走它：
 
 | 场景 | 使用的方法 |
 | --- | --- |
@@ -112,7 +112,7 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 ## API
 
 - `GET/POST /api/doc-template/templates`
-  - `GET` 不带 `page` 时返回完整数组（兼容旧调用）；带 `page` 时返回 `{records,total,page,size,pages}`，支持 `size`（默认 20，上限 200）、`keyword`（模板名称 / 编码）、`status`
+  - `GET` 不带 `page` 时返回完整数组；带 `page` 时返回 `{records,total,page,size,pages}`，支持 `size`（默认 20，上限 200）、`keyword`（模板名称 / 编码）、`status`
 - `GET /api/doc-template/templates/stats`：模板总览统计 `{total,enabled,uploaded}`，供列表页统计卡片使用（不受分页影响）
 - `GET/PUT/DELETE /api/doc-template/templates/{id}`
 - `POST /api/doc-template/templates/batch-delete`：批量删除模板，请求体 `{"ids":[1,2,3]}`（上限 200 条）。逐条删、单条失败不影响其他条，返回 `{deleted, failed:[{id,message}]}`
@@ -131,7 +131,7 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 - `GET/POST /api/doc-template/dicts/{id}/items`：字典项（子表）列表 / 新增；`PUT/DELETE /api/doc-template/dicts/items/{itemId}` 改 / 删单条
 - `POST /api/doc-template/dicts/batch-delete`、`POST /api/doc-template/dicts/items/batch-delete`：两张表各自的批量删除
 - `GET/POST /api/doc-template/generate-records`
-  - `GET` 不带 `page` 时返回完整数组（兼容旧调用）；带 `page` 时返回 `{records,total,page,size,pages}`，支持 `size`（默认 20，上限 200）、`keyword`（记录号 / 生成人 / 失败说明 / 模板名称）、`status`
+  - `GET` 不带 `page` 时返回完整数组；带 `page` 时返回 `{records,total,page,size,pages}`，支持 `size`（默认 20，上限 200）、`keyword`（记录号 / 生成人 / 失败说明 / 模板名称）、`status`
 - `GET /api/doc-template/generate-records/{id}/file`
 - `GET /api/doc-template/generate-records/{id}/preview`
 - `DELETE /api/doc-template/generate-records/{id}`
@@ -171,10 +171,10 @@ doc-template:
 >
 > MiniPdf 面向实用文档转换，并非完整的 Office 版式兼容实现：常规段落、表格、图片能较好还原，极复杂的版式（文本框叠放、艺术字等）可能与 Word 略有差异。
 
-Starter 在把文件交给 MiniPdf 之前做了两处预处理，让导出的 PDF 尽量和原文件一致：
+导出前还会做两处处理，让 PDF 尽量和原文件一致：
 
-- **DOCX 保留样式**：MiniPdf 的公开入口对「一个表格都没有」的 DOCX 会退化成纯文本输出（全部 11pt、左对齐、丢粗体和居中）。Starter 改为直接走它内部的结构化渲染通道，字号、加粗、对齐、颜色、图片、页眉页脚都能保留，无论文档里有没有表格；同时按 DOCX 里的 `sectPr` 还原纸张尺寸（A4 / A3 / 自定义 / 横向）。
-- **XLSX 跳过空 sheet**：工作簿里留着但完全没有内容的 sheet（无单元格值、无合并区域、无图片）会在转换前被剔除，不会在 PDF 里多出空白页；至少保留一个 sheet，预处理失败时按原文件转换，不影响导出。
+- **DOCX 保留样式**：字号、加粗、对齐、颜色、图片、页眉页脚都按原文件保留，与文档里有没有表格无关；纸张尺寸按 DOCX 里的 `sectPr` 还原（A4 / A3 / 自定义 / 横向）。
+- **XLSX 跳过空 sheet**：工作簿里留着但完全没有内容的 sheet（无单元格值、无合并区域、无图片）不会出现在 PDF 里，不会多出空白页；至少保留一个 sheet，处理失败时按原文件转换，不影响导出。
 
 ## 模板标记写法
 
@@ -244,7 +244,7 @@ ${order_no} | ${customer}
 
 `where` 右边是当前作用域里的键（`order_no` / `item.order_no`），字面量要加引号（`'open'`）；比较时去空格、忽略大小写，只支持单个等值条件，取不到值会直接报错。
 
-标记必须**独占一行 / 一段**才是区域；`{{#each}}` 独占一行但没有配对的 `{{/each}}` 时仍按单行循环处理，老模板行为不变。
+标记必须**独占一行 / 一段**才是区域；`{{#each}}` 独占一行但没有配对的 `{{/each}}` 时按单行循环处理。
 
 ### DOCX 模板
 
@@ -428,9 +428,9 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 | 语法校验 | JSqlParser 解析，**只有解析结果是 `Select` 才放行** | `with x as (select 1) delete from t` 这类 CTE 写操作 |
 | 只读连接 | 执行前 `Connection.setReadOnly(true)`，执行完恢复再归还连接池 | 前两层漏掉的写操作（MySQL / PostgreSQL 会置为只读事务） |
 
-MySQL 的 `/*! ... */` 可执行注释按**代码**参与检查（服务器会执行里面的内容，不能当注释剥掉），`#` 注释在交给解析器前换成 `--`。
+MySQL 的 `/*! ... */` 可执行注释按**代码**参与检查（服务器会执行里面的内容），`#` 行注释按注释处理。
 
-顺带修掉了几个旧误杀：值里带分号（`where name = 'a;b'`）、SQL 前面带注释、结尾分号后跟注释（`select 1; -- 说明`）、`#` 行注释，现在都能正常保存执行。
+以下写法都按合法查询放行：值里带分号（`where name = 'a;b'`）、语句前后带注释（`-- 说明` / `# 说明`）、结尾分号后跟注释（`select 1; -- 说明`）。
 
 **这三层不是安全边界。** 解析器不认识的方言写法会直接报错（宁可拒也不放过），也有驱动只把 `setReadOnly` 当提示、并不真的生效。真正可靠的隔离是**给模块配只读数据库账号**——这是宿主侧唯一能兜住所有情况的措施。
 
@@ -442,7 +442,7 @@ SQL 执行失败时，接口和生成记录里只会看到：
 SQL 执行失败（dataSource=primary），请检查 SQL 与数据源配置；详细原因见服务端日志
 ```
 
-数据库原始报错（含表名、列名、SQL 片段）只写服务端日志，避免把盲注变成「显错注」。其他接口的兜底 500 也统一改成「服务内部错误，请查看服务端日志」，不再回传异常内部信息。
+数据库原始报错（含表名、列名、SQL 片段）只写服务端日志，避免把盲注变成「显错注」。其他接口的兜底 500 同样只返回「服务内部错误，请查看服务端日志」，不回传异常内部信息。
 
 #### 关掉 SQL 数据源
 
@@ -542,7 +542,7 @@ doc-template:
 
 ### 执行规则
 
-- 生成时按 `sort_order`、`id` 依次执行状态为 `ENABLED` 的数据块（管理界面不再提供排序输入，列表顺序即执行顺序），结果以**块编码**为命名空间放进渲染参数：块编码 `report` + `single: true` 时，模板里写 `${report.report_no}`。
+- 生成时按 `sort_order`、`id` 依次执行状态为 `ENABLED` 的数据块（管理界面不提供排序输入，执行顺序即列表顺序），结果以**块编码**为命名空间放进渲染参数：块编码 `report` + `single: true` 时，模板里写 `${report.report_no}`。
 - 任一数据块执行失败，整次生成记为 `FAILED`，错误信息形如「数据块「检验报告主信息」执行失败：…」，可在「生成记录」里直接看到。
 - 请求里手填的参数优先级高于数据块结果；但**空串不覆盖**数据块取到的值——模拟生成弹窗不会给数据块管理的占位符补空串，避免把取数结果冲掉。
 - 安全边界：SQL 数据块要过语句白名单 + 只读连接，但**仍不推荐使用**（详见上面「SQL 数据源」一节），可用 `sql-enabled: false` 整体关掉；API 只允许 `http`/`https`，可用 `doc-template.data-block.allowed-hosts` 限制主机。

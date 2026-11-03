@@ -148,9 +148,6 @@ doc-template:
 
 ## 为什么 Starter 不带适配器
 
-Starter 的 pom 里**没有任何认证框架依赖**，也不提供内置适配器。这是刻意的取舍：
-
-- 内置适配器会引入 optional 依赖、条件装配、四份文档，以及「宿主没引依赖时 `NoClassDefFoundError`」的风险；
-- 宿主桥接成本只有 3~5 行，而且能自己控制上下文透传、缓存等细节。
+Starter 的 pom 里**没有任何认证框架依赖**，也不提供内置适配器。宿主桥接成本只有 3~5 行，上下文透传、缓存这些细节也由宿主自己掌握。
 
 `doc-template-example` 里的 `DemoDocTemplateAuthorizer` 就是一行桥接的示例（该模块不在发布包范围内，仅供参照）。

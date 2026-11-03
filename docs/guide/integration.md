@@ -104,7 +104,7 @@ public class ReportProvider implements DocumentDataProvider {
 
 ## 7. 上线检查清单
 
-- [ ] `doc-template.auth.mode` 是否已从 `none` 改为 `custom`
+- [ ] `doc-template.auth.mode` 是否已设为 `custom`
 - [ ] `DocTemplateAuthorizer` Bean 是否已在请求线程内取到身份
 - [ ] 全局拦截器是否放行两个前缀
 - [ ] 对外系统是否已 `data-block.sql-enabled: false`

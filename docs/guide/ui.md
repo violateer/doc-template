@@ -83,7 +83,7 @@ mvn clean package
 ::: tip 排查「改完前端没变化」
 完整布局下侧边栏底部会显示「构建 yyyy-MM-dd HH:mm:ss」，这是 `vite.config.ts` 用 `define` 注入的构建时刻。没变就说明浏览器加载的还是旧包 —— 需要重新 `vite build` 并重新打包重启。注意 `mvn spring-boot:run` 用的是 `target/classes`，只重启不重新打包同样不会更新。
 
-`layout=bare` 没有侧栏和顶栏，时间戳改成控制台输出：`[doc-template] build yyyy-MM-dd HH:mm:ss`。
+`layout=bare` 没有侧栏和顶栏，构建时间戳输出到控制台：`[doc-template] build yyyy-MM-dd HH:mm:ss`。
 :::
 
 Starter 里只放构建产物（`index.html` + `assets/`），没有手写的静态兜底页；不跑前端构建就拿不到页面。
