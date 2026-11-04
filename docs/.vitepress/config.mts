@@ -49,6 +49,12 @@ export default defineConfig({
       { text: '在线演示', link: 'http://www.violateer.top:9150/doc-template' }
     ],
 
+    // 右上角导航栏末尾的图标按钮，点击直达公开主仓。
+    // 用 socialLinks 而不是往 nav 里塞文字项，是为了不占导航宽度、移动端也能正常收进菜单。
+    socialLinks: [
+      { icon: 'github', link: 'https://github.com/violateer/doc-template', ariaLabel: 'GitHub 仓库' }
+    ],
+
     sidebar: {
       '/guide/': [
         {
