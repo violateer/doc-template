@@ -16,6 +16,8 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-04
+
 ### 新增
 
 - **字典项分页**：字典项列表支持分页取数，字典项上千条时不必一次拉全量。管理页的字典项表格改为按页加载，翻页与调整每页条数都重新取数；不传分页参数时接口仍返回该字典的全部字典项。
@@ -42,6 +44,7 @@
 - **运行接入**：复用宿主 `DataSource` 或配置独立库；MySQL 8 / MariaDB 自动建表；文件存储支持本地磁盘与 S3 兼容对象存储；同时兼容 Spring Boot 3.x / 4.x 的 Servlet Web 应用。
 - **内嵌管理界面**：模板、数据块、字典、生成记录的管理页随 JAR 发布，可 iframe 嵌入或同源部署。
 
-[Unreleased]: https://github.com/violateer/doc-template/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/violateer/doc-template/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/violateer/doc-template/releases/tag/v0.1.2
 [0.1.1]: https://github.com/violateer/doc-template/releases/tag/v0.1.1
 [0.1.0]: https://github.com/violateer/doc-template/releases/tag/v0.1.0

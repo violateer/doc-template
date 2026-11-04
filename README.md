@@ -23,7 +23,7 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 <dependency>
   <groupId>io.github.violateer</groupId>
   <artifactId>doc-template-spring-boot-starter</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.2</version>
 </dependency>
 ```
 
@@ -833,9 +833,9 @@ example **不自带内存库**，必须带 `dev` 或 `local` 启动（不带 pro
 # 连真实库本地调试（团队共用档，先设好环境变量）
 mvn -pl doc-template-example -am spring-boot:run -Dspring-boot.run.profiles=dev
 # 或者
-java -jar doc-template-example/target/doc-template-example-0.1.1.jar --spring.profiles.active=dev
+java -jar doc-template-example/target/doc-template-example-0.1.2.jar --spring.profiles.active=dev
 # 自己的机器：地址写在 application-local.yml 里，直接跑
-java -jar doc-template-example/target/doc-template-example-0.1.1.jar --spring.profiles.active=local
+java -jar doc-template-example/target/doc-template-example-0.1.2.jar --spring.profiles.active=local
 ```
 
 `dev` 档的连接串与凭据全部来自环境变量，缺任何一项都会启动失败并提示 `Could not resolve placeholder`：
