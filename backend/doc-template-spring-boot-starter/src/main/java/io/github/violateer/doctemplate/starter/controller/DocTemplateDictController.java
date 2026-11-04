@@ -59,9 +59,20 @@ public class DocTemplateDictController {
 
     // ------------------------------------------------------------------ 字典项
 
+    /**
+     * 字典项列表。
+     *
+     * <p>带 {@code page} 参数时返回 {@code {records,total,page,size,pages}} 分页结构，
+     * 支持 {@code size} 指定每页条数（默认 20，上限 200）；
+     * 不带 {@code page} 时返回该字典的全部字典项。</p>
+     */
     @GetMapping("/{id}/items")
-    public List<Map<String, Object>> items(@PathVariable("id") long id) {
-        return service.items(id);
+    public Object items(
+            @PathVariable("id") long id,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false, defaultValue = "20") Integer size) {
+        if (page == null) return service.items(id);
+        return service.itemsPage(id, page, size == null ? 20 : size);
     }
 
     @PostMapping("/{id}/items")

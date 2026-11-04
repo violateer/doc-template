@@ -498,10 +498,15 @@ async function downloadResult() {
   margin-bottom: 8px;
 }
 
+/* 数据块一多就把弹窗撑长：这一块自己限高滚动，弹窗整体不再跟着变高 */
 .block-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  /* 出滚动条时给卡片留一点空隙，避免贴住滚动条 */
+  padding-right: 4px;
 }
 
 .block-card {

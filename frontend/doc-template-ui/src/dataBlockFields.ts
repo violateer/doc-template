@@ -8,7 +8,7 @@
  */
 export type DataSourceType = 'JAVA' | 'SQL' | 'API';
 
-export type ConfigFieldType = 'text' | 'textarea' | 'number' | 'switch' | 'select' | 'json' | 'kv';
+export type ConfigFieldType = 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'json' | 'kv';
 
 export interface ConfigOption {
   label: string;
@@ -19,25 +19,28 @@ export interface ConfigField {
   /** 对应 data_source_config 里的键名 */
   key: string;
   label: string;
-  /** 字段说明，直接显示在输入框下面 */
+  /** 字段说明，显示在编辑弹窗右侧的「说明」侧栏里 */
   desc: string;
   type: ConfigFieldType;
   placeholder?: string;
+  /** select / boolean 的选项；boolean 的两个选项值固定写 'true' / 'false' */
   options?: ConfigOption[];
   /** 选项来自后端接口：providers（Java Provider）/ dataSources（SQL 数据源） */
   dynamic?: 'providers' | 'dataSources';
   /** 单字段「填入示例」用的值 */
   sample?: unknown;
+  /** boolean 字段的默认值；新建和老配置缺这个键时都用它 */
+  defaultValue?: 'true' | 'false';
   required?: boolean;
   /** textarea 行数 */
   rows?: number;
   /** 单位后缀，如 ms */
   suffix?: string;
   /**
-   * 在表单两列网格里占几列。
-   * 不填时按类型推断：textarea / json / kv 占满整行，其余占半行。
+   * 在表单网格里占几列（网格是三列）。
+   * 不填时按类型推断：textarea / json / kv 占满整行（3 列），其余占 1 列。
    */
-  span?: 1 | 2;
+  span?: 1 | 2 | 3;
   /** 分组标题：同一组的字段在表单里排在一起，上方显示小标题 */
   group?: string;
 }
@@ -90,7 +93,7 @@ export const configFields: Record<DataSourceType, ConfigField[]> = {
       type: 'select',
       dynamic: 'dataSources',
       group: '查询',
-      span: 2,
+      span: 3,
       desc: '留空用宿主主库；写 docTemplate 表示模板元数据所在的库；其他值按 Spring Bean 名解析。'
     },
     {
@@ -109,11 +112,18 @@ export const configFields: Record<DataSourceType, ConfigField[]> = {
     },
     {
       key: 'single',
-      label: '返回单条对象',
-      type: 'switch',
+      label: '返回数据格式',
+      type: 'boolean',
       group: '结果处理',
-      desc: '开启：结果按单条对象放进数据块（主信息）；关闭：结果按数组返回，配合模板里的 {{#each 块编码}} 做明细行。',
-      sample: true
+      options: [
+        { label: '单条', value: 'true' },
+        { label: '多条', value: 'false' }
+      ],
+      // 主信息查询更常见，默认按单条返回；做明细行时再改成多条
+      defaultValue: 'true',
+      desc:
+        '单条：结果按一条记录放进数据块（主信息）；多条：结果按多行返回，配合模板里的 {{#each 块编码}} 做明细行。',
+      sample: 'true'
     },
     {
       key: 'maxRows',
@@ -130,7 +140,7 @@ export const configFields: Record<DataSourceType, ConfigField[]> = {
       key: 'url',
       label: '请求地址',
       type: 'text',
-      span: 2,
+      span: 3,
       required: true,
       group: '请求',
       desc:
@@ -162,7 +172,7 @@ export const configFields: Record<DataSourceType, ConfigField[]> = {
       key: 'resultPath',
       label: '结果路径',
       type: 'text',
-      span: 2,
+      span: 3,
       placeholder: 'data',
       group: '响应',
       desc: '从响应 JSON 里取哪个节点作为数据块，如 data、data.rows、data.rows.0.name；留空表示用整个响应。',

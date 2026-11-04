@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref, watch } from 'vue';
+import { computed, h, onMounted, reactive, ref, watch } from 'vue';
 import {
   NButton,
   NCard,
@@ -19,8 +19,8 @@ import {
 } from 'naive-ui';
 import { RefreshOutline, SearchOutline } from '@vicons/ionicons5';
 import { api } from '../api';
-import type { DictItemRow, DictRow } from '../types';
-import { batchDeleteSummary, formatTime, isInteractiveClick } from '../utils';
+import type { DictItemRow, DictRow, PageResult } from '../types';
+import { batchDeleteSummary, isInteractiveClick } from '../utils';
 import type { BatchDeleteResult } from '../utils';
 import { rowActions } from '../components/rowActions';
 import BatchBar from '../components/BatchBar.vue';
@@ -40,6 +40,25 @@ const items = ref<DictItemRow[]>([]);
 const itemsLoading = ref(false);
 const checkedItems = ref<number[]>([]);
 
+/** 字典项服务端分页：默认每页 20 条，与模板列表同一套交互 */
+const itemPagination = reactive({
+  page: 1,
+  pageSize: 20,
+  itemCount: 0,
+  showSizePicker: true,
+  pageSizes: [20, 50, 100],
+  prefix: ({ itemCount }: { itemCount: number }) => `共 ${itemCount} 条`,
+  onChange: (page: number) => {
+    itemPagination.page = page;
+    void loadItems();
+  },
+  onUpdatePageSize: (size: number) => {
+    itemPagination.pageSize = size;
+    itemPagination.page = 1;
+    void loadItems();
+  }
+});
+
 const selected = computed(() => dicts.value.find((row) => row.id === selectedId.value) ?? null);
 
 async function loadDicts() {
@@ -48,12 +67,13 @@ async function loadDicts() {
   try {
     const query = keyword.value.trim() ? `?keyword=${encodeURIComponent(keyword.value.trim())}` : '';
     dicts.value = await api<DictRow[]>(`/dicts${query}`);
-    // 选中的字典被搜索条件过滤掉了：清空选中，避免下面还挂着一本「看不见的字典」
+    // 选中的字典被搜索条件过滤掉了：清空选中，避免右侧还挂着一本「看不见的字典」
     if (selectedId.value && !dicts.value.some((row) => row.id === selectedId.value)) {
       selectedId.value = null;
       items.value = [];
+      itemPagination.itemCount = 0;
     }
-    // 首次进来默认选中第一本，下面的字典项区域不空着
+    // 首次进来默认选中第一本，右侧的字典项区域不空着
     if (!selectedId.value && dicts.value.length) selectDict(dicts.value[0]);
   } catch (e: any) {
     message.error(e.message);
@@ -65,18 +85,30 @@ async function loadDicts() {
 function selectDict(row: DictRow) {
   selectedId.value = row.id;
   checkedItems.value = [];
+  itemPagination.page = 1;
   void loadItems();
 }
 
 async function loadItems() {
   if (!selectedId.value) {
     items.value = [];
+    itemPagination.itemCount = 0;
     return;
   }
   itemsLoading.value = true;
+  // 换页 / 换字典 / 删完重载都会走到这里，之前勾的项可能已经不在这一页了
   checkedItems.value = [];
   try {
-    items.value = await api<DictItemRow[]>(`/dicts/${selectedId.value}/items`);
+    const data = await api<PageResult<DictItemRow>>(
+      `/dicts/${selectedId.value}/items?page=${itemPagination.page}&size=${itemPagination.pageSize}`
+    );
+    items.value = data.records ?? [];
+    itemPagination.itemCount = data.total ?? items.value.length;
+    // 删到当前页空了就退回上一页
+    if (!items.value.length && itemPagination.page > 1) {
+      itemPagination.page -= 1;
+      await loadItems();
+    }
   } catch (e: any) {
     message.error(e.message);
   } finally {
@@ -125,7 +157,10 @@ async function saveDict() {
     }
     showDictEditor.value = false;
     await loadDicts();
-    if (selectedId.value) await loadItems();
+    if (selectedId.value) {
+      itemPagination.page = 1;
+      await loadItems();
+    }
   } catch (e: any) {
     message.error(e.message);
   } finally {
@@ -140,6 +175,7 @@ async function removeDict(row: DictRow) {
     if (selectedId.value === row.id) {
       selectedId.value = null;
       items.value = [];
+      itemPagination.itemCount = 0;
     }
     await loadDicts();
   } catch (e: any) {
@@ -168,6 +204,7 @@ async function batchRemoveDicts() {
     if (ids.includes(selectedId.value ?? -1)) {
       selectedId.value = null;
       items.value = [];
+      itemPagination.itemCount = 0;
     }
     await loadDicts();
     const summary = batchDeleteSummary('字典', res);
@@ -213,6 +250,7 @@ async function saveItem() {
   if (!value) return message.warning('请填写字典值');
   if (!label) return message.warning('请填写显示名');
   const body = { itemValue: value, itemLabel: label, sortOrder: editor.sort_order ?? null };
+  const creating = !editor.id;
   savingItem.value = true;
   try {
     if (editor.id) {
@@ -222,8 +260,13 @@ async function saveItem() {
     }
     message.success('字典项已保存');
     showItemEditor.value = false;
+    // 新增的项排在最后：直接翻到最后一页，省得以为没保存成功
+    if (creating) {
+      const pageSize = itemPagination.pageSize;
+      itemPagination.page = Math.max(1, Math.ceil((itemPagination.itemCount + 1) / pageSize));
+    }
     await loadItems();
-    // 项数变了，上方列表上的计数要跟着变
+    // 项数变了，左侧列表上的计数要跟着变
     await loadDicts();
   } catch (e: any) {
     message.error(e.message);
@@ -283,12 +326,13 @@ function confirmBatchRemoveItems() {
 }
 
 /* ------------------------------------------------------------ 表格 */
+/** 左侧列表窄，只保留「选哪本」需要的信息；备注和时间放进字典编辑弹窗里看 */
 const dictColumns = [
-  { type: 'selection' as const, width: 44 },
+  { type: 'selection' as const, width: 40 },
   {
     title: '字典',
     key: 'dict_code',
-    minWidth: 220,
+    minWidth: 140,
     render: (row: DictRow) =>
       h('div', null, [
         h('div', { class: 'cell-title mono' }, row.dict_code),
@@ -298,30 +342,16 @@ const dictColumns = [
   {
     title: '项数',
     key: 'item_count',
-    width: 90,
+    width: 68,
     render: (row: DictRow) =>
-      h(NTag, { size: 'small', bordered: false, type: 'info' }, { default: () => `${row.item_count ?? 0} 项` })
-  },
-  {
-    title: '备注',
-    key: 'remark',
-    minWidth: 200,
-    ellipsis: { tooltip: true },
-    render: (row: DictRow) => h('span', { class: 'muted' }, row.remark || '—')
-  },
-  {
-    title: '更新时间',
-    key: 'update_time',
-    width: 160,
-    render: (row: DictRow) => h('span', { class: 'muted' }, formatTime(row.update_time ?? row.create_time))
+      h(NTag, { size: 'small', bordered: false, type: 'info' }, { default: () => `${row.item_count ?? 0}` })
   },
   {
     title: '操作',
     key: 'actions',
-    width: 150,
+    width: 84,
     render: (row: DictRow) =>
       rowActions([
-        { label: '维护项', tone: 'info', onClick: () => selectDict(row) },
         { label: '编辑', tone: 'primary', onClick: () => openEditDict(row) },
         { label: '删除', tone: 'error', onClick: () => confirmRemoveDict(row) }
       ])
@@ -376,40 +406,40 @@ onMounted(loadDicts);
 
 <template>
   <div class="view dict-view">
+    <!-- 左：字典列表（窄栏，点一行切换右侧的字典项） -->
     <NCard
       :bordered="false"
       class="table-card dict-card"
       content-style="flex:1;min-height:0;display:flex;flex-direction:column;"
     >
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <NInput v-model:value="keyword" placeholder="搜索字典编码 / 名称 / 备注" clearable style="width: 260px">
-            <template #prefix>
-              <NIcon color="#a3adbd"><SearchOutline /></NIcon>
-            </template>
-          </NInput>
-          <NTag size="small" :bordered="false">共 {{ dicts.length }} 本字典</NTag>
-        </div>
-        <div class="toolbar-right">
-          <BatchBar
-            v-if="checkedDicts.length"
-            :count="checkedDicts.length"
-            label="字典"
-            @remove="confirmBatchRemoveDicts"
-            @clear="checkedDicts = []"
-          />
-          <NTooltip trigger="hover">
-            <template #trigger>
-              <NButton circle quaternary @click="loadDicts">
-                <template #icon>
-                  <NIcon><RefreshOutline /></NIcon>
-                </template>
-              </NButton>
-            </template>
-            刷新
-          </NTooltip>
-          <NButton type="primary" size="small" @click="openCreateDict">新增字典</NButton>
-        </div>
+      <div class="side-toolbar">
+        <NInput v-model:value="keyword" size="small" placeholder="搜索编码 / 名称 / 备注" clearable>
+          <template #prefix>
+            <NIcon color="#a3adbd"><SearchOutline /></NIcon>
+          </template>
+        </NInput>
+        <NTooltip trigger="hover">
+          <template #trigger>
+            <NButton circle quaternary @click="loadDicts">
+              <template #icon>
+                <NIcon><RefreshOutline /></NIcon>
+              </template>
+            </NButton>
+          </template>
+          刷新
+        </NTooltip>
+        <NButton type="primary" size="small" @click="openCreateDict">新增字典</NButton>
+      </div>
+
+      <div class="side-meta">
+        <span class="muted">共 {{ dicts.length }} 本</span>
+        <BatchBar
+          v-if="checkedDicts.length"
+          :count="checkedDicts.length"
+          label="字典"
+          @remove="confirmBatchRemoveDicts"
+          @clear="checkedDicts = []"
+        />
       </div>
 
       <NDataTable
@@ -423,7 +453,7 @@ onMounted(loadDicts);
         :row-class-name="dictRowClassName"
         :bordered="false"
         size="small"
-        :scroll-x="900"
+        :scroll-x="360"
         style="flex: 1; min-height: 0"
         @update:checked-row-keys="(keys: Array<string | number>) => (checkedDicts = keys as number[])"
       >
@@ -433,6 +463,7 @@ onMounted(loadDicts);
       </NDataTable>
     </NCard>
 
+    <!-- 右：选中字典的字典项（服务端分页） -->
     <NCard
       :bordered="false"
       class="table-card items-card"
@@ -445,7 +476,7 @@ onMounted(loadDicts);
             <NTag size="small" :bordered="false" type="info">{{ selected.dict_code }}</NTag>
             <span class="items-sub">{{ selected.dict_name }}</span>
           </template>
-          <span v-else class="items-sub">先在上方选中一本字典</span>
+          <span v-else class="items-sub">先在左侧选中一本字典</span>
         </div>
         <div class="toolbar-right">
           <BatchBar
@@ -473,11 +504,13 @@ onMounted(loadDicts);
 
       <NDataTable
         flex-height
+        remote
         :columns="itemColumns"
         :data="items"
         :loading="itemsLoading"
         :row-key="(row: DictItemRow) => row.id"
         :checked-row-keys="checkedItems"
+        :pagination="itemPagination"
         :bordered="false"
         size="small"
         :scroll-x="700"
@@ -486,7 +519,7 @@ onMounted(loadDicts);
       >
         <template #empty>
           <NEmpty
-            :description="selected ? '这本字典还没有项，点击「新增字典项」添加' : '选中一本字典后在这里维护它的「值 → 显示名」'"
+            :description="selected ? '这本字典还没有项，点击「新增字典项」添加' : '在左侧选中一本字典后，在这里维护它的「值 → 显示名」'"
           />
         </template>
       </NDataTable>
@@ -553,17 +586,42 @@ onMounted(loadDicts);
 </template>
 
 <style scoped>
+/* 左：字典列表（固定宽度）；右：字典项占满剩余宽度。窄屏回退成上下结构 */
 .dict-view {
+  flex-direction: row;
   gap: 14px;
 }
 
-/* 上：字典主表（约四成高）；下：字典项子表（剩余高度），两张表各自内部滚动 */
 .dict-view .dict-card {
-  flex: 0 0 40%;
+  flex: 0 0 400px;
 }
 
 .dict-view .items-card {
   flex: 1 1 auto;
+  min-width: 0;
+}
+
+.side-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.side-toolbar .n-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.side-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  margin-bottom: 8px;
 }
 
 .items-title {
@@ -578,6 +636,7 @@ onMounted(loadDicts);
 }
 
 .items-hint {
+  flex: none;
   margin-bottom: 10px;
   padding: 7px 10px;
   border: 1px solid #d9e6fb;
@@ -596,5 +655,15 @@ onMounted(loadDicts);
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 16px;
+}
+
+@media (max-width: 992px) {
+  .dict-view {
+    flex-direction: column;
+  }
+
+  .dict-view .dict-card {
+    flex: 0 0 40%;
+  }
 }
 </style>

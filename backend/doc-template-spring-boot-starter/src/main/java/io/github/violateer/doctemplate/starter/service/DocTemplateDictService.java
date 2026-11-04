@@ -162,6 +162,25 @@ public class DocTemplateDictService {
         return itemRepository.findByDictId(dictId).stream().map(this::itemMap).toList();
     }
 
+    /**
+     * 字典项分页列表：返回 {@code {records,total,page,size,pages}}，与模板列表同一套结构，
+     * 供管理页做服务端分页；字典项很多时不必一次拉全量。
+     */
+    public Map<String, Object> itemsPage(long dictId, int page, int size) {
+        requireDict(dictId);
+        int current = Math.max(1, page);
+        int pageSize = Math.min(200, Math.max(1, size));
+        long total = itemRepository.countByDictId(dictId);
+        List<DocTemplateDictItemEntity> rows = itemRepository.findPage(dictId, (current - 1) * pageSize, pageSize);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("records", rows.stream().map(this::itemMap).toList());
+        data.put("total", total);
+        data.put("page", current);
+        data.put("size", pageSize);
+        data.put("pages", pages(total, pageSize));
+        return data;
+    }
+
     public Map<String, Object> createItem(long dictId, Map<String, Object> body) {
         requireDict(dictId);
         String value = require(body, "itemValue", "字典值");
@@ -220,6 +239,11 @@ public class DocTemplateDictService {
     }
 
     // ------------------------------------------------------------------ 内部
+
+    /** 分页总页数：0 条数据时返回 0，与前端分页器保持一致。 */
+    private static int pages(long total, int pageSize) {
+        return (int) ((total + pageSize - 1) / pageSize);
+    }
 
     private DocTemplateDictEntity requireDict(long id) {
         DocTemplateDictEntity e = dictRepository.findById(id);

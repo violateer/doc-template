@@ -45,6 +45,21 @@ public class DocTemplateDictItemRepository {
                 new MapSqlParameterSource("dictId", dictId), ROW_MAPPER);
     }
 
+    /** 字典项分页：字典项上千条时管理页只取当前页，排序与全量查询一致。 */
+    public List<DocTemplateDictItemEntity> findPage(long dictId, int offset, int limit) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM doc_template_dict_item WHERE dict_id = :dictId"
+                        + " ORDER BY sort_order ASC, id ASC LIMIT :limit OFFSET :offset",
+                new MapSqlParameterSource("dictId", dictId)
+                        .addValue("limit", limit)
+                        .addValue("offset", offset), ROW_MAPPER);
+    }
+
+    public long countByDictId(long dictId) {
+        Long total = jdbc.queryForObject("SELECT COUNT(*) FROM doc_template_dict_item WHERE dict_id = :dictId",
+                new MapSqlParameterSource("dictId", dictId), Long.class);
+        return total == null ? 0L : total;
+    }
+
     public DocTemplateDictItemEntity findById(long id) {
         List<DocTemplateDictItemEntity> rows = jdbc.query("SELECT " + COLUMNS
                 + " FROM doc_template_dict_item WHERE id = :id", new MapSqlParameterSource("id", id), ROW_MAPPER);

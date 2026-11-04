@@ -61,7 +61,7 @@
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/dicts/{id}/items` | 该字典的映射，按 `sort_order`、`id` 排序 |
+| `GET` | `/dicts/{id}/items` | 该字典的映射，按 `sort_order`、`id` 排序；不带 `page` 返回全量，带 `page` 返回 `{records,total,page,size,pages}`，支持 `size`（默认 20，上限 200） |
 | `POST` | `/dicts/{id}/items` | 新增映射，body `{itemValue, itemLabel, sortOrder?}`，`sortOrder` 不传自动追加到末尾 |
 | `PUT` | `/dicts/items/{itemId}` | 修改单条映射 |
 | `DELETE` | `/dicts/items/{itemId}` | 删除单条映射 |

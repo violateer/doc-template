@@ -115,7 +115,7 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 - `PUT/DELETE /api/doc-template/data-blocks/{id}`
 - `POST /api/doc-template/data-blocks/batch-delete`：批量删除数据块，请求体与返回结构同模板的批量删除
 - `GET /api/doc-template/dicts?keyword=`：字典主表列表（每行带 `item_count`），`POST` 新增、`PUT/DELETE /{id}` 修改 / 删除（连带子表）
-- `GET/POST /api/doc-template/dicts/{id}/items`：字典项（子表）列表 / 新增；`PUT/DELETE /api/doc-template/dicts/items/{itemId}` 改 / 删单条
+- `GET/POST /api/doc-template/dicts/{id}/items`：字典项（子表）列表 / 新增；`GET` 不带 `page` 时返回完整数组，带 `page` 时返回 `{records,total,page,size,pages}`（支持 `size`，默认 20，上限 200）；`PUT/DELETE /api/doc-template/dicts/items/{itemId}` 改 / 删单条
 - `POST /api/doc-template/dicts/batch-delete`、`POST /api/doc-template/dicts/items/batch-delete`：两张表各自的批量删除
 - `GET/POST /api/doc-template/generate-records`
   - `GET` 不带 `page` 时返回完整数组；带 `page` 时返回 `{records,total,page,size,pages}`，支持 `size`（默认 20，上限 200）、`keyword`（记录号 / 生成人 / 失败说明 / 模板名称）、`status`
@@ -368,10 +368,12 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 
 ### 在管理界面里配置
 
-数据源配置和参数映射都是**按字段填表**，每个字段一个输入框，输入框下方就是这个字段的说明（能填什么、默认值、注意点）：
+数据源配置和参数映射都是**按字段填表**，每个字段一个输入框；字段说明集中在弹窗右侧的「说明」侧栏里（默认收起），不占表单的位置：
 
 - **每个字段一个输入框**，标签旁边带「填入示例」，点一下只填这一项，不影响其他已填内容。
-- **控件按字段类型自动切换**：文本 / 多行文本 / 数字（带单位）/ 开关 / 下拉 / 键值对 / JSON（只有 API 的请求体是 JSON，因为接口本身就要 JSON）。
+- **说明侧栏**：弹窗标题栏右上角、关闭按钮左边的侧边栏图标控制展开 / 收起（默认收起），展开后按分组列出当前类型的字段名、JSON 键名和说明（能填什么、默认值、注意点），内容与表单同一份字段定义，改一处两边都变。
+- **控件按字段类型自动切换**：文本 / 多行文本 / 数字（带单位）/ 布尔（二选一，用下拉）/ 下拉 / 键值对 / JSON（只有 API 的请求体是 JSON，因为接口本身就要 JSON）。
+- **一行放三个**：表单是三列网格，窄字段（布尔、数字、下拉、单行文本）一行排三个，多行文本 / JSON / 键值对占满整行；`合并单元格对齐`（整篇文档一份设置）也排在这张网格里。
 - **下拉项来自后端**：`Provider 编码` 列的是宿主应用注册的 Provider，`数据源` 列的是可用的 `DataSource` Bean，不用记名字。
 - **切换数据源类型**时配置项整套换掉（重置为新类型的默认值），参数映射和图片字段保留。
 - **排序不用填**：新建的数据块排在最后，执行顺序就是列表顺序。
@@ -401,7 +403,7 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 ```
 
 - `sql`：单条查询语句，用 `:name` 命名占位，**不要拼字符串**；参数值一律走 JDBC 占位符绑定，不会进入 SQL 文本。
-- `single`：`true` 返回单条对象（主信息）；`false` 返回数组，配合模板里的 `{{#each 块编码}}` 做明细行循环。
+- `single`（界面上是「返回数据格式」下拉，选项 单条 / 多条）：`true` 按单条返回（主信息）；`false` 按多条返回（结果是一个数组），配合模板里的 `{{#each 块编码}}` 做明细行循环。
 - `maxRows`：最多返回行数，默认取 `doc-template.data-block.default-max-rows`（500）。
 - `dataSource`：可选，宿主应用里 `DataSource` 的 Bean 名称，默认用主数据源 `dataSource`。
 
@@ -524,7 +526,7 @@ doc-template:
 - 内置 `date` / `number` / `boolean` / `percent` / `upper` / `lower` / `trim` / `mask` / `dict`；宿主实现 `DocTemplateValueConverter` 注册成 Bean 即可扩展，同名覆盖内置。**数据块里的转换是整列批量执行的**（`convertBatch`，明细几百行也只调一次），需要查库/调接口的宿主转换器覆盖它就不会 N+1。
 - 转换链写在默认值之后：`${amount:0|number:2}` → `0.00`；可串联 `${name|trim|upper}`。
 - **认不出来的值原样输出**（不会中断生成）；参数写错（日期格式非法、`dict` 少了 `code`）会直接报错并带上转换器名。
-- 数据字典是全局资源，**主子表结构**：`doc_template_dict`（主表，`dict_code` + `dict_name`）配字段编码，`doc_template_dict_item`（子表，`item_value` → `item_label`）配值到显示名的映射；管理页「数据字典」上半屏选字典、下半屏维护映射。`dict` 转换器按 `dict_code` 换显示名，查不到时由 `args.fallback` 决定原样输出 / 空串 / 字面量。
+- 数据字典是全局资源，**主子表结构**：`doc_template_dict`（主表，`dict_code` + `dict_name`）配字段编码，`doc_template_dict_item`（子表，`item_value` → `item_label`）配值到显示名的映射；管理页「数据字典」左侧选字典、右侧维护映射（按页加载）。`dict` 转换器按 `dict_code` 换显示名，查不到时由 `args.fallback` 决定原样输出 / 空串 / 字面量。
 - **同一次生成里每本字典只查一次库**（明细几百行也只发一条 `SELECT`），生成结束即清理缓存，改完字典立即生效。
 
 ### 执行规则

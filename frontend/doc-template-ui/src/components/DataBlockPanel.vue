@@ -15,10 +15,11 @@ import {
   NSpace,
   NSwitch,
   NTag,
+  NTooltip,
   useDialog,
   useMessage
 } from 'naive-ui';
-import { InformationCircleOutline, WarningOutline } from '@vicons/ionicons5';
+import { WarningOutline } from '@vicons/ionicons5';
 import type { DataTableColumns } from 'naive-ui';
 import { api } from '../api';
 import type { DataBlockRow, DataSourceItem, DictRow, ProviderItem } from '../types';
@@ -44,6 +45,8 @@ const editing = ref<Partial<DataBlockRow> | null>(null);
 const originalCode = ref('');
 const saving = ref(false);
 const showEditor = ref(false);
+/** 编辑弹窗右侧的说明侧栏：默认收起，表单占满整宽；打开弹窗时复位 */
+const asideOpen = ref(false);
 
 /* ------------------------------------------------------------ 数据源预览 */
 /** 预览弹窗：配完数据块先跑一次，看 Provider / 接口 / SQL 到底返回什么 */
@@ -83,10 +86,10 @@ const sourceType = computed<DataSourceType>(
 const fields = computed<ConfigField[]>(() => configFields[sourceType.value] ?? []);
 const meta = computed(() => dataSourceMeta[sourceType.value]);
 
-/** 哪些配置项占满整行：多行文本 / JSON / 键值对默认整行，可用 field.span 覆盖 */
-function isWide(field: ConfigField) {
-  if (field.span) return field.span === 2;
-  return field.type === 'textarea' || field.type === 'json' || field.type === 'kv';
+/** 配置项占几列：显式 span 优先；多行文本 / JSON / 键值对默认占满整行（3 列） */
+function fieldSpan(field: ConfigField) {
+  if (field.span) return field.span;
+  return field.type === 'textarea' || field.type === 'json' || field.type === 'kv' ? 3 : 1;
 }
 
 /** 按 field.group 分组展示，未标注分组的字段自成一组且不显示小标题 */
@@ -668,14 +671,12 @@ function filterOption(pattern: string, option: Record<string, any>) {
 function defaultsFor(type: DataSourceType): Record<string, any> {
   const values: Record<string, any> = {};
   for (const field of configFields[type] ?? []) {
-    if (field.type === 'switch') values[field.key] = false;
-    else if (field.type === 'number') values[field.key] = null;
+    if (field.type === 'number') values[field.key] = null;
     else if (field.type === 'kv') values[field.key] = [];
+    else if (field.type === 'boolean') values[field.key] = field.defaultValue ?? 'false';
     else values[field.key] = '';
   }
   if (type === 'JAVA') values.provider = providers.value[0]?.code ?? '';
-  // 主信息查询更常见，默认按单条对象返回；做明细行时再关掉
-  if (type === 'SQL') values.single = true;
   if (type === 'API') {
     values.method = 'GET';
     values.timeoutMs = 5000;
@@ -708,8 +709,10 @@ function applyConfig(type: DataSourceType, config: Record<string, any>) {
     known.add(field.key);
     const raw = config?.[field.key];
     switch (field.type) {
-      case 'switch':
-        values[field.key] = raw === true || raw === 'true';
+      case 'boolean':
+        // 表单里用 'true' / 'false' 两个字符串，写回配置时再转成真正的布尔
+        values[field.key] =
+          raw == null ? (field.defaultValue ?? 'false') : raw === true || raw === 'true' ? 'true' : 'false';
         break;
       case 'number':
         values[field.key] = raw == null || raw === '' ? null : Number(raw);
@@ -745,8 +748,8 @@ function buildConfig(): Record<string, any> | null {
   const config: Record<string, any> = { ...extraConfig.value };
   for (const field of fields.value) {
     const value = configValues.value[field.key];
-    if (field.type === 'switch') {
-      config[field.key] = value === true;
+    if (field.type === 'boolean') {
+      config[field.key] = value === 'true';
       continue;
     }
     if (field.type === 'number') {
@@ -907,6 +910,7 @@ function openCreate() {
   imageFields.value = [];
   converterRows.value = [];
   mergeAlign.value = '';
+  asideOpen.value = false;
   showEditor.value = true;
   void loadDicts();
 }
@@ -922,6 +926,7 @@ function openEdit(row: DataBlockRow) {
   imageFields.value = readImageFields(config as Record<string, any>);
   converterRows.value = readConverters(config as Record<string, any>);
   mergeAlign.value = readMergeAlign(config as Record<string, any>);
+  asideOpen.value = false;
   showEditor.value = true;
   void loadDicts();
 }
@@ -1405,364 +1410,409 @@ onMounted(() => {
       preset="card"
       class="doc-modal-card"
       :title="editing?.id ? '编辑数据块' : '新增数据块'"
-      style="width: min(900px, 94vw); max-height: 88vh"
+      style="width: min(1080px, 94vw); max-height: 88vh"
     >
-      <NForm v-if="editing" label-placement="top" size="small">
-        <div class="basic-grid">
-          <NFormItem label="数据块编码" required>
-            <NInput v-model:value="editing.block_code" placeholder="例如 report" class="mono" />
-            <template #feedback>
-              <span v-if="editing.id && editing.block_code !== originalCode" class="code-hint">
-                <span v-pre>改编码不会动模板文件，记得同步改模板里的 ${编码.字段} / {{#each 编码}}，否则生成时取不到这个块。</span>
-              </span>
-            </template>
-          </NFormItem>
-          <NFormItem label="数据块名称" required>
-            <NInput v-model:value="editing.block_name" placeholder="例如 检验报告主信息" />
-          </NFormItem>
-          <NFormItem label="数据源类型">
-            <NSelect v-model:value="editing.data_source_type" :options="typeOptions" @update:value="handleTypeChange" />
-          </NFormItem>
-          <NFormItem label="状态">
-            <NSelect v-model:value="editing.status" :options="statusOptions" />
-          </NFormItem>
-        </div>
+      <!-- 说明开关放在标题栏右侧、关闭按钮左边：一个侧边栏图标 -->
+      <template #header-extra>
+        <NTooltip trigger="hover">
+          <template #trigger>
+            <NButton
+              class="aside-toggle"
+              :class="{ 'is-active': asideOpen }"
+              size="small"
+              quaternary
+              circle
+              :aria-expanded="asideOpen"
+              aria-label="配置说明"
+              @click="asideOpen = !asideOpen"
+            >
+              <template #icon>
+                <svg class="aside-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                  <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.2" />
+                  <line x1="6" y1="2.5" x2="6" y2="13.5" stroke="currentColor" stroke-width="1.2" />
+                </svg>
+              </template>
+            </NButton>
+          </template>
+          {{ asideOpen ? '收起配置说明' : '展开配置说明' }}
+        </NTooltip>
+      </template>
 
-        <div class="section-head">
-          <span class="section-title">数据源配置</span>
-          <span class="section-badge">{{ meta.label }}</span>
-        </div>
-        <div class="cfg-tip">
-          <NIcon :size="13" class="cfg-tip-icon"><InformationCircleOutline /></NIcon>
-          <span>{{ meta.summary }}</span>
-        </div>
-        <div v-if="meta.warning" class="cfg-warn">
-          <NIcon :size="13" class="cfg-warn-icon"><WarningOutline /></NIcon>
-          <span>{{ meta.warning }}</span>
-        </div>
+      <div class="editor-body">
+        <NForm v-if="editing" class="editor-form" label-placement="top" size="small">
+          <div class="basic-grid">
+            <NFormItem label="数据块编码" required>
+              <NInput v-model:value="editing.block_code" placeholder="例如 report" class="mono" />
+              <template #feedback>
+                <span v-if="editing.id && editing.block_code !== originalCode" class="code-hint">
+                  <span v-pre>改编码不会动模板文件，记得同步改模板里的 ${编码.字段} / {{#each 编码}}，否则生成时取不到这个块。</span>
+                </span>
+              </template>
+            </NFormItem>
+            <NFormItem label="数据块名称" required>
+              <NInput v-model:value="editing.block_name" placeholder="例如 检验报告主信息" />
+            </NFormItem>
+            <NFormItem label="数据源类型">
+              <NSelect v-model:value="editing.data_source_type" :options="typeOptions" @update:value="handleTypeChange" />
+            </NFormItem>
+            <NFormItem label="状态">
+              <NSelect v-model:value="editing.status" :options="statusOptions" />
+            </NFormItem>
+          </div>
 
-        <div class="cfg-groups">
-          <div v-for="(group, groupIndex) in fieldGroups" :key="group.title || groupIndex" class="cfg-group">
-            <div v-if="group.title" class="cfg-group-title">{{ group.title }}</div>
-            <div class="cfg-grid">
+          <div class="section-head">
+            <span class="section-title">数据源配置</span>
+            <span class="section-badge">{{ meta.label }}</span>
+          </div>
+          <div v-if="meta.warning" class="cfg-warn">
+            <NIcon :size="13" class="cfg-warn-icon"><WarningOutline /></NIcon>
+            <span>{{ meta.warning }}</span>
+          </div>
+
+          <!-- 所有配置项共用一张网格：分组标题占满一行，窄字段一行排三个 -->
+          <div class="cfg-grid">
+            <template v-for="(group, groupIndex) in fieldGroups" :key="group.title || groupIndex">
+              <div v-if="group.title" class="cfg-group-title">{{ group.title }}</div>
               <div
                 v-for="field in group.fields"
                 :key="field.key"
                 class="cfg-field"
-                :class="{ 'cfg-field--wide': isWide(field) }"
+                :style="{ gridColumn: `span ${fieldSpan(field)}` }"
               >
-                <!-- 开关类字段压成一行设置项，比标签+开关竖排更省空间 -->
-                <div v-if="field.type === 'switch'" class="cfg-switch-row">
+                <div class="cfg-label">
                   <span class="cfg-label-main">
-                    <span class="cfg-label-text">{{ field.label }}</span>
+                    <span class="cfg-label-text">
+                      {{ field.label }}<span v-if="field.required" class="field-required">*</span>
+                    </span>
                     <code class="cfg-key">{{ field.key }}</code>
                   </span>
-                  <span class="cfg-switch-side">
-                    <NButton
-                      v-if="field.sample !== undefined"
-                      size="tiny"
-                      text
-                      type="primary"
-                      @click="fillField(field)"
-                    >
-                      示例
-                    </NButton>
-                    <NSwitch v-model:value="configValues[field.key]" size="small" />
-                  </span>
-                </div>
-
-                <template v-else>
-                  <div class="cfg-label">
-                    <span class="cfg-label-main">
-                      <span class="cfg-label-text">
-                        {{ field.label }}<span v-if="field.required" class="field-required">*</span>
-                      </span>
-                      <code class="cfg-key">{{ field.key }}</code>
-                    </span>
-                    <NButton
-                      v-if="field.sample !== undefined"
-                      size="tiny"
-                      text
-                      type="primary"
-                      @click="fillField(field)"
-                    >
-                      填入示例
-                    </NButton>
-                  </div>
-
-                  <NInput
-                    v-if="field.type === 'text'"
-                    v-model:value="configValues[field.key]"
-                    size="small"
-                    :placeholder="field.placeholder"
-                  />
-                  <NInput
-                    v-else-if="field.type === 'textarea'"
-                    v-model:value="configValues[field.key]"
-                    type="textarea"
-                    class="json-editor"
-                    :autosize="{ minRows: field.rows ?? 4, maxRows: 14 }"
-                    :placeholder="field.placeholder"
-                  />
-                  <NInputNumber
-                    v-else-if="field.type === 'number'"
-                    v-model:value="configValues[field.key]"
-                    size="small"
-                    :min="0"
-                    :show-button="false"
-                    :placeholder="field.placeholder"
+                  <NButton
+                    v-if="field.sample !== undefined"
+                    size="tiny"
+                    text
+                    type="primary"
+                    @click="fillField(field)"
                   >
-                    <template v-if="field.suffix" #suffix>{{ field.suffix }}</template>
-                  </NInputNumber>
-                  <NSelect
-                    v-else-if="field.type === 'select'"
-                    v-model:value="configValues[field.key]"
-                    size="small"
-                    :options="fieldOptions(field)"
-                    :placeholder="field.placeholder"
-                    :filterable="!!field.dynamic"
-                    :filter-option="filterOption"
-                    :tag="field.dynamic === 'providers'"
-                    :consistent-menu-width="false"
-                  />
-                  <div v-else-if="field.type === 'kv'" class="kv-list">
-                    <div v-for="(item, index) in configValues[field.key]" :key="index" class="kv-row">
-                      <NInput v-model:value="item.key" size="small" class="mono" placeholder="名称" />
-                      <NInput v-model:value="item.value" size="small" class="mono" placeholder="值，可用 ${name}" />
-                      <NButton size="small" quaternary type="error" @click="configValues[field.key].splice(index, 1)">
-                        移除
-                      </NButton>
-                    </div>
-                    <NButton size="tiny" dashed @click="configValues[field.key].push({ key: '', value: '' })">
-                      添加一项
-                    </NButton>
-                  </div>
-                  <NInput
-                    v-else-if="field.type === 'json'"
-                    v-model:value="configValues[field.key]"
-                    type="textarea"
-                    class="json-editor"
-                    :autosize="{ minRows: field.rows ?? 4, maxRows: 12 }"
-                    :placeholder="field.placeholder"
-                  />
-                </template>
-
-                <div v-if="field.desc" class="cfg-hint">
-                  <NIcon :size="12" class="cfg-hint-icon"><InformationCircleOutline /></NIcon>
-                  <span>{{ field.desc }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="list-section">
-          <div class="list-head">
-            <span class="list-title">图片字段</span>
-          </div>
-          <div class="field-body">
-            <div class="field-desc">
-              字段值可以是 http(s) 地址、data URI 或 Base64（SQL 返回 BLOB 也可以）；宽高留空按原图尺寸，对齐是图片在单元格内的水平位置，四周默认留 4px 白边。
-            </div>
-            <div v-if="imageFields.length" class="kv-list">
-              <div v-for="(row, index) in imageFields" :key="index" class="image-row">
-                <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，如 logo / photo" />
-                <NInputNumber v-model:value="row.width" size="small" :min="1" :max="4000" placeholder="宽 px" />
-                <NInputNumber v-model:value="row.height" size="small" :min="1" :max="4000" placeholder="高 px" />
-                <NSelect v-model:value="row.align" size="small" :options="alignOptions" />
-                <NButton size="small" quaternary type="error" @click="removeImageField(index)">移除</NButton>
-              </div>
-            </div>
-            <div v-else class="field-empty">还没有图片字段；模板里写 <span class="mono">${logo}</span>，取到的值按图片渲染</div>
-            <NButton size="tiny" dashed @click="addImageField">添加图片字段</NButton>
-          </div>
-        </div>
-
-        <div class="list-section">
-          <div class="list-head">
-            <span class="list-title">字段值转换</span>
-          </div>
-          <div class="field-body">
-            <div class="field-desc">
-              取数完成后按字段名转换值：0/1 显示成「是/否」、时间戳格式化、金额千分位、枚举换中文。
-              模板里也能就地覆盖：<span class="mono">${amount|number:2}</span>、<span class="mono">${status|dict(order_status)}</span>（模板优先，因为渲染发生在取数之后）。
-            </div>
-            <div v-if="converterRows.length" class="converter-list">
-              <div v-for="(row, index) in converterRows" :key="index" class="converter-item">
-                <div class="converter-main">
-                  <span class="converter-label">字段</span>
-                  <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，多个用逗号分隔" />
-                  <span class="converter-label">转换器</span>
-                  <NSelect
-                    size="small"
-                    :options="converterOptions"
-                    :consistent-menu-width="false"
-                    :value="typeSelectValue(row)"
-                    @update:value="(value: string) => handleTypeSelect(row, value)"
-                  />
-                  <NButton size="small" quaternary type="primary" @click="fillConverterSample(row)">示例</NButton>
-                  <NButton size="small" quaternary type="error" @click="removeConverter(index)">移除</NButton>
-                </div>
-                <div class="converter-desc">{{ converterDesc(row) }}</div>
-                <div v-if="missingRequired(row).length" class="converter-warn">
-                  还差「{{ missingRequired(row).join('、') }}」，不填的话这条规则用不了
+                    填入示例
+                  </NButton>
                 </div>
 
-                <div v-if="row.custom" class="converter-args">
-                  <div class="converter-arg">
-                    <label class="converter-arg-label" title="参数名：type">自定义转换器</label>
-                    <div class="converter-arg-control">
-                      <NSelect
-                        size="small"
-                        filterable
-                        :options="customOptionsFor(row)"
-                        :value="row.type || null"
-                        placeholder="搜索转换器编码，如 demoSku"
-                        @update:value="(value: string | null) => (row.type = value ?? '')"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div v-if="specArgs(row).length" class="converter-args">
-                  <div v-for="arg in specArgs(row)" :key="arg.key" class="converter-arg">
-                    <label class="converter-arg-label" :title="`参数名：${arg.key}`">{{ arg.label }}</label>
-                    <div class="converter-arg-control">
-                      <NSwitch
-                        v-if="arg.control === 'switch'"
-                        size="small"
-                        :value="argBool(row, arg)"
-                        @update:value="(value: boolean) => setArg(row, arg, value ? 'true' : '')"
-                      />
-                      <NInputNumber
-                        v-else-if="arg.control === 'number'"
-                        size="small"
-                        :value="argNumber(row, arg)"
-                        :min="arg.min"
-                        :max="arg.max"
-                        :show-button="false"
-                        :placeholder="arg.placeholder"
-                        @update:value="(value: number | null) => setArg(row, arg, value)"
-                      />
-                      <NSelect
-                        v-else-if="arg.control === 'dict'"
-                        size="small"
-                        filterable
-                        clearable
-                        :loading="dictLoading"
-                        :options="dictOptions"
-                        :value="argValue(row, arg) || null"
-                        :placeholder="arg.placeholder ?? '搜索字典名称或编码'"
-                        @update:value="(value: string | null) => setArg(row, arg, value)"
-                      />
-                      <NSelect
-                        v-else-if="arg.control === 'select'"
-                        size="small"
-                        :options="arg.options ?? []"
-                        :tag="Boolean(arg.tag)"
-                        :filterable="Boolean(arg.tag)"
-                        :value="argValue(row, arg) || null"
-                        :placeholder="arg.placeholder ?? '默认'"
-                        @update:value="(value: string | null) => setArg(row, arg, value)"
-                      />
-                      <NSelect
-                        v-else-if="arg.control === 'pattern'"
-                        size="small"
-                        filterable
-                        tag
-                        :options="arg.options ?? []"
-                        :value="argValue(row, arg) || null"
-                        :placeholder="arg.placeholder ?? '选择或直接输入'"
-                        @update:value="(value: string | null) => setArg(row, arg, value)"
-                      />
-                      <NInput
-                        v-else
-                        size="small"
-                        class="mono"
-                        :value="argValue(row, arg)"
-                        :placeholder="arg.placeholder ?? ''"
-                        @update:value="(value: string) => setArg(row, arg, value)"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div v-else class="converter-hint">
-                  {{ isBuiltin(row.type) ? '该转换器不需要参数' : '宿主自定义转换器，参数名由它的实现决定' }}
-                </div>
-
-                <div v-if="row.extraArgs.length" class="converter-args">
-                  <div v-for="(arg, argIndex) in row.extraArgs" :key="argIndex" class="converter-extra-arg">
-                    <NInput v-model:value="arg.key" size="small" class="mono" placeholder="参数名" />
-                    <NInput v-model:value="arg.value" size="small" class="mono" placeholder="参数值" />
-                    <NButton size="small" quaternary type="error" @click="row.extraArgs.splice(argIndex, 1)">
+                <NInput
+                  v-if="field.type === 'text'"
+                  v-model:value="configValues[field.key]"
+                  size="small"
+                  :placeholder="field.placeholder"
+                />
+                <NInput
+                  v-else-if="field.type === 'textarea'"
+                  v-model:value="configValues[field.key]"
+                  type="textarea"
+                  class="json-editor"
+                  :autosize="{ minRows: field.rows ?? 4, maxRows: 14 }"
+                  :placeholder="field.placeholder"
+                />
+                <NInputNumber
+                  v-else-if="field.type === 'number'"
+                  v-model:value="configValues[field.key]"
+                  size="small"
+                  :min="0"
+                  :show-button="false"
+                  :placeholder="field.placeholder"
+                >
+                  <template v-if="field.suffix" #suffix>{{ field.suffix }}</template>
+                </NInputNumber>
+                <NSelect
+                  v-else-if="field.type === 'select'"
+                  v-model:value="configValues[field.key]"
+                  size="small"
+                  :options="fieldOptions(field)"
+                  :placeholder="field.placeholder"
+                  :filterable="!!field.dynamic"
+                  :filter-option="filterOption"
+                  :tag="field.dynamic === 'providers'"
+                  :consistent-menu-width="false"
+                />
+                <div v-else-if="field.type === 'kv'" class="kv-list">
+                  <div v-for="(item, index) in configValues[field.key]" :key="index" class="kv-row">
+                    <NInput v-model:value="item.key" size="small" class="mono" placeholder="名称" />
+                    <NInput v-model:value="item.value" size="small" class="mono" placeholder="值，可用 ${name}" />
+                    <NButton size="small" quaternary type="error" @click="configValues[field.key].splice(index, 1)">
                       移除
                     </NButton>
                   </div>
-                </div>
-                <div class="converter-arg-actions">
-                  <NButton
-                    v-if="row.custom || row.extraArgs.length"
-                    size="tiny"
-                    dashed
-                    @click="row.extraArgs.push({ key: '', value: '' })"
-                  >
-                    添加自定义参数
+                  <NButton size="tiny" dashed @click="configValues[field.key].push({ key: '', value: '' })">
+                    添加一项
                   </NButton>
-                  <span class="converter-hint">
-                    {{
-                      row.custom
-                        ? '参数名由宿主转换器自己定义，按「参数名 / 参数值」填；转换器编码来自 /system/converters。'
-                        : '参数名由转换器固定，界面只填值；空着的项保存时不写入，交给转换器用它自己的默认值。'
-                    }}
-                  </span>
+                </div>
+                <NInput
+                  v-else-if="field.type === 'json'"
+                  v-model:value="configValues[field.key]"
+                  type="textarea"
+                  class="json-editor"
+                  :autosize="{ minRows: field.rows ?? 4, maxRows: 12 }"
+                  :placeholder="field.placeholder"
+                />
+                <!-- 布尔字段用下拉选，两个选项固定是 单条 / 多条 -->
+                <NSelect
+                  v-else-if="field.type === 'boolean'"
+                  v-model:value="configValues[field.key]"
+                  size="small"
+                  :options="fieldOptions(field)"
+                  :consistent-menu-width="false"
+                />
+              </div>
+            </template>
+
+            <!-- 合并单元格对齐：整篇文档一份设置，和窄字段排在同一行 -->
+            <div class="cfg-field">
+              <div class="cfg-label">
+                <span class="cfg-label-main">
+                  <span class="cfg-label-text">合并单元格对齐</span>
+                  <code class="cfg-key">mergeCellAlign</code>
+                </span>
+              </div>
+              <NSelect v-model:value="mergeAlign" size="small" :options="mergeAlignOptions" />
+            </div>
+          </div>
+
+          <div class="list-section">
+            <div class="list-head">
+              <span class="list-title">图片字段</span>
+            </div>
+            <div class="field-body">
+              <div v-if="imageFields.length" class="kv-list">
+                <div v-for="(row, index) in imageFields" :key="index" class="image-row">
+                  <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，如 logo / photo" />
+                  <NInputNumber v-model:value="row.width" size="small" :min="1" :max="4000" placeholder="宽 px" />
+                  <NInputNumber v-model:value="row.height" size="small" :min="1" :max="4000" placeholder="高 px" />
+                  <NSelect v-model:value="row.align" size="small" :options="alignOptions" />
+                  <NButton size="small" quaternary type="error" @click="removeImageField(index)">移除</NButton>
                 </div>
               </div>
+              <div v-else class="field-empty">还没有图片字段；模板里写 <span class="mono">${logo}</span>，取到的值按图片渲染</div>
+              <NButton size="tiny" dashed @click="addImageField">添加图片字段</NButton>
             </div>
-            <div v-else class="field-empty">还没有转换规则；数据块返回什么就渲染什么</div>
-            <NButton size="tiny" dashed @click="addConverter">添加转换</NButton>
           </div>
-        </div>
 
-        <div class="list-section">
-          <div class="list-head">
-            <span class="list-title">合并单元格对齐</span>
-          </div>
-          <div class="field-body">
-            <div class="field-desc">
-              模板里用 merge= 竖向合并出来的那一格，内容垂直怎么对齐。水平方向跟随原单元格；不设置时保持模板原样（默认靠上）。
+          <div class="list-section">
+            <div class="list-head">
+              <span class="list-title">字段值转换</span>
             </div>
-            <NSelect v-model:value="mergeAlign" size="small" :options="mergeAlignOptions" style="max-width: 240px" />
-          </div>
-        </div>
+            <div class="field-body">
+              <div v-if="converterRows.length" class="converter-list">
+                <div v-for="(row, index) in converterRows" :key="index" class="converter-item">
+                  <div class="converter-main">
+                    <span class="converter-label">字段</span>
+                    <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，多个用逗号分隔" />
+                    <span class="converter-label">转换器</span>
+                    <NSelect
+                      size="small"
+                      :options="converterOptions"
+                      :consistent-menu-width="false"
+                      :value="typeSelectValue(row)"
+                      @update:value="(value: string) => handleTypeSelect(row, value)"
+                    />
+                    <NButton size="small" quaternary type="primary" @click="fillConverterSample(row)">示例</NButton>
+                    <NButton size="small" quaternary type="error" @click="removeConverter(index)">移除</NButton>
+                  </div>
+                  <div class="converter-desc">{{ converterDesc(row) }}</div>
+                  <div v-if="missingRequired(row).length" class="converter-warn">
+                    还差「{{ missingRequired(row).join('、') }}」，不填的话这条规则用不了
+                  </div>
 
-        <div class="list-section">
-          <div class="list-head">
-            <span class="list-title">参数映射</span>
-            <NButton size="tiny" text type="primary" @click="fillParamSample">填入示例</NButton>
-          </div>
-          <div class="field-body">
-            <div class="param-hint">
-              <span v-for="note in paramFieldNotes" :key="note.name" class="param-hint-item">
-                <code>{{ note.name }}</code>
-                {{ note.desc }}
-              </span>
+                  <div v-if="row.custom" class="converter-args">
+                    <div class="converter-arg">
+                      <label class="converter-arg-label" title="参数名：type">自定义转换器</label>
+                      <div class="converter-arg-control">
+                        <NSelect
+                          size="small"
+                          filterable
+                          :options="customOptionsFor(row)"
+                          :value="row.type || null"
+                          placeholder="搜索转换器编码，如 demoSku"
+                          @update:value="(value: string | null) => (row.type = value ?? '')"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="specArgs(row).length" class="converter-args">
+                    <div v-for="arg in specArgs(row)" :key="arg.key" class="converter-arg">
+                      <label class="converter-arg-label" :title="`参数名：${arg.key}`">{{ arg.label }}</label>
+                      <div class="converter-arg-control">
+                        <NSwitch
+                          v-if="arg.control === 'switch'"
+                          size="small"
+                          :value="argBool(row, arg)"
+                          @update:value="(value: boolean) => setArg(row, arg, value ? 'true' : '')"
+                        />
+                        <NInputNumber
+                          v-else-if="arg.control === 'number'"
+                          size="small"
+                          :value="argNumber(row, arg)"
+                          :min="arg.min"
+                          :max="arg.max"
+                          :show-button="false"
+                          :placeholder="arg.placeholder"
+                          @update:value="(value: number | null) => setArg(row, arg, value)"
+                        />
+                        <NSelect
+                          v-else-if="arg.control === 'dict'"
+                          size="small"
+                          filterable
+                          clearable
+                          :loading="dictLoading"
+                          :options="dictOptions"
+                          :value="argValue(row, arg) || null"
+                          :placeholder="arg.placeholder ?? '搜索字典名称或编码'"
+                          @update:value="(value: string | null) => setArg(row, arg, value)"
+                        />
+                        <NSelect
+                          v-else-if="arg.control === 'select'"
+                          size="small"
+                          :options="arg.options ?? []"
+                          :tag="Boolean(arg.tag)"
+                          :filterable="Boolean(arg.tag)"
+                          :value="argValue(row, arg) || null"
+                          :placeholder="arg.placeholder ?? '默认'"
+                          @update:value="(value: string | null) => setArg(row, arg, value)"
+                        />
+                        <NSelect
+                          v-else-if="arg.control === 'pattern'"
+                          size="small"
+                          filterable
+                          tag
+                          :options="arg.options ?? []"
+                          :value="argValue(row, arg) || null"
+                          :placeholder="arg.placeholder ?? '选择或直接输入'"
+                          @update:value="(value: string | null) => setArg(row, arg, value)"
+                        />
+                        <NInput
+                          v-else
+                          size="small"
+                          class="mono"
+                          :value="argValue(row, arg)"
+                          :placeholder="arg.placeholder ?? ''"
+                          @update:value="(value: string) => setArg(row, arg, value)"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="converter-hint">
+                    {{ isBuiltin(row.type) ? '该转换器不需要参数' : '宿主自定义转换器，参数名由它的实现决定' }}
+                  </div>
+
+                  <div v-if="row.extraArgs.length" class="converter-args">
+                    <div v-for="(arg, argIndex) in row.extraArgs" :key="argIndex" class="converter-extra-arg">
+                      <NInput v-model:value="arg.key" size="small" class="mono" placeholder="参数名" />
+                      <NInput v-model:value="arg.value" size="small" class="mono" placeholder="参数值" />
+                      <NButton size="small" quaternary type="error" @click="row.extraArgs.splice(argIndex, 1)">
+                        移除
+                      </NButton>
+                    </div>
+                  </div>
+                  <div class="converter-arg-actions">
+                    <NButton
+                      v-if="row.custom || row.extraArgs.length"
+                      size="tiny"
+                      dashed
+                      @click="row.extraArgs.push({ key: '', value: '' })"
+                    >
+                      添加自定义参数
+                    </NButton>
+                    <span class="converter-hint">
+                      {{
+                        row.custom
+                          ? '参数名由宿主转换器自己定义，按「参数名 / 参数值」填；转换器编码来自 /system/converters。'
+                          : '参数名由转换器固定，界面只填值；空着的项保存时不写入，交给转换器用它自己的默认值。'
+                      }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="field-empty">还没有转换规则；数据块返回什么就渲染什么</div>
+              <NButton size="tiny" dashed @click="addConverter">添加转换</NButton>
             </div>
-            <div v-if="paramRows.length" class="kv-list">
-              <div v-for="(row, index) in paramRows" :key="index" class="kv-row">
-                <NInput v-model:value="row.key" size="small" class="mono" placeholder="参数名，如 reportNo" />
-                <NInput v-model:value="row.value" size="small" class="mono" placeholder="$request.reportNo 或字面量" />
-                <NButton size="small" quaternary type="error" @click="paramRows.splice(index, 1)">移除</NButton>
+          </div>
+
+          <div class="list-section">
+            <div class="list-head">
+              <span class="list-title">参数映射</span>
+              <NButton size="tiny" text type="primary" @click="fillParamSample">填入示例</NButton>
+            </div>
+            <div class="field-body">
+              <div v-if="paramRows.length" class="kv-list">
+                <div v-for="(row, index) in paramRows" :key="index" class="kv-row">
+                  <NInput v-model:value="row.key" size="small" class="mono" placeholder="参数名，如 reportNo" />
+                  <NInput v-model:value="row.value" size="small" class="mono" placeholder="$request.reportNo 或字面量" />
+                  <NButton size="small" quaternary type="error" @click="paramRows.splice(index, 1)">移除</NButton>
+                </div>
+              </div>
+              <div v-else class="field-empty">还没有参数；数据源不需要入参时可以留空</div>
+              <NButton size="tiny" dashed @click="paramRows.push({ key: '', value: '' })">添加参数</NButton>
+            </div>
+          </div>
+
+          <div v-if="extraKeys.length" class="extra-hint">
+            配置里还有 {{ extraKeys.length }} 个扩展项（<span class="mono">{{ extraKeys.join('、') }}</span>），保存时会原样保留。
+          </div>
+        </NForm>
+
+        <!-- 说明侧栏：内容与表单同一份字段定义，默认收起；自己滚动，不跟表单挤同一条滚动条 -->
+        <aside v-if="asideOpen" class="editor-aside">
+          <div class="aside-title">配置说明</div>
+          <div class="aside-summary">{{ meta.summary }}</div>
+
+          <div v-for="(group, groupIndex) in fieldGroups" :key="group.title || groupIndex" class="aside-group">
+            <div v-if="group.title" class="aside-group-title">{{ group.title }}</div>
+            <div v-for="field in group.fields" :key="field.key" class="aside-item">
+              <div class="aside-item-head">
+                <span class="aside-item-label">{{ field.label }}</span>
+                <code class="cfg-key">{{ field.key }}</code>
+              </div>
+              <div class="aside-item-desc">{{ field.desc }}</div>
+            </div>
+          </div>
+
+          <div class="aside-group">
+            <div class="aside-group-title">参数映射</div>
+            <div v-for="note in paramFieldNotes" :key="note.name" class="aside-item">
+              <div class="aside-item-head">
+                <code class="aside-item-key">{{ note.name }}</code>
+              </div>
+              <div class="aside-item-desc">{{ note.desc }}</div>
+            </div>
+          </div>
+
+          <div class="aside-group">
+            <div class="aside-group-title">图片字段</div>
+            <div class="aside-item">
+              <div class="aside-item-desc">
+                字段值可以是 http(s) 地址、data URI 或 Base64（SQL 返回 BLOB 也可以）；宽高留空按原图尺寸，对齐是图片在单元格内的水平位置，四周默认留 4px 白边。
               </div>
             </div>
-            <div v-else class="field-empty">还没有参数；数据源不需要入参时可以留空</div>
-            <NButton size="tiny" dashed @click="paramRows.push({ key: '', value: '' })">添加参数</NButton>
           </div>
-        </div>
 
-        <div v-if="extraKeys.length" class="extra-hint">
-          配置里还有 {{ extraKeys.length }} 个扩展项（<span class="mono">{{ extraKeys.join('、') }}</span>），保存时会原样保留。
-        </div>
-      </NForm>
+          <div class="aside-group">
+            <div class="aside-group-title">字段值转换</div>
+            <div class="aside-item">
+              <div class="aside-item-desc">
+                取数完成后按字段名转换值：0/1 显示成「是/否」、时间戳格式化、金额千分位、枚举换中文。
+                模板里也能就地覆盖：<code>${amount|number:2}</code>、<code>${status|dict(order_status)}</code>（模板优先，因为渲染发生在取数之后）。
+              </div>
+            </div>
+          </div>
+
+          <div class="aside-group">
+            <div class="aside-group-title">合并单元格对齐</div>
+            <div class="aside-item">
+              <div class="aside-item-desc">
+                模板里用 merge= 竖向合并出来的那一格，内容垂直怎么对齐。水平方向跟随原单元格；不设置时保持模板原样（默认靠上）。
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
 
       <template #footer>
         <div class="modal-footer">
@@ -1849,6 +1899,130 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* -------------------------------------------------- 编辑弹窗：表单 + 说明侧栏 */
+/* 左侧表单占满剩余宽度，右侧说明固定宽度；侧栏收起时表单自动铺满整宽 */
+.editor-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.editor-form {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 侧栏跟随弹窗内容区滚动，自己再套一层滚动，和表单互不影响 */
+.editor-aside {
+  flex: none;
+  align-self: flex-start;
+  position: sticky;
+  top: 0;
+  width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid #e6ecf6;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+
+/* 标题栏里的说明开关：与关闭按钮同排，展开时图标变色 */
+.aside-toggle {
+  color: #5b6577;
+}
+
+.aside-toggle.is-active {
+  color: #2f6fed;
+  background-color: #eef4ff;
+}
+
+.aside-icon {
+  display: block;
+}
+
+.aside-toggle.is-active .aside-icon {
+  color: #2f6fed;
+}
+
+.aside-title {
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1f2733;
+}
+
+.aside-summary {
+  margin-bottom: 12px;
+  padding: 7px 9px;
+  border: 1px solid #d9e6fb;
+  border-radius: 8px;
+  background: #f4f8ff;
+  color: #4a5f88;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.aside-group {
+  margin-top: 12px;
+}
+
+.aside-group-title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #42506b;
+}
+
+.aside-item + .aside-item {
+  margin-top: 8px;
+}
+
+.aside-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.aside-item-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1f2733;
+  line-height: 1.4;
+}
+
+.aside-item-key {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #f2f5fa;
+  color: #2f6fed;
+  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
+.aside-item-desc {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #5b6577;
+  word-break: break-word;
+}
+
+.aside-item-desc code {
+  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #2f6fed;
+}
+
+/* 窄屏：侧栏会把表单挤成一条，干脆不显示开关（打开弹窗时本就是收起状态） */
+@media (max-width: 992px) {
+  .aside-toggle {
+    display: none;
+  }
+}
+
 .basic-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1877,27 +2051,6 @@ onMounted(() => {
   color: #2f6fed;
   background: #eef4ff;
   border: 1px solid #dbe8ff;
-}
-
-/* 数据源类型说明：四边描边的浅蓝提示块 */
-.cfg-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin-bottom: 12px;
-  padding: 7px 10px;
-  border: 1px solid #d9e6fb;
-  border-radius: 8px;
-  background: #f4f8ff;
-  color: #4a5f88;
-  font-size: 11.5px;
-  line-height: 1.55;
-}
-
-.cfg-tip-icon {
-  flex: none;
-  margin-top: 2px;
-  color: #4b7bec;
 }
 
 /* 表单项下方的浅色说明（目前只有「改数据块编码」用） */
@@ -1929,17 +2082,13 @@ onMounted(() => {
 }
 
 /* -------------------------------------------------- 配置项分组 */
-.cfg-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
+/* 分组标题是网格里的一整行，下面的字段接着在同一张网格里排 */
 .cfg-group-title {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-top: 4px;
   font-size: 12px;
   font-weight: 600;
   color: #42506b;
@@ -1962,9 +2111,10 @@ onMounted(() => {
 }
 
 /* -------------------------------------------------- 配置项网格 */
+/* 三列：窄字段（开关 / 数字 / 下拉 / 单行文本）一行排三个，多行文本 / JSON / 键值对占满整行 */
 .cfg-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px 18px;
   align-items: start;
 }
@@ -1974,10 +2124,6 @@ onMounted(() => {
   flex-direction: column;
   gap: 5px;
   min-width: 0;
-}
-
-.cfg-field--wide {
-  grid-column: 1 / -1;
 }
 
 .cfg-label {
@@ -2023,50 +2169,6 @@ onMounted(() => {
   width: 100%;
 }
 
-/* 开关类字段：一行式设置项，高度和输入框对齐 */
-.cfg-switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 30px;
-  padding: 3px 10px;
-  border: 1px solid #e6ecf6;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.cfg-switch-side {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 字段说明：四边描边的浅蓝提示块 */
-.cfg-hint {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 6px 9px;
-  border: 1px solid #d9e6fb;
-  border-radius: 8px;
-  background: #f4f8ff;
-  color: #4a5f88;
-  font-size: 11.5px;
-  line-height: 1.55;
-}
-
-.cfg-hint > span {
-  flex: 1;
-  min-width: 0;
-}
-
-.cfg-hint-icon {
-  flex: none;
-  margin-top: 2px;
-  color: #4b7bec;
-}
-
 /* -------------------------------------------------- 图片字段 / 参数映射 */
 .list-section {
   margin-top: 18px;
@@ -2103,16 +2205,6 @@ onMounted(() => {
   gap: 6px;
 }
 
-.field-desc {
-  padding: 6px 9px;
-  border: 1px solid #d9e6fb;
-  border-radius: 8px;
-  background: #f4f8ff;
-  color: #4a5f88;
-  font-size: 11.5px;
-  line-height: 1.55;
-}
-
 .field-empty {
   font-size: 12px;
   color: #a3adbb;
@@ -2141,30 +2233,6 @@ onMounted(() => {
   gap: 8px;
   width: 100%;
   align-items: center;
-}
-
-/* -------------------------------------------------- 参数映射说明 */
-.param-hint {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 2px;
-  padding: 7px 10px;
-  border: 1px solid #d9e6fb;
-  border-radius: 8px;
-  background: #f4f8ff;
-}
-
-.param-hint-item {
-  font-size: 11.5px;
-  color: #4a5f88;
-  line-height: 1.5;
-}
-
-.param-hint-item code {
-  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  color: #2f6fed;
-  margin-right: 4px;
 }
 
 /* -------------------------------------------------- 图片字段 */
