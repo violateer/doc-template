@@ -38,8 +38,10 @@ import java.util.Set;
  * @param height  目标高度（像素），为空表示按原始高度；同时给宽高时按比例缩放到框内
  * @param align   单元格内水平对齐：{@code CENTER}（默认）/ {@code LEFT} / {@code RIGHT}
  * @param padding 图片四周留白（像素），默认 4
+ * @param qr      不为空时，这个字段的值先按二维码编码再作为图片插入（见 {@link DocTemplateQrCodeSpec}）
  */
-public record DocTemplateImageSpec(String field, Integer width, Integer height, String align, Integer padding) {
+public record DocTemplateImageSpec(String field, Integer width, Integer height, String align, Integer padding,
+                                   DocTemplateQrCodeSpec qr) {
 
     /** 数据块配置里使用的键名（另外兼容 image_fields / images）。 */
     public static final String CONFIG_KEY = "imageFields";
@@ -67,6 +69,11 @@ public record DocTemplateImageSpec(String field, Integer width, Integer height, 
     /** 老调用方式：只关心字段名与尺寸时用这个，对齐居中、留白取默认值。 */
     public DocTemplateImageSpec(String field, Integer width, Integer height) {
         this(field, width, height, null, null);
+    }
+
+    /** 普通图片字段（非二维码）。 */
+    public DocTemplateImageSpec(String field, Integer width, Integer height, String align, Integer padding) {
+        this(field, width, height, align, padding, null);
     }
 
     /** 对齐方式归一化：不认识的写法一律按居中处理。 */

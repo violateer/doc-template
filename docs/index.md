@@ -32,9 +32,9 @@ features:
 ---
 
 ::: tip 在线演示
-不想装环境，直接打开 **[http://www.violateer.top:9150/doc-template](http://www.violateer.top:9150/doc-template)** 就能试：模板管理、数据块配置、模拟生成、PDF 导出都在真跑，十套示例模板也已经刷好。演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。
+不想装环境，直接打开 **[http://www.violateer.top:9150/doc-template](http://www.violateer.top:9150/doc-template)** 就能试：模板管理、数据块配置、模拟生成、PDF 导出都在真跑，四套示例模板也已经刷好。演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。
 
-内置的十套示例模板在演示站上是**只读**的，想试完整流程请自己新建一个模板。
+内置的四套示例模板在演示站上是**只读**的，想试完整流程请自己新建一个模板。
 :::
 
 ## 发布物范围
@@ -78,19 +78,13 @@ POST /api/doc-template/templates/{id}/generate
 
 ## 示例模板
 
-十个开箱即用的模板，配套数据块 SQL 一起给，导入后就能验证占位符、明细行循环、递归渲染、竖向合并、字段值转换与字典、图片字段与 PDF 导出：
+四套开箱即用的模板，配套数据块 SQL 一起给，导入后就能验证占位符、明细行循环、递归渲染、竖向合并、字段值转换与字典、图片与二维码、PDF 导出：
 
 | 模板 | 文件 | 数据块 | 覆盖的写法 |
 | --- | --- | --- | --- |
-| 普通Word | [word-render-test.docx](/demo/word-render-test.docx) | `form`(SQL) / `demoProvider`(JAVA) / `demoApi`(API) | 默认值、表格行循环、三种数据源 |
-| Excel循环渲染 | [excel-render-test.xlsx](/demo/excel-render-test.xlsx) | `user`(SQL) | 整行循环、图片字段、PDF 导出 |
-| 嵌套循环（Word） | [word-nested-loop.docx](/demo/word-nested-loop.docx) | 3 个 SQL 块 | 区域循环、递归嵌套、where 关联过滤、段落块嵌套 |
-| 嵌套循环（Excel） | [excel-nested-loop.xlsx](/demo/excel-nested-loop.xlsx) | 3 个 SQL 块 | 三个工作表：嵌套字段 / where 关联过滤 / 行内单行循环 |
-| 竖向合并（Word） | [word-merge-cells.docx](/demo/word-merge-cells.docx) | 4 个 SQL 块 | `merge=1,2 by=物料主键`、按文本合并、空值不合并、嵌套里合并外层列 |
-| 竖向合并（Excel） | [excel-merge-cells.xlsx](/demo/excel-merge-cells.xlsx) | 4 个 SQL 块 | 列字母 `merge=A,B` / 列号 `merge=1`、按文本合并、嵌套里合并外层列 |
+| 综合示例（Word） | [word-showcase.docx](/demo/word-showcase.docx) | 5 个 SQL 块 + `demoProvider`(JAVA) + `demoApi`(API) + 3 本字典 | 占位符与默认值、手填参数、三种循环、嵌套与 `where`、竖向合并、转换与字典、图片与二维码、三种数据源 |
+| 综合示例（Excel） | [excel-showcase.xlsx](/demo/excel-showcase.xlsx) | 5 个 SQL 块 + 3 本字典 | 整格数字与混排文本、行内与区域循环、嵌套、`merge` 两种列写法、转换与字典、图片与二维码、多 sheet |
 | 正式验收报告（Word） | [word-acceptance-report.docx](/demo/word-acceptance-report.docx) | 20 个 SQL 块 | 交付级长文档、目录域、页眉页脚 |
 | 正式验收报告（Excel） | [excel-acceptance-report.xlsx](/demo/excel-acceptance-report.xlsx) | 5 个 SQL 块 | 多 sheet、合并单元格、KPI 卡片 |
-| 转换与字典（Word） | [word-dict-convert.docx](/demo/word-dict-convert.docx) | 2 个 SQL 块 + 3 本字典 | 数据块 `converters` 与模板 `${字段\|转换器}` 两条路径、`dict` 字典转换、日期 / 金额 / 百分比 / 布尔 / 脱敏 |
-| 转换与字典（Excel） | [excel-dict-convert.xlsx](/demo/excel-dict-convert.xlsx) | 2 个 SQL 块 + 3 本字典 | 同上，另加「转换对照」工作表逐条列出原始值 → 显示值 |
 
-数据块脚本：[word-render-test.sql](/demo/word-render-test.sql)、[excel-render-test.sql](/demo/excel-render-test.sql)、[word-nested-loop.sql](/demo/word-nested-loop.sql)、[excel-nested-loop.sql](/demo/excel-nested-loop.sql)、[word-merge-cells.sql](/demo/word-merge-cells.sql)、[excel-merge-cells.sql](/demo/excel-merge-cells.sql)、[word-acceptance-report.sql](/demo/word-acceptance-report.sql)、[excel-acceptance-report.sql](/demo/excel-acceptance-report.sql)、[word-dict-convert.sql](/demo/word-dict-convert.sql)、[excel-dict-convert.sql](/demo/excel-dict-convert.sql)。导入步骤与逐项说明见[示例模板](/guide/examples)。
+数据块脚本：[word-showcase.sql](/demo/word-showcase.sql)、[excel-showcase.sql](/demo/excel-showcase.sql)、[word-acceptance-report.sql](/demo/word-acceptance-report.sql)、[excel-acceptance-report.sql](/demo/excel-acceptance-report.sql)。导入步骤与逐项说明见[示例模板](/guide/examples)。

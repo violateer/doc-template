@@ -37,6 +37,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -179,7 +180,8 @@ public class DocTemplateAutoConfiguration {
         public Object execute(String code, Map<String, Object> params) {
             DocumentDataProvider provider = providers.get(code);
             if (provider == null) throw new IllegalArgumentException("Unknown document data provider: " + code);
-            return provider.execute(params == null ? Map.of() : Map.copyOf(params));
+            // 不能用 Map.copyOf：参数映射里 $request.xxx 取不到时值是 null，copyOf 会直接 NPE
+            return provider.execute(params == null ? Map.of() : new LinkedHashMap<>(params));
         }
     }
 }

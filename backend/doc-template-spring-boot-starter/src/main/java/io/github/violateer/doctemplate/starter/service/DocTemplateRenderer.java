@@ -382,7 +382,8 @@ public class DocTemplateRenderer {
             checkToken(token);
             DocTemplateImageSpec spec = specFor(keyOf(token), images);
             if (spec == null) continue;
-            DocTemplateImageLoader.ImagePayload payload = imageLoader.load(resolve(token, params), spec);
+            DocTemplateImageLoader.ImagePayload payload =
+                    imageLoader.load(resolve(token, params), spec, params, keyOf(token));
             // 值为空：保留占位符文本，交给后面的文本替换（走默认值或空串）
             if (payload == null) continue;
             if (matcher.start() > cursor) segments.add(replaceText(text.substring(cursor, matcher.start()), params));
@@ -1217,7 +1218,8 @@ public class DocTemplateRenderer {
             checkToken(token);
             DocTemplateImageSpec spec = specFor(keyOf(token), images);
             if (spec != null) {
-                DocTemplateImageLoader.ImagePayload payload = imageLoader.load(resolve(token, params), spec);
+                DocTemplateImageLoader.ImagePayload payload =
+                        imageLoader.load(resolve(token, params), spec, params, keyOf(token));
                 if (payload != null) {
                     insertPicture(cell, payload, spec);
                     return;

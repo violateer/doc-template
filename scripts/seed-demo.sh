@@ -6,7 +6,7 @@
 #    scripts/seed-demo.sh
 #    scripts/seed-demo.sh --base-url http://localhost:9150
 #    scripts/seed-demo.sh --dry-run
-#    scripts/seed-demo.sh --only WordStandard,ExcelDataRows
+#    scripts/seed-demo.sh --only WordShowcase,ExcelShowcase
 #
 #  参数原样转给 seed-demo.mjs，完整选项见 scripts/seed-demo.mjs --help
 # ============================================================================

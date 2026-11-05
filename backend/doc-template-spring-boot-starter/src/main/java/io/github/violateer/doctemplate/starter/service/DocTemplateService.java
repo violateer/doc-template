@@ -17,6 +17,7 @@ import io.github.violateer.doctemplate.starter.repository.DocTemplateVersionRepo
 import io.github.violateer.doctemplate.starter.support.DocTemplateImageSpec;
 import io.github.violateer.doctemplate.starter.support.DocTemplateMergeAlign;
 import io.github.violateer.doctemplate.starter.support.DocTemplateJson;
+import io.github.violateer.doctemplate.starter.support.DocTemplateQrCodeSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.multipart.MultipartFile;
@@ -550,9 +551,11 @@ public class DocTemplateService {
     }
 
     /**
-     * 收集所有启用数据块里声明的图片字段（{@code data_source_config.imageFields}）。
+     * 收集所有启用数据块里声明的图片字段（{@code data_source_config.imageFields}）
+     * 和二维码字段（{@code data_source_config.qrCodes}）。
      *
-     * <p>渲染器只认「字段名」，不关心图片来自哪个数据块，所以这里合并成一份列表并按字段名去重。</p>
+     * <p>渲染器只认「字段名」，不关心来自哪个数据块，所以这里合并成一份列表并按字段名去重。
+     * 同一个字段既声明成图片又声明成二维码时，按二维码处理（更具体的那条配置优先）。</p>
      */
     private List<DocTemplateImageSpec> imageSpecsOf(List<DocTemplateDataBlockEntity> blocks) {
         if (blocks == null || blocks.isEmpty()) return List.of();
@@ -560,9 +563,12 @@ public class DocTemplateService {
         for (DocTemplateDataBlockEntity block : blocks) {
             if (block == null) continue;
             if (!"ENABLED".equalsIgnoreCase(StrUtil.blankToDefault(block.getStatus(), "ENABLED"))) continue;
-            for (DocTemplateImageSpec spec : DocTemplateImageSpec.fromConfig(
-                    DocTemplateJson.readMap(block.getDataSourceConfig()))) {
+            Map<String, Object> config = DocTemplateJson.readMap(block.getDataSourceConfig());
+            for (DocTemplateImageSpec spec : DocTemplateImageSpec.fromConfig(config)) {
                 merged.putIfAbsent(spec.field().toLowerCase(Locale.ROOT), spec);
+            }
+            for (DocTemplateQrCodeSpec qr : DocTemplateQrCodeSpec.fromConfig(config)) {
+                merged.put(qr.field().toLowerCase(Locale.ROOT), qr.toImageSpec());
             }
         }
         return new ArrayList<>(merged.values());

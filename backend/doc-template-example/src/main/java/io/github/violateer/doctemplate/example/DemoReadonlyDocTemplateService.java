@@ -121,6 +121,6 @@ public class DemoReadonlyDocTemplateService extends DocTemplateService {
         if (template == null) return;
         if (!readonly.getTemplateCodes().contains(template.getTemplateCode())) return;
         throw new IllegalStateException("「" + template.getTemplateName()
-                + "」是演示站的内置模板，不支持修改或删除；可以新增你自己的模板来试。");
+                + "」是演示站的内置模板，不支持修改或删除。");
     }
 }

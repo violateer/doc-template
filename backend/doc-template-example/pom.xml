@@ -47,6 +47,17 @@
             <version>4.9</version>
             <scope>runtime</scope>
         </dependency>
+        <!--
+          同上：只在 IDE 里直接跑 example 时需要（classpath 指向 Starter 的 target/classes，
+          里面还是未重定位的 com.google.zxing）。跑打包后的 Starter jar 时用不到这行
+          （jar 里已内置重定位副本）。
+        -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>cn.dev33</groupId>
             <artifactId>sa-token-spring-boot3-starter</artifactId>

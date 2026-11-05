@@ -136,6 +136,7 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 - 左侧的「数据源参数（JSON）」只用来**给数据源传参**：键名对应参数映射里 `$request.xxx` 的 `xxx`（例如 SQL 里的 `:reportNo`）。模板占位符由数据块结果自动填充，不需要写在这里。
 - 数据块需要的参数没填时，弹窗会提前用黄色提示列出缺哪些键，避免 SQL 拿 null 查出 0 条却看不出原因。
 - 模板里不由数据块提供的占位符（普通 `${key}`），仍然可以在同一个 JSON 里直接给值，`补齐参数` 按钮会把这两类键一次性补上。
+- 弹窗底部的「接口调用」区块给出这次等价的 HTTP 调用：完整请求地址（`POST {origin}/api/doc-template/templates/{id}/generate`）、请求头、请求体，点「开始生成」后还会显示真实响应；下面还有 curl、JavaScript、Java、Python 四种语言的调用示例，可整段拿去用，直接搬到不内嵌管理页的其他项目里。宿主启用了认证时，调用方需要带上自己的身份凭证。
 - 生成结果写入存储（`templates/...` 同级 `generated/...` 前缀），并在 `doc_template_generate_record` 中留下 `SUCCESS`/`FAILED` 记录与失败原因。
 - 文件预览走 `/preview` 接口（`Content-Disposition: inline`），管理界面用 docx-preview / SheetJS 在浏览器内渲染 DOCX、XLSX，PDF 直接内嵌。
 - 删除模板、删除版本、删除生成记录都会同步删除对象存储中的文件，不会遗留孤儿对象。
@@ -207,7 +208,7 @@ doc-template:
 
 限制：段落块循环只处理段落，跨表格的块循环不支持；Excel 行循环不复制合并单元格。
 
-循环体里的字段也可以声明成图片字段（见[图片字段](#图片字段)），明细行里的图片会逐行渲染。
+循环体里的字段也可以声明成图片字段或二维码字段（见[图片字段](#图片字段)），明细行里的图片会逐行渲染。
 
 #### 递归渲染：循环行下面再挂一个列表
 
@@ -294,18 +295,20 @@ ${order_no} | ${customer}
 
 ## 示例模板
 
-`docs/public/demo/` 下放了可以直接导入的示例模板，配套的数据块 SQL 一起给了。下表两个是最基础的（默认值、明细行循环、图片字段、三种数据源、PDF 导出）；另外八套分别演示递归嵌套、竖向合并、交付级长报告、字段值转换与数据字典，见 [示例模板](./docs/guide/examples.md)。
+`docs/public/demo/` 下放了四套可以直接导入的示例模板，配套的数据块 SQL 一起给了。两份「综合示例」把各种写法集中在一份文档里（Word / Excel 各一份），另外两套是交付级的长报告，见 [示例模板](./docs/guide/examples.md)。
 
 | 模板 | 模板编码 | 文件 | 格式 | 数据块 | 覆盖的写法 |
 | --- | --- | --- | --- | --- | --- |
-| 普通Word | `WordStandard` | [`word-render-test.docx`](./docs/public/demo/word-render-test.docx) | DOCX / 导出 ORIGINAL | `form`(SQL)、`demoProvider`(JAVA)、`demoApi`(API) | 标题占位符与默认值、表格行循环、JAVA / API / SQL 三种数据源 |
-| Excel循环渲染 | `ExcelDataRows` | [`excel-render-test.xlsx`](./docs/public/demo/excel-render-test.xlsx) | XLSX / 导出 PDF | `user`(SQL) | 整行循环、图片字段、空 sheet 跳过 |
+| 综合示例（Word） | `WordShowcase` | [`word-showcase.docx`](./docs/public/demo/word-showcase.docx) | DOCX / 导出 ORIGINAL | 5 个 SQL 块 + `demoProvider`(JAVA) + `demoApi`(API) + 3 本字典 | 占位符与默认值、手填参数、三种循环、嵌套与 `where`、竖向合并、转换与字典、图片与二维码、三种数据源 |
+| 综合示例（Excel） | `ExcelShowcase` | [`excel-showcase.xlsx`](./docs/public/demo/excel-showcase.xlsx) | XLSX / 导出 ORIGINAL | 5 个 SQL 块 + 3 本字典 | 整格数字与混排文本、行内与区域循环、嵌套、`merge` 两种列写法、转换与字典、图片与二维码、多 sheet |
+| 正式验收报告（Word） | `WordAcceptanceReport` | [`word-acceptance-report.docx`](./docs/public/demo/word-acceptance-report.docx) | DOCX / 导出 ORIGINAL | 20 个 SQL 块 | 交付级长文档、目录域、页眉页脚 |
+| 正式验收报告（Excel） | `ExcelAcceptanceReport` | [`excel-acceptance-report.xlsx`](./docs/public/demo/excel-acceptance-report.xlsx) | XLSX / 导出 ORIGINAL | 5 个 SQL 块 | 多 sheet、合并单元格、KPI 卡片 |
 
-数据块脚本：[`word-render-test.sql`](./docs/public/demo/word-render-test.sql)、[`excel-render-test.sql`](./docs/public/demo/excel-render-test.sql)。脚本按 `template_code` 关联模板，可重复执行。
+数据块脚本：[`word-showcase.sql`](./docs/public/demo/word-showcase.sql)、[`excel-showcase.sql`](./docs/public/demo/excel-showcase.sql)、[`word-acceptance-report.sql`](./docs/public/demo/word-acceptance-report.sql)、[`excel-acceptance-report.sql`](./docs/public/demo/excel-acceptance-report.sql)。脚本按 `template_code` 关联模板，可重复执行。
 
 ### 一键刷入（推荐）
 
-不用手工建模板、传文件、跑 SQL：两个脚本会把 `docs/public/demo` 下的 10 套示例一次性刷进**正在运行的系统**，模板元数据、模板文件、数据块、数据字典全带上。
+不用手工建模板、传文件、跑 SQL：两个脚本会把 `docs/public/demo` 下的 4 套示例一次性刷进**正在运行的系统**，模板元数据、模板文件、数据块、数据字典全带上。
 
 ```bash
 scripts\seed-demo.bat                 # Windows
@@ -316,7 +319,7 @@ scripts/seed-demo.sh                  # Linux / macOS
 
 ```bash
 scripts/seed-demo.bat --dry-run       # 只解析并打印要写什么，不调接口
-scripts/seed-demo.bat --only WordStandard,ExcelDataRows
+scripts/seed-demo.bat --only WordShowcase,ExcelShowcase
 scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 ```
 
@@ -340,16 +343,17 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 
 | 模板编码 | 模板名称 | 文件类型 | 导出类型 |
 | --- | --- | --- | --- |
-| `WordStandard` | 普通Word | `DOCX` | `ORIGINAL` |
-| `ExcelDataRows` | Excel循环渲染 | `XLSX` | `PDF` |
+| `WordShowcase` | 综合示例（Word） | `DOCX` | `ORIGINAL` |
+| `ExcelShowcase` | 综合示例（Excel） | `XLSX` | `ORIGINAL` |
+| `WordAcceptanceReport` | 正式验收报告（Word） | `DOCX` | `ORIGINAL` |
+| `ExcelAcceptanceReport` | 正式验收报告（Excel） | `XLSX` | `ORIGINAL` |
 
 几点需要知道的：
 
-- **两个 SQL 块都是 `select` 假数据**（`union all` 拼几行常量），不依赖任何业务表，执行完就能生成；换成自己的表时改 `sql` 即可。
-- **`form` 块**返回 `title` / `info` 两列（`single=true`），标题和信息直接出值；换成真实查询时保证结果里有这两列即可。
-- **`demoProvider` / `demoApi` 依赖 example 模块**（`DemoOrderProvider` 与 `POST /demo/api/orders/{orderNo}`），只有 `doc-template-example` 启动着才有数据；换宿主时删掉或改成自己的 Provider / 接口即可。
-- **模拟生成要填 `orderNo` 和 `channel` 两个参数**：`orderNo` 给 `demoProvider`、`channel` 给 `demoApi`。补齐参数只列出参数映射里以 `$request.` 开头的键，写死的常量（如 `demoApi` 的 `orderNo`）不会列出来——想让 API 块也用传进来的单号，把它的值改成 `$request.orderNo` 即可。
-- **Excel 的 `${pic}` 会真的去下载图片**（5 秒超时、单张 5MB），离线环境请换成可访问的地址或先去掉 `imageFields`，否则整次生成 `FAILED`。
+- **所有数据块都是 `select` 假数据**（`union all` 拼几行常量），不依赖任何业务表，执行完就能生成；换成自己的表时改 `sql` 即可。
+- **综合示例（Word）的 `demoProvider` / `demoApi` 依赖 example 模块**（`DemoOrderProvider` 与 `POST /demo/api/orders/{orderNo}`），只有 `doc-template-example` 启动着才有数据；换宿主时删掉或改成自己的 Provider / 接口即可。`demoApi` 回调 `127.0.0.1:9150`，接口挂在别的地址时改 `url`。
+- **模拟生成要填 `inspector` / `orderNo` / `channel`**：`inspector` 是模板里手填的审核人（不填显示「未填写」），`orderNo` 给 `demoProvider`、`channel` 给 `demoApi`。补齐参数只列出参数映射里以 `$request.` 开头的键，写死的常量（如 `demoApi` 的 `orderNo`）不会列出来。
+- **图片与二维码会真的去取图**（5 秒超时、单张 5MB），离线环境请换成可访问的地址或先去掉 `imageFields` / `qrCodes`，否则整次生成 `FAILED`（二维码中间的小图取不到只打 warn，不影响出码）。
 
 完整说明（模板结构、数据块逐项解释、常见坑）见 [`docs/guide/examples.md`](./docs/guide/examples.md)。
 
@@ -375,7 +379,7 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 - **控件按字段类型自动切换**：文本 / 多行文本 / 数字（带单位）/ 布尔（二选一，用下拉）/ 下拉 / 键值对 / JSON（只有 API 的请求体是 JSON，因为接口本身就要 JSON）。
 - **一行放三个**：表单是三列网格，窄字段（布尔、数字、下拉、单行文本）一行排三个，多行文本 / JSON / 键值对占满整行；`合并单元格对齐`（整篇文档一份设置）也排在这张网格里。
 - **下拉项来自后端**：`Provider 编码` 列的是宿主应用注册的 Provider，`数据源` 列的是可用的 `DataSource` Bean，不用记名字。
-- **切换数据源类型**时配置项整套换掉（重置为新类型的默认值），参数映射和图片字段保留。
+- **切换数据源类型**时配置项整套换掉（重置为新类型的默认值），参数映射、图片字段与二维码字段保留。
 - **排序不用填**：新建的数据块排在最后，执行顺序就是列表顺序。
 - 表单里没有的扩展项不会被丢掉，保存时原样带回，界面上会提示「还有 N 个扩展项」。
 
@@ -507,6 +511,29 @@ doc-template:
 
 图片渲染默认就开启，**不需要任何配置**：远程图片 5 秒超时、单张上限 5MB、未声明尺寸时最大 480px 宽，超过即等比缩小。
 
+### 二维码字段
+
+数据块取到的是一个链接或编号、希望文档上直接出一张能扫的二维码时，在数据块配置里声明 `qrCodes`：
+
+```json
+{
+  "sql": "select verify_url, trace_url, logo from qc_report where report_no = :reportNo",
+  "single": true,
+  "qrCodes": [
+    { "field": "verify_url", "width": 140, "logoField": "logo" },
+    { "field": "trace_url", "logoUrl": "https://minio.example.com/logo.png", "level": "H" }
+  ]
+}
+```
+
+- 模板里写 `${report.verify_url}`，取到的值按文本编码成二维码图片；明细行里写 `{{#each items}}${qr}` 就逐行出码。
+- 尺寸、对齐、留白与图片字段同一套：宽高都不写默认 140px，只写一边按正方形算；`align` 支持 `center`（默认）/ `left` / `right`。
+- 中间小图两种来源：`logoUrl` 填图片地址（`http(s)://`、`data:image/...;base64,...`、裸 Base64），或 `logoField` 指向**同一数据块**里的另一个字段（写字段名即可，不用带块编码）。两个都写时字段优先，取不到再回退地址。
+- 带小图默认纠错级别 `H`（能纠正约 30% 的遮挡），不带小图默认 `M`；`level` 可显式写 `L` / `M` / `Q` / `H`。小图占二维码边长默认 22%（`logoRatio` 可调 0.1 ~ 0.35）。
+- 同一个字段同时声明成图片和二维码时，按二维码渲染。
+- 二维码内容为空 → 按文本规则渲染（走默认值或空串），不中断生成；中间小图取不到或格式不支持 → 二维码照常输出，只是不叠加小图。
+- 管理页数据块配置里的「二维码字段」区块可以直接维护字段、尺寸、对齐和中间小图，不需要手写 JSON。
+
 ### 字段值转换与数据字典
 
 数据库里存的是 `0/1`、时间戳、`PAID`，文档上要显示「是」「2026-10-30」「已支付」——不用改 SQL，声明一下就行：
@@ -551,7 +578,7 @@ doc-template:
 
 ## 当前边界
 
-已实现：模板元数据 CRUD、文件上传/版本/下载/预览、删除时同步清理云存储、数据块 CRUD（**表单化配置**）与**执行器（Java Provider / SQL / API 三种数据源）**、DOCX/XLSX 占位符渲染（含明细行循环与**图片字段**）、**字段值转换与数据字典**、模拟生成、内置 PDF 导出、生成记录与结果文件、Provider 列表、可插拔认证（none / custom）、嵌入式管理页面（模板信息与数据块合并为双 Tab 弹窗）、示例 iframe/代理/认证配置。
+已实现：模板元数据 CRUD、文件上传/版本/下载/预览、删除时同步清理云存储、数据块 CRUD（**表单化配置**）与**执行器（Java Provider / SQL / API 三种数据源）**、DOCX/XLSX 占位符渲染（含明细行循环、**图片字段与二维码字段**）、**字段值转换与数据字典**、模拟生成、内置 PDF 导出、生成记录与结果文件、Provider 列表、可插拔认证（none / custom）、嵌入式管理页面（模板信息与数据块合并为双 Tab 弹窗）、示例 iframe/代理/认证配置。
 
 尚未实现：复杂模板语法（条件判断、图表）、循环区的合并单元格、异步生成任务队列、细粒度业务数据权限适配器。
 

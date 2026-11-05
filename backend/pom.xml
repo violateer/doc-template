@@ -52,6 +52,7 @@
         <poi.version>5.4.1</poi.version>
         <minipdf.version>0.4.1</minipdf.version>
         <awssdk.version>2.29.26</awssdk.version>
+        <zxing.version>3.5.3</zxing.version>
         <!--
           发布到 Maven Central 用的凭据名，必须与 settings.xml 里 <server><id> 一致。
           只放 id，不放任何账号口令：凭据在 settings.xml（本地）或 CI Secrets（流水线）里。
@@ -83,6 +84,11 @@
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-crypto</artifactId>
                 <version>${hutool.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>core</artifactId>
+                <version>${zxing.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -115,6 +115,7 @@ const extraKeys = computed(() => Object.keys(extraConfig.value));
 const paramRows = ref<Array<{ key: string; value: string }>>([]);
 
 const IMAGE_KEYS = ['imageFields', 'image_fields', 'images'];
+const QR_KEYS = ['qrCodes', 'qr_codes', 'qrcodes', 'qrCode'];
 const MERGE_ALIGN_KEYS = ['mergeCellAlign', 'merge_cell_align', 'mergeAlign'];
 /** 由「字段值转换」区块单独维护，不放进「未识别的扩展项」 */
 const CONVERTER_KEYS = ['converters'];
@@ -221,12 +222,13 @@ function readImageFields(config: Record<string, any>): ImageFieldRow[] {
   return rows;
 }
 
-/** 保存时写回 config.imageFields / mergeCellAlign / converters（清掉旧的别名键，避免两份配置打架） */
+/** 保存时写回 config.imageFields / qrCodes / mergeCellAlign / converters（清掉旧的别名键，避免两份配置打架） */
 function withRenderOptions(config: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = { ...config };
   delete result.imageFields;
   delete result.image_fields;
   delete result.images;
+  for (const key of QR_KEYS) delete result[key];
   for (const key of MERGE_ALIGN_KEYS) delete result[key];
   delete result.converters;
   const list = imageFields.value
@@ -244,6 +246,17 @@ function withRenderOptions(config: Record<string, any>): Record<string, any> {
       return item;
     });
   if (list.length) result.imageFields = list;
+  const qrList = qrCodes.value
+    .map((row) => {
+      const item: Record<string, any> = { field: (row.field ?? '').trim(), align: toAlign(row.align) };
+      if (toInt(row.width)) item.width = toInt(row.width);
+      if (toInt(row.height)) item.height = toInt(row.height);
+      if (row.logoSource === 'url' && (row.logoUrl ?? '').trim()) item.logoUrl = row.logoUrl.trim();
+      if (row.logoSource === 'field' && (row.logoField ?? '').trim()) item.logoField = row.logoField.trim();
+      return item;
+    })
+    .filter((row) => !!row.field);
+  if (qrList.length) result.qrCodes = qrList;
   if (mergeAlign.value) result.mergeCellAlign = mergeAlign.value;
   const converters = buildConverters();
   if (converters.length) result.converters = converters;
@@ -256,6 +269,83 @@ function addImageField() {
 
 function removeImageField(index: number) {
   imageFields.value.splice(index, 1);
+}
+
+/* ------------------------------------------------------------ 二维码字段 */
+/** 中间小图的来源：不放 / 固定地址 / 同块字段 */
+type QrLogoSource = '' | 'url' | 'field';
+
+interface QrCodeRow {
+  field: string;
+  width: number | null;
+  height: number | null;
+  align: ImageAlign;
+  logoSource: QrLogoSource;
+  logoUrl: string;
+  logoField: string;
+}
+
+/** 数据块配置里声明「这个字段渲染成二维码」，值就是二维码内容 */
+const qrCodes = ref<QrCodeRow[]>([]);
+
+const qrLogoOptions = [
+  { label: '不放小图', value: '' },
+  { label: '图片地址', value: 'url' },
+  { label: '数据块字段', value: 'field' }
+];
+
+function emptyQrRow(): QrCodeRow {
+  return {
+    field: '',
+    width: 140,
+    height: 140,
+    align: 'CENTER',
+    logoSource: '',
+    logoUrl: '',
+    logoField: ''
+  };
+}
+
+/** 兼容 qrCodes / qr_codes / qrcodes / qrCode，以及字符串、数组、对象三种写法 */
+function readQrCodes(config: Record<string, any>): QrCodeRow[] {
+  const raw = config?.qrCodes ?? config?.qr_codes ?? config?.qrcodes ?? config?.qrCode;
+  if (!raw) return [];
+  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : [raw];
+  const rows: QrCodeRow[] = [];
+  for (const item of list) {
+    if (typeof item === 'string') {
+      const [field, size] = item.split(':');
+      const name = (field ?? '').trim();
+      if (!name) continue;
+      const px = toInt(size);
+      rows.push({ ...emptyQrRow(), field: name, width: px, height: px });
+      continue;
+    }
+    if (item && typeof item === 'object') {
+      const name = String(item.field ?? item.name ?? item.key ?? item.path ?? '').trim();
+      if (!name) continue;
+      const logoUrl = String(item.logoUrl ?? item.logo_url ?? item.logoImage ?? '').trim();
+      const logoField = String(item.logoField ?? item.logo_field ?? item.logoFrom ?? '').trim();
+      rows.push({
+        field: name,
+        width: toInt(item.width ?? item.w ?? item.size),
+        height: toInt(item.height ?? item.h),
+        align: toAlign(item.align ?? item.alignment ?? item.position),
+        logoSource: logoField ? 'field' : logoUrl ? 'url' : '',
+        logoUrl,
+        logoField
+      });
+    }
+  }
+  return rows;
+}
+
+function addQrCode() {
+  qrCodes.value.push(emptyQrRow());
+}
+
+function removeQrCode(index: number) {
+  qrCodes.value.splice(index, 1);
 }
 
 /* ------------------------------------------------------------ 字段值转换 */
@@ -731,7 +821,15 @@ function applyConfig(type: DataSourceType, config: Record<string, any>) {
 
   const extra: Record<string, any> = {};
   for (const [key, value] of Object.entries(config ?? {})) {
-    if (known.has(key) || IMAGE_KEYS.includes(key) || MERGE_ALIGN_KEYS.includes(key) || CONVERTER_KEYS.includes(key)) continue;
+    if (
+      known.has(key) ||
+      IMAGE_KEYS.includes(key) ||
+      QR_KEYS.includes(key) ||
+      MERGE_ALIGN_KEYS.includes(key) ||
+      CONVERTER_KEYS.includes(key)
+    ) {
+      continue;
+    }
     extra[key] = value;
   }
   extraConfig.value = extra;
@@ -908,6 +1006,7 @@ function openCreate() {
   extraConfig.value = {};
   paramRows.value = [];
   imageFields.value = [];
+  qrCodes.value = [];
   converterRows.value = [];
   mergeAlign.value = '';
   asideOpen.value = false;
@@ -924,6 +1023,7 @@ function openEdit(row: DataBlockRow) {
   applyConfig(type, config as Record<string, any>);
   paramRows.value = toParamRows(row.param_config);
   imageFields.value = readImageFields(config as Record<string, any>);
+  qrCodes.value = readQrCodes(config as Record<string, any>);
   converterRows.value = readConverters(config as Record<string, any>);
   mergeAlign.value = readMergeAlign(config as Record<string, any>);
   asideOpen.value = false;
@@ -1596,6 +1696,52 @@ onMounted(() => {
 
           <div class="list-section">
             <div class="list-head">
+              <span class="list-title">二维码字段</span>
+            </div>
+            <div class="field-body">
+              <div v-if="qrCodes.length" class="qr-list">
+                <div v-for="(row, index) in qrCodes" :key="index" class="qr-item">
+                  <div class="qr-main">
+                    <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，如 verify_url" />
+                    <NInputNumber v-model:value="row.width" size="small" :min="1" :max="4000" placeholder="宽 px" />
+                    <NInputNumber v-model:value="row.height" size="small" :min="1" :max="4000" placeholder="高 px" />
+                    <NSelect v-model:value="row.align" size="small" :options="alignOptions" />
+                    <NButton size="small" quaternary type="error" @click="removeQrCode(index)">移除</NButton>
+                  </div>
+                  <div class="qr-logo">
+                    <span class="qr-label">中间小图</span>
+                    <NSelect v-model:value="row.logoSource" size="small" :options="qrLogoOptions" />
+                    <NInput
+                      v-if="row.logoSource === 'url'"
+                      v-model:value="row.logoUrl"
+                      size="small"
+                      class="mono"
+                      placeholder="图片地址，支持 http(s) 与 data:image/png;base64,..."
+                    />
+                    <NInput
+                      v-else-if="row.logoSource === 'field'"
+                      v-model:value="row.logoField"
+                      size="small"
+                      class="mono"
+                      placeholder="本数据块里的图片字段名，如 logo"
+                    />
+                    <span v-else class="qr-hint">只出二维码，不叠加小图</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="field-empty">
+                还没有二维码字段；模板里写 <span class="mono">${verify_url}</span>，取到的值按二维码渲染
+              </div>
+              <div class="extra-hint">
+                中间小图会遮住一部分码点，二维码会自动提高纠错级别；图源可以填固定地址，也可以指向本数据块里的另一个字段。
+                同一个字段同时配在图片字段里时，按二维码渲染。
+              </div>
+              <NButton size="tiny" dashed @click="addQrCode">添加二维码字段</NButton>
+            </div>
+          </div>
+
+          <div class="list-section">
+            <div class="list-head">
               <span class="list-title">字段值转换</span>
             </div>
             <div class="field-body">
@@ -2242,6 +2388,51 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   width: 100%;
+}
+
+/* -------------------------------------------------- 二维码字段 */
+.qr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.qr-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e6ecf6;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.qr-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 92px 88px auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.qr-logo {
+  display: grid;
+  grid-template-columns: auto 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.qr-label {
+  font-size: 12px;
+  color: #5b6577;
+  white-space: nowrap;
+}
+
+.qr-hint {
+  font-size: 12px;
+  color: #a3adbb;
 }
 
 /* -------------------------------------------------- 字段值转换 */

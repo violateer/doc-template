@@ -110,7 +110,7 @@ doc-template:
 #   它们的数据块也不能增删改；使用者自己新建的模板完全不受影响。
 # 生成、预览、下载这些读操作照常。
 #
-# 编码取自 scripts/seed-demo 刷入的那十个示例模板（docs/public/demo/*.sql）。
+# 编码取自 scripts/seed-demo 刷入的那四个示例模板（docs/public/demo/*.sql）。
 # 默认关闭，本地调试想改演示模板就保持 false；演示部署在 application-dev.yml 里打开。
 # 这段逻辑只在示例宿主里（DemoReadonlyDocTemplateService），不属于 Starter。
 # ============================================================================
@@ -118,13 +118,7 @@ demo:
   readonly:
     enabled: false
     template-codes:
-      - WordStandard            # 普通Word
-      - WordNestedLoop          # 嵌套循环示例（Word）
-      - WordMergeCells          # 竖向合并示例（Word）
-      - WordDictConvert         # 转换与字典示例（Word）
+      - WordShowcase            # 综合示例（Word）
+      - ExcelShowcase           # 综合示例（Excel）
       - WordAcceptanceReport    # 正式验收报告（Word）
-      - ExcelDataRows           # Excel循环渲染
-      - ExcelNestedLoop         # 嵌套循环示例（Excel）
-      - ExcelMergeCells         # 竖向合并示例（Excel）
-      - ExcelDictConvert        # 转换与字典示例（Excel）
       - ExcelAcceptanceReport   # 正式验收报告（Excel）

@@ -71,7 +71,7 @@ doc-template:
 6. **取文件**：生成记录里下载 / 预览，或直接走 `/generate-records/{id}/file`。
 
 ::: tip 不想手工建模板
-仓库根目录的 `scripts/seed-demo.bat` / `scripts/seed-demo.sh` 可以把十套示例模板连文件带数据块、字典一次性刷进当前运行的系统，见[示例模板 · 导入方式](./examples#导入方式)。
+仓库根目录的 `scripts/seed-demo.bat` / `scripts/seed-demo.sh` 可以把四套示例模板连文件带数据块、字典一次性刷进当前运行的系统，见[示例模板 · 导入方式](./examples#导入方式)。
 :::
 
 ## 校验是否接对了

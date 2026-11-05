@@ -3,6 +3,8 @@ package io.github.violateer.doctemplate.starter.service;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
 import io.github.violateer.doctemplate.starter.support.DocTemplateImageSpec;
+import io.github.violateer.doctemplate.starter.support.DocTemplateJson;
+import io.github.violateer.doctemplate.starter.support.DocTemplateQrCodeSpec;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,8 +17,10 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -56,12 +60,32 @@ public class DocTemplateImageLoader {
     public record ImagePayload(byte[] bytes, int pictureType, String fileName, int widthPx, int heightPx) {
     }
 
+    private final DocTemplateQrCodeGenerator qrCodeGenerator;
+
+    public DocTemplateImageLoader() {
+        this(new DocTemplateQrCodeGenerator());
+    }
+
+    public DocTemplateImageLoader(DocTemplateQrCodeGenerator qrCodeGenerator) {
+        this.qrCodeGenerator = qrCodeGenerator == null ? new DocTemplateQrCodeGenerator() : qrCodeGenerator;
+    }
+
     /**
      * @param value 占位符解析出来的值（URL / Data URI / Base64 / byte[]）
      * @param spec  该字段的图片声明（可能带目标尺寸）
      * @return 图片数据；值为空时返回 {@code null}
      */
     public ImagePayload load(Object value, DocTemplateImageSpec spec) {
+        return load(value, spec, null, null);
+    }
+
+    /**
+     * @param key    占位符的原始键（可能带块编码，如 {@code report.verify_url}），
+     *               二维码中间小图取同块字段时用它推断命名空间
+     * @param params 整篇渲染参数，二维码中间小图取字段值时用
+     */
+    public ImagePayload load(Object value, DocTemplateImageSpec spec, Map<String, Object> params, String key) {
+        if (spec != null && spec.qr() != null) return loadQrCode(value, spec, params, key);
         byte[] bytes = bytesOf(value);
         if (bytes == null || bytes.length == 0) return null;
 
@@ -91,6 +115,118 @@ public class DocTemplateImageLoader {
         int naturalHeight = image == null ? 0 : image.getHeight();
         int[] size = targetSize(spec, naturalWidth, naturalHeight);
         return new ImagePayload(embed, pictureType, "image" + extension, size[0], size[1]);
+    }
+
+    // ------------------------------------------------------------------ 二维码
+
+    /**
+     * 把字段值按文本编码成二维码；中间的小图可以来自同块字段或固定地址。
+     *
+     * <p>值为空时返回 {@code null}，交给调用方按「没有值」处理（和普通图片字段一致）。</p>
+     */
+    private ImagePayload loadQrCode(Object value, DocTemplateImageSpec spec, Map<String, Object> params, String key) {
+        String text = qrText(value);
+        if (StrUtil.isBlank(text)) return null;
+        byte[] logo = logoBytes(spec.qr(), params, key);
+        byte[] png = qrCodeGenerator.encode(text, spec.qr(), logo);
+        BufferedImage image = readImage(png);
+        int naturalWidth = image == null ? 0 : image.getWidth();
+        int naturalHeight = image == null ? 0 : image.getHeight();
+        int[] size = targetSize(spec, naturalWidth, naturalHeight);
+        return new ImagePayload(png, Workbook.PICTURE_TYPE_PNG, "qrcode.png", size[0], size[1]);
+    }
+
+    private String qrText(Object value) {
+        if (value == null) return null;
+        if (value instanceof Map<?, ?> || value instanceof Iterable<?>) {
+            try {
+                return DocTemplateJson.toJson(value);
+            } catch (Exception ignored) {
+                return String.valueOf(value);
+            }
+        }
+        if (value instanceof byte[] bytes) return new String(bytes, StandardCharsets.UTF_8);
+        if (value instanceof Double || value instanceof Float) {
+            double number = ((Number) value).doubleValue();
+            if (number == Math.rint(number) && !Double.isInfinite(number)) return String.valueOf((long) number);
+        }
+        return String.valueOf(value).trim();
+    }
+
+    /**
+     * 中间小图的原始字节：先按 {@code logoField} 从渲染参数里取，取不到再用 {@code logoUrl}。
+     *
+     * <p>字段名可以不带块编码：占位符是 {@code ${report.verify_url}} 时会自动到 {@code report}
+     * 下面找 {@code logo}；明细行里参数本身就是当前项，直接取即可。取不到或不是可识别的图片时
+     * 只打日志、不中断生成——二维码本身仍然可用。</p>
+     */
+    private byte[] logoBytes(DocTemplateQrCodeSpec qr, Map<String, Object> params, String key) {
+        if (qr == null) return null;
+        Object raw = null;
+        if (StrUtil.isNotBlank(qr.logoField())) {
+            raw = logoValue(qr.logoField(), params, key);
+        }
+        if (raw == null && StrUtil.isNotBlank(qr.logoUrl())) {
+            raw = qr.logoUrl();
+        }
+        if (raw == null) return null;
+        try {
+            return bytesOf(raw);
+        } catch (Exception error) {
+            log.warn("二维码中间小图不可用（字段「{}」），本次不叠加小图：{}", qr.field(), error.getMessage());
+            return null;
+        }
+    }
+
+    private Object logoValue(String logoField, Map<String, Object> params, String key) {
+        Object value = lookupPath(params, logoField);
+        if (value != null) return value;
+        // 单条数据块：字段在块编码的命名空间下，用二维码字段自己的前缀去找
+        if (StrUtil.isNotBlank(key)) {
+            int dot = key.lastIndexOf('.');
+            if (dot > 0) {
+                value = lookupPath(params, key.substring(0, dot) + "." + logoField);
+                if (value != null) return value;
+            }
+        }
+        // 兜底：块结果可能被平铺或包在别的层级里，扫一层子 Map
+        if (params != null) {
+            for (Object child : params.values()) {
+                if (child instanceof Map<?, ?> map) {
+                    value = lookupPath(castMap(map), logoField);
+                    if (value != null) return value;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Object lookupPath(Map<String, Object> params, String path) {
+        if (params == null || StrUtil.isBlank(path)) return null;
+        Object current = params;
+        for (String part : path.trim().split("\\.")) {
+            if (!(current instanceof Map<?, ?> map)) return null;
+            String actual = matchKey(map, part);
+            if (actual == null) return null;
+            current = map.get(actual);
+        }
+        return current;
+    }
+
+    private String matchKey(Map<?, ?> map, String key) {
+        if (map.containsKey(key)) return key;
+        String lower = key.toLowerCase(Locale.ROOT);
+        for (Object candidate : map.keySet()) {
+            if (candidate != null && String.valueOf(candidate).toLowerCase(Locale.ROOT).equals(lower)) {
+                return String.valueOf(candidate);
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> castMap(Map<?, ?> map) {
+        return (Map<String, Object>) map;
     }
 
     // ------------------------------------------------------------------ 取值

@@ -59,7 +59,7 @@ const USAGE = `
       --username <name>  登录账号，默认 admin
       --password <pwd>   登录密码，默认 Admin@123
   -d, --dir <path>       示例目录，默认 <仓库>/docs/public/demo
-      --only <codes>     只刷指定模板，逗号分隔，例如 WordStandard,ExcelDataRows
+      --only <codes>     只刷指定模板，逗号分隔，例如 WordShowcase,ExcelShowcase
   -n, --dry-run          只解析并打印将要写入的内容，不调接口
       --skip-file        不上传模板文件
       --skip-blocks      不写数据块
