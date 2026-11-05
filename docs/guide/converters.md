@@ -153,6 +153,6 @@ public class SkuNameConverter implements DocTemplateValueConverter {
 `dict` 的字典编码是**可搜索下拉**（选项来自 `/dicts`），不需要记参数名、也不用背编码。
 :::
 
-::: tip 非 MySQL / MariaDB 的宿主
-字典两张表 `doc_template_dict` / `doc_template_dict_item` 跟着 Starter 自动建表；其他数据库需要自己执行 `db/schema.sql`。
+::: tip MySQL / MariaDB / PostgreSQL 之外的宿主
+字典两张表 `doc_template_dict` / `doc_template_dict_item` 跟着 Starter 自动建表；其他数据库需要自己执行建表脚本（`db/schema.sql` 或 `db/schema-postgresql.sql` 的写法可作参考）。
 :::

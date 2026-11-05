@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.starter.repository;
 
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
 import io.github.violateer.doctemplate.starter.entity.DocTemplateDataBlockEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -34,9 +35,12 @@ public class DocTemplateDataBlockRepository {
     };
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final DocTemplateDialectProvider dialect;
 
-    public DocTemplateDataBlockRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc) {
+    public DocTemplateDataBlockRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc,
+                                          DocTemplateDialectProvider dialect) {
         this.jdbc = new NamedParameterJdbcTemplate(jdbc);
+        this.dialect = dialect;
     }
 
     public List<DocTemplateDataBlockEntity> findByTemplateId(long templateId) {
@@ -69,8 +73,8 @@ public class DocTemplateDataBlockRepository {
                 .addValue("sortOrder", e.getSortOrder() == null ? 0 : e.getSortOrder())
                 .addValue("status", e.getStatus());
         KeyHolder keys = new GeneratedKeyHolder();
-        jdbc.update("INSERT INTO doc_template_data_block (template_id, block_code, block_name, data_source_type,"
-                + " data_source_config, param_config, sort_order, status)"
+        dialect.current().insert(jdbc, "INSERT INTO doc_template_data_block"
+                + " (template_id, block_code, block_name, data_source_type, data_source_config, param_config, sort_order, status)"
                 + " VALUES (:templateId, :blockCode, :blockName, :dataSourceType, :dataSourceConfig, :paramConfig, :sortOrder, :status)",
                 params, keys);
         Long id = JdbcKeys.generatedId(keys);

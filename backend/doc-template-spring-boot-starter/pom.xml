@@ -51,10 +51,14 @@
             <artifactId>core</artifactId>
             <optional>true</optional>
         </dependency>
+        <!--
+          数据库驱动不随包发布：驱动是宿主的职责，这个模块不替宿主选库。
+          MySQL 驱动放在 test scope，只给冒烟测试用（DOC_TEST_MYSQL_URL），不会传给宿主。
+        -->
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -87,6 +91,24 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
+        </dependency>
+        <!--
+          测试只验证「四张表能建、六个 Repository 能读写」，不引 spring-boot-starter-test：
+          冒烟测试直接 new Repository + DriverManagerDataSource，不需要 Spring 容器。
+        -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          PostgreSQL 驱动只用于测试（DOC_TEST_PG_URL）。发布物不带它：
+          宿主用 PostgreSQL 时自己加驱动，和 MySQL 之外的其他库同一个规则。
+        -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
     <build>

@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.starter.repository;
 
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
 import io.github.violateer.doctemplate.starter.entity.DocTemplateGenerateRecordEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,9 +38,12 @@ public class DocTemplateGenerateRecordRepository {
     };
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final DocTemplateDialectProvider dialect;
 
-    public DocTemplateGenerateRecordRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc) {
+    public DocTemplateGenerateRecordRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc,
+                                               DocTemplateDialectProvider dialect) {
         this.jdbc = new NamedParameterJdbcTemplate(jdbc);
+        this.dialect = dialect;
     }
 
     public List<DocTemplateGenerateRecordEntity> findAll() {
@@ -49,17 +53,15 @@ public class DocTemplateGenerateRecordRepository {
     /**
      * 分页查询，支持状态与关键字过滤。
      *
-     * <p>关键字匹配记录号、生成人、失败说明，以及 {@code templateIds} 里的模板
+     * <p>关键字匹配记录号（纯数字时等值比对 {@code id}）、生成人、失败说明，以及 {@code templateIds} 里的模板
      * （模板名称不是记录表的列，由调用方先按名称查出 id 再传进来，避免拼接 SQL）。</p>
      */
     public List<DocTemplateGenerateRecordEntity> findPage(String keyword, String status, Collection<Long> templateIds,
                                                           int offset, int limit) {
         MapSqlParameterSource params = new MapSqlParameterSource();
-        String where = where(keyword, status, templateIds, params);
-        params.addValue("limit", limit);
-        params.addValue("offset", offset);
-        return jdbc.query("SELECT " + COLUMNS + " FROM doc_template_generate_record" + where
-                + " ORDER BY id DESC LIMIT :limit OFFSET :offset", params, ROW_MAPPER);
+        String sql = "SELECT " + COLUMNS + " FROM doc_template_generate_record"
+                + where(keyword, status, templateIds, params) + " ORDER BY id DESC";
+        return jdbc.query(dialect.current().page(sql, offset, limit), params, ROW_MAPPER);
     }
 
     public long count(String keyword, String status, Collection<Long> templateIds) {
@@ -93,8 +95,9 @@ public class DocTemplateGenerateRecordRepository {
                 .addValue("createBy", e.getCreateBy(), Types.VARCHAR)
                 .addValue("createTime", e.getCreateTime(), Types.TIMESTAMP);
         KeyHolder keys = new GeneratedKeyHolder();
-        jdbc.update("INSERT INTO doc_template_generate_record (template_id, template_version_id, export_type,"
-                + " request_params, result_file_url, status, error_message, create_by, create_time)"
+        dialect.current().insert(jdbc, "INSERT INTO doc_template_generate_record"
+                + " (template_id, template_version_id, export_type, request_params, result_file_url, status,"
+                + " error_message, create_by, create_time)"
                 + " VALUES (:templateId, :templateVersionId, :exportType, :requestParams, :resultFileUrl, :status,"
                 + " :errorMessage, :createBy, :createTime)", params, keys);
         Long id = JdbcKeys.generatedId(keys);
@@ -118,8 +121,16 @@ public class DocTemplateGenerateRecordRepository {
             params.addValue("status", status.trim());
         }
         if (StringUtils.hasText(keyword)) {
-            where.append(" AND (create_by LIKE :keyword OR error_message LIKE :keyword OR CAST(id AS CHAR) LIKE :keyword");
-            params.addValue("keyword", "%" + keyword.trim() + "%");
+            String text = keyword.trim();
+            where.append(" AND (create_by LIKE :keyword OR error_message LIKE :keyword");
+            params.addValue("keyword", "%" + text + "%");
+            // 记录号按等值匹配，不把 id 转成字符串再 LIKE：各库的类型转换规则不一样，
+            // PostgreSQL 的 CAST(x AS CHAR) 是定长 1 位，会静默截断成首字符，导致按 id 永远搜不到。
+            Long recordId = numericId(text);
+            if (recordId != null) {
+                where.append(" OR id = :recordId");
+                params.addValue("recordId", recordId);
+            }
             if (templateIds != null && !templateIds.isEmpty()) {
                 where.append(" OR template_id IN (:templateIds)");
                 params.addValue("templateIds", templateIds);
@@ -127,5 +138,15 @@ public class DocTemplateGenerateRecordRepository {
             where.append(")");
         }
         return where.toString();
+    }
+
+    /** 纯数字（且放得进 BIGINT）才当记录号；带字母的关键字不参与 id 匹配。 */
+    private static Long numericId(String text) {
+        if (text.isEmpty() || text.length() > 18) return null;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c < '0' || c > '9') return null;
+        }
+        return Long.parseLong(text);
     }
 }

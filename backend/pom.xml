@@ -132,6 +132,15 @@
                     <artifactId>maven-gpg-plugin</artifactId>
                     <version>3.2.8</version>
                 </plugin>
+                <!--
+                  固定 surefire 版本：Maven 3.8 默认绑的是 2.12.4，那个版本不认 JUnit 5，
+                  测试会被静默跳过（不是失败），等于白写。
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.2.5</version>
+                </plugin>
                 <plugin>
                     <groupId>org.sonatype.central</groupId>
                     <artifactId>central-publishing-maven-plugin</artifactId>

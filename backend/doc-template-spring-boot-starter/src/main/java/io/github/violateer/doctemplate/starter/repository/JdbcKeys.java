@@ -7,8 +7,8 @@ import java.util.Map;
 /**
  * 取回自增主键。
  *
- * <p>不同驱动返回的键不一样：MySQL 只回一列（列名 {@code GENERATED_KEY}），另一些驱动会把整行
- * 都当键返回，此时 {@link KeyHolder#getKey()} 会因为「多个键」直接抛异常。所以这里按列名找
+ * <p>不同驱动返回的键不一样：MySQL 只回一列（列名 {@code GENERATED_KEY}），PostgreSQL 会把整行都当键返回，
+ * 此时 {@link KeyHolder#getKey()} 会因为「多个键」直接抛异常。所以这里按列名找
  * {@code id}，找不到再退回第一个数值。</p>
  */
 final class JdbcKeys {

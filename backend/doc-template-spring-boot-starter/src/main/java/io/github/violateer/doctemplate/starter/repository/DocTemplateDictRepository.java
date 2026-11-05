@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.starter.repository;
 
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
 import io.github.violateer.doctemplate.starter.entity.DocTemplateDictEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,9 +42,12 @@ public class DocTemplateDictRepository {
     };
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final DocTemplateDialectProvider dialect;
 
-    public DocTemplateDictRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc) {
+    public DocTemplateDictRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc,
+                                     DocTemplateDialectProvider dialect) {
         this.jdbc = new NamedParameterJdbcTemplate(jdbc);
+        this.dialect = dialect;
     }
 
     /** 全部字典（含项数），按编码排序；{@code keyword} 匹配编码 / 名称 / 备注。 */
@@ -91,7 +95,7 @@ public class DocTemplateDictRepository {
                 .addValue("dictName", e.getDictName())
                 .addValue("remark", e.getRemark());
         KeyHolder keys = new GeneratedKeyHolder();
-        jdbc.update("INSERT INTO doc_template_dict (dict_code, dict_name, remark)"
+        dialect.current().insert(jdbc, "INSERT INTO doc_template_dict (dict_code, dict_name, remark)"
                 + " VALUES (:dictCode, :dictName, :remark)", params, keys);
         Long id = JdbcKeys.generatedId(keys);
         if (id != null) e.setId(id);

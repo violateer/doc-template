@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.starter.autoconfigure;
 
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -65,11 +66,13 @@ final class DocTemplateSchemaInitializer {
 
     /** 建表脚本按数据库类型选；不支持的类型只在真的需要建表时才报错。 */
     private static String scriptFor(String product) {
-        String name = product == null ? "" : product.toLowerCase(Locale.ROOT);
-        if (name.contains("mysql") || name.contains("mariadb")) return "db/schema.sql";
-        throw new IllegalStateException("Automatic Doc Template schema initialization does not support database: "
-                + product + ". Supported databases: MySQL, MariaDB. "
-                + "请自行执行 db/schema.sql，或把 doc-template.initialize-schema 设为 false。");
+        return DocTemplateDialect.fromProductName(product)
+                .map(DocTemplateDialect::schemaScript)
+                .orElseThrow(() -> new IllegalStateException("Automatic Doc Template schema initialization"
+                        + " does not support database: " + product + ". Supported databases: "
+                        + DocTemplateDialect.supported()
+                        + ". 请自行执行对应建表脚本（见 db/schema.sql、db/schema-postgresql.sql），"
+                        + "或把 doc-template.initialize-schema 设为 false。"));
     }
 
     private static boolean tableExists(DatabaseMetaData metadata, Connection connection, String tableName) {

@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.starter.repository;
 
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
 import io.github.violateer.doctemplate.starter.entity.DocTemplateVersionEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,9 +33,12 @@ public class DocTemplateVersionRepository {
     };
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final DocTemplateDialectProvider dialect;
 
-    public DocTemplateVersionRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc) {
+    public DocTemplateVersionRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc,
+                                        DocTemplateDialectProvider dialect) {
         this.jdbc = new NamedParameterJdbcTemplate(jdbc);
+        this.dialect = dialect;
     }
 
     public List<DocTemplateVersionEntity> findByTemplateId(long templateId) {
@@ -44,8 +48,9 @@ public class DocTemplateVersionRepository {
 
     /** 版本号最大的那一版；没有版本时返回 {@code null}。 */
     public DocTemplateVersionEntity findLatest(long templateId) {
-        List<DocTemplateVersionEntity> rows = jdbc.query("SELECT " + COLUMNS + " FROM doc_template_version"
-                + " WHERE template_id = :templateId ORDER BY version_no DESC LIMIT 1",
+        String sql = dialect.current().page("SELECT " + COLUMNS + " FROM doc_template_version"
+                + " WHERE template_id = :templateId ORDER BY version_no DESC", 0, 1);
+        List<DocTemplateVersionEntity> rows = jdbc.query(sql,
                 new MapSqlParameterSource("templateId", templateId), ROW_MAPPER);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -65,7 +70,8 @@ public class DocTemplateVersionRepository {
                 .addValue("fileSha256", e.getFileSha256(), Types.VARCHAR)
                 .addValue("createTime", e.getCreateTime(), Types.TIMESTAMP);
         KeyHolder keys = new GeneratedKeyHolder();
-        jdbc.update("INSERT INTO doc_template_version (template_id, version_no, file_name, file_url, file_sha256, create_time)"
+        dialect.current().insert(jdbc, "INSERT INTO doc_template_version"
+                + " (template_id, version_no, file_name, file_url, file_sha256, create_time)"
                 + " VALUES (:templateId, :versionNo, :fileName, :fileUrl, :fileSha256, :createTime)", params, keys);
         Long id = JdbcKeys.generatedId(keys);
         if (id != null) e.setId(id);

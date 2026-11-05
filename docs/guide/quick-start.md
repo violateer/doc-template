@@ -12,7 +12,7 @@
 | Maven | 3.8+ |
 | Spring Boot | 3.x 或 4.x（Servlet Web，WebFlux 不支持） |
 | 一个 `DataSource` Bean | 任何连接池都行，Starter 不建自己的池 |
-| 数据库 | MySQL 8 / MariaDB（自动建表支持这两种） |
+| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+（自动建表支持这三种） |
 
 前端源码构建额外需要 Node.js 20+、pnpm 9+，但**使用 Starter 不需要前端环境** —— 管理页的构建产物已经打进 JAR。
 
@@ -31,6 +31,28 @@ Starter 不绑定任何业务框架、认证框架、权限体系，也不要求
   <version>0.1.2</version>
 </dependency>
 ```
+
+::: tip 数据库驱动要自己声明
+Starter 不内置任何数据库驱动，用哪个库就加哪个驱动。`scope` 写 `runtime`，版本交给 Spring Boot BOM 管，不用写 `<version>`：
+
+```xml
+<!-- MySQL / MariaDB -->
+<dependency>
+  <groupId>com.mysql</groupId>
+  <artifactId>mysql-connector-j</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+<!-- PostgreSQL -->
+<dependency>
+  <groupId>org.postgresql</groupId>
+  <artifactId>postgresql</artifactId>
+  <scope>runtime</scope>
+</dependency>
+```
+
+只加实际用到的那个即可。`spring.datasource` 里不用写 `driver-class-name`，按 JDBC URL 自动识别。
+:::
 
 Starter 会自动装配以下内容（无需 `@EnableXxx`）：
 

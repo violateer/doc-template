@@ -180,7 +180,7 @@ scripts/seed-demo.sh           # Linux / macOS
 | 项 | 说明 |
 | --- | --- |
 | 业务表依赖 | 四套模板的数据块**都不依赖任何业务表**：要么是 `select` 常量 + `union all`，要么是 JAVA / API 块。执行完 `.sql` 就能「模拟生成」，不用建表、不用灌数 |
-| 表结构 | `doc_template` / `doc_template_data_block` / `doc_template_dict` / `doc_template_dict_item` 由 Starter 自动创建（MySQL 8 / MariaDB）；其他库先执行 `db/schema.sql` |
+| 表结构 | `doc_template` / `doc_template_data_block` / `doc_template_dict` / `doc_template_dict_item` 由 Starter 自动创建（MySQL 8 / MariaDB / PostgreSQL）；其他库先执行 `db/schema.sql` |
 | SQL 数据块开关 | `doc-template.data-block.sql-enabled=false` 时 SQL 块直接报错，示例里的块都跑不了 |
 | 执行顺序 | 按 `sort_order` 依次执行，任一块失败整次生成就是 `FAILED`；调模板时可以先停用不相关的块 |
 | 占位符取不到值 | 不报错，输出空串或默认值。想暴露问题就用「模拟生成」看实际参数列表 |

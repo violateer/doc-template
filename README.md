@@ -13,7 +13,7 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 | JDK 17+ | 编译目标 `release=17` |
 | Spring Boot 3.x 或 4.x | Servlet Web 应用；自动装配同时兼容两代 Boot 的包路径，WebFlux 不支持 |
 | 一个 `DataSource` Bean | 任何连接池都行；不配 `doc-template.datasource` 时复用宿主的 |
-| 数据库 | MySQL 8 / MariaDB 可自动建表；其他库需自行执行建表 DDL |
+| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ 可自动建表；其他库需自行执行建表 DDL |
 
 不需要的东西：不需要任何 ORM（MyBatis / MyBatis-Plus / JPA 用不用、什么版本都不影响）、不需要任何认证框架、不需要权限码或菜单表、不需要前端构建环境、不需要 Office / LibreOffice / WPS。
 
@@ -27,13 +27,13 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 </dependency>
 ```
 
-> Starter 的 classpath 需求只有 Spring Web、Spring JDBC 和一个 `DataSource`：不传递任何 ORM 依赖，也不传递 JSqlParser（SQL 校验用的那份被重定位进自己的包内）。所以宿主用不用 MyBatis-Plus、用哪个版本，都不会和这个模块互相影响。
+> Starter 的 classpath 需求只有 Spring Web、Spring JDBC、一个 `DataSource`，以及宿主自己声明的数据库驱动：不传递任何 ORM 依赖，不传递任何数据库驱动，也不传递 JSqlParser（SQL 校验用的那份被重定位进自己的包内）。所以宿主用不用 MyBatis-Plus、用哪个版本，都不会和这个模块互相影响。
 
 ## 工程结构
 
 - `backend/doc-template-core`：业务 Provider SPI（`DocumentDataProvider`），零依赖。
-- `backend/doc-template-spring-boot-starter`：模板、版本、数据块、生成记录 API，文件上传/下载，可插拔认证，Starter 静态页面与 MySQL schema。
-- `backend/doc-template-example`：独立示例应用，连真实 MySQL 并自动建表，并提供仅供本地示例使用的 `/demo/login`。
+- `backend/doc-template-spring-boot-starter`：模板、版本、数据块、生成记录 API，文件上传/下载，可插拔认证，Starter 静态页面与建表脚本。
+- `backend/doc-template-example`：独立示例应用，连真实数据库并自动建表，并提供仅供本地示例使用的 `/demo/login`。
 - `frontend/doc-template-ui`：内嵌管理页源码（Vue 3 + Naive UI）。`vite build` 的输出目录直接指向 Starter 的 `META-INF/resources/doc-template/`，产物随 JAR 发布。
 - `integration/README.md`：宿主集成、认证接入与代理说明。
 
@@ -126,7 +126,7 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 - `GET /api/doc-template/system/providers`
 - `GET /api/doc-template/system/converters`：可用的字段值转换器编码（内置 + 宿主注册）
 
-认证接入见 `integration/README.md`。默认启动时会检测文档模板所需的六张表；若存在缺失，则自动执行对应数据库建表脚本（MySQL/MariaDB），不会删除已有数据。
+认证接入见 `integration/README.md`。默认启动时会检测文档模板所需的六张表；若存在缺失，则自动执行对应数据库建表脚本（MySQL / MariaDB / PostgreSQL），不会删除已有数据。
 
 ## 模拟生成与文件预览
 
@@ -879,9 +879,27 @@ export DOC_S3_SECRET_KEY=your_secret_key
 
 `application-dev.yml` 进 git（不含任何真实地址和凭据），`application-local.yml` 已被 `.gitignore` 忽略、只留在本机。两个文件都只属于 example 模块（示例宿主），不会进入 Starter 的 jar；Starter 发布给宿主使用时，宿主的 `spring.datasource` 是什么就连什么。
 
-### 独立数据库驱动说明
+### 数据库驱动
 
-Starter 已将 `com.mysql:mysql-connector-j` 作为运行时依赖引入，`doc-template.datasource.driver-class-name` 可不配置，默认根据 JDBC URL 自动识别；如使用其他数据库，需要自行添加对应 JDBC 驱动。自动建表目前支持 MySQL 和 MariaDB。
+**Starter 不内置任何数据库驱动**——驱动由宿主在自己的依赖里声明：
+
+```xml
+<!-- MySQL / MariaDB -->
+<dependency>
+  <groupId>com.mysql</groupId>
+  <artifactId>mysql-connector-j</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+<!-- PostgreSQL -->
+<dependency>
+  <groupId>org.postgresql</groupId>
+  <artifactId>postgresql</artifactId>
+  <scope>runtime</scope>
+</dependency>
+```
+
+版本交给 Spring Boot BOM 管，不用写。宿主的 `spring.datasource` 里 `driver-class-name` 也可以不写，按 JDBC URL 自动识别；只有模块单独连另一个库（配了 `doc-template.datasource.url`）时才需要在该段里显式写驱动类名。自动建表目前支持 MySQL、MariaDB 和 PostgreSQL。
 
 ## 对外坐标
 

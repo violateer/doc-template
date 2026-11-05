@@ -7,7 +7,7 @@ doc-template-engine/
 ├── backend/
 │   ├── doc-template-core                  ✅ 发布物：SPI（零依赖契约层）
 │   ├── doc-template-spring-boot-starter   ✅ 发布物：全部能力
-│   └── doc-template-example               ❌ 示例宿主（MySQL + 本地磁盘 + 极简登录）
+│   └── doc-template-example               ❌ 示例宿主（真实数据库 + 本地磁盘 + 极简登录）
 ├── frontend/
 │   └── doc-template-ui                    ✅ 内嵌管理页源码（build 产物随 Starter 发布）
 ├── integration/                            ❌ 集成说明（iframe / 代理 / 上线检查）
@@ -50,7 +50,7 @@ POST /api/doc-template/templates/{id}/generate
 
 ## 数据表
 
-启动时检测六张表，缺失则执行 `CREATE TABLE IF NOT EXISTS`（MySQL / MariaDB），**不会删除已有数据**。
+启动时检测六张表，缺失则执行 `CREATE TABLE IF NOT EXISTS`（MySQL / MariaDB / PostgreSQL），**不会删除已有数据**。
 
 | 表 | 关键字段 |
 | --- | --- |

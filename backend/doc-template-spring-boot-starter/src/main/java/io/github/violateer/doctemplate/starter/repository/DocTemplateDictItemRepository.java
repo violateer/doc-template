@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.starter.repository;
 
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
 import io.github.violateer.doctemplate.starter.entity.DocTemplateDictItemEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -34,9 +35,12 @@ public class DocTemplateDictItemRepository {
     };
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final DocTemplateDialectProvider dialect;
 
-    public DocTemplateDictItemRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc) {
+    public DocTemplateDictItemRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc,
+                                         DocTemplateDialectProvider dialect) {
         this.jdbc = new NamedParameterJdbcTemplate(jdbc);
+        this.dialect = dialect;
     }
 
     public List<DocTemplateDictItemEntity> findByDictId(long dictId) {
@@ -47,11 +51,9 @@ public class DocTemplateDictItemRepository {
 
     /** 字典项分页：字典项上千条时管理页只取当前页，排序与全量查询一致。 */
     public List<DocTemplateDictItemEntity> findPage(long dictId, int offset, int limit) {
-        return jdbc.query("SELECT " + COLUMNS + " FROM doc_template_dict_item WHERE dict_id = :dictId"
-                        + " ORDER BY sort_order ASC, id ASC LIMIT :limit OFFSET :offset",
-                new MapSqlParameterSource("dictId", dictId)
-                        .addValue("limit", limit)
-                        .addValue("offset", offset), ROW_MAPPER);
+        String sql = dialect.current().page("SELECT " + COLUMNS + " FROM doc_template_dict_item"
+                + " WHERE dict_id = :dictId ORDER BY sort_order ASC, id ASC", offset, limit);
+        return jdbc.query(sql, new MapSqlParameterSource("dictId", dictId), ROW_MAPPER);
     }
 
     public long countByDictId(long dictId) {
@@ -99,7 +101,8 @@ public class DocTemplateDictItemRepository {
                 .addValue("itemLabel", e.getItemLabel())
                 .addValue("sortOrder", e.getSortOrder() == null ? 0 : e.getSortOrder());
         KeyHolder keys = new GeneratedKeyHolder();
-        jdbc.update("INSERT INTO doc_template_dict_item (dict_id, item_value, item_label, sort_order)"
+        dialect.current().insert(jdbc, "INSERT INTO doc_template_dict_item"
+                + " (dict_id, item_value, item_label, sort_order)"
                 + " VALUES (:dictId, :itemValue, :itemLabel, :sortOrder)", params, keys);
         Long id = JdbcKeys.generatedId(keys);
         if (id != null) e.setId(id);

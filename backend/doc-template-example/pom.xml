@@ -58,6 +58,20 @@
             <version>${zxing.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <!--
+          示例宿主的数据库驱动。Starter 不内置任何驱动（驱动是宿主的职责），
+          这个工程把 MySQL 与 PostgreSQL 都带上，dev / local 两个 profile 换库不用改 pom。
+        -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>cn.dev33</groupId>
             <artifactId>sa-token-spring-boot3-starter</artifactId>

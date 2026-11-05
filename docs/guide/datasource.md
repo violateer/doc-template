@@ -58,12 +58,30 @@ doc-template:
 
 - 启动时检测六张表，任意一张缺失就执行对应建表脚本；
 - 脚本用 `CREATE TABLE IF NOT EXISTS`，**不会删除已有数据**；
-- 支持 MySQL、MariaDB；
+- 支持 MySQL、MariaDB、PostgreSQL；
 - `doc-template.initialize-schema: false` 可关闭，改由宿主的迁移流程管理。
 
 ## 驱动说明
 
-Starter 已将 `com.mysql:mysql-connector-j` 作为运行时依赖引入，`doc-template.datasource.driver-class-name` 可不配置，默认根据 JDBC URL 自动识别；如使用其他数据库，需要自行添加对应 JDBC 驱动。
+**Starter 不内置任何数据库驱动**，宿主在自己的依赖里声明即可，`scope` 用 `runtime`，版本交给 Spring Boot BOM 管：
+
+```xml
+<!-- MySQL / MariaDB -->
+<dependency>
+  <groupId>com.mysql</groupId>
+  <artifactId>mysql-connector-j</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+<!-- PostgreSQL -->
+<dependency>
+  <groupId>org.postgresql</groupId>
+  <artifactId>postgresql</artifactId>
+  <scope>runtime</scope>
+</dependency>
+```
+
+宿主的 `spring.datasource` 里 `driver-class-name` 可以不写，按 JDBC URL 自动识别；只有模块单独连另一个库（配了 `doc-template.datasource.url`）时，才需要在该段里显式写驱动类名。
 
 ## 多租户 / 多数据权限场景注意
 

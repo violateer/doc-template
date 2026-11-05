@@ -1,5 +1,6 @@
 package io.github.violateer.doctemplate.starter.repository;
 
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
 import io.github.violateer.doctemplate.starter.entity.DocTemplateEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -54,9 +55,12 @@ public class DocTemplateRepository {
     };
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final DocTemplateDialectProvider dialect;
 
-    public DocTemplateRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc) {
+    public DocTemplateRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbc,
+                                 DocTemplateDialectProvider dialect) {
         this.jdbc = new NamedParameterJdbcTemplate(jdbc);
+        this.dialect = dialect;
     }
 
     public List<DocTemplateEntity> findAll() {
@@ -65,11 +69,8 @@ public class DocTemplateRepository {
 
     public List<DocTemplateEntity> findPage(String keyword, String status, int offset, int limit) {
         MapSqlParameterSource params = new MapSqlParameterSource();
-        String where = where(keyword, status, params);
-        params.addValue("limit", limit);
-        params.addValue("offset", offset);
-        return jdbc.query("SELECT " + COLUMNS + " FROM doc_template" + where
-                + " ORDER BY id DESC LIMIT :limit OFFSET :offset", params, ROW_MAPPER);
+        String sql = "SELECT " + COLUMNS + " FROM doc_template" + where(keyword, status, params) + " ORDER BY id DESC";
+        return jdbc.query(dialect.current().page(sql, offset, limit), params, ROW_MAPPER);
     }
 
     public long count(String keyword, String status) {
@@ -134,7 +135,7 @@ public class DocTemplateRepository {
                 .addValue("createTime", e.getCreateTime(), Types.TIMESTAMP)
                 .addValue("updateTime", e.getUpdateTime(), Types.TIMESTAMP);
         KeyHolder keys = new GeneratedKeyHolder();
-        jdbc.update(INSERT_SQL, params, keys);
+        dialect.current().insert(jdbc, INSERT_SQL, params, keys);
         Long id = JdbcKeys.generatedId(keys);
         if (id != null) e.setId(id);
     }

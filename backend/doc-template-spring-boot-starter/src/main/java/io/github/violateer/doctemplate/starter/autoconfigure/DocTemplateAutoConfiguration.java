@@ -12,6 +12,7 @@ import io.github.violateer.doctemplate.starter.controller.DocTemplateExceptionHa
 import io.github.violateer.doctemplate.starter.convert.BuiltinConverters;
 import io.github.violateer.doctemplate.starter.convert.DictConverter;
 import io.github.violateer.doctemplate.starter.convert.DocTemplateConverterRegistry;
+import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
 import io.github.violateer.doctemplate.starter.service.DocTemplateDictService;
 import io.github.violateer.doctemplate.starter.service.DocTemplateService;
 import io.github.violateer.doctemplate.starter.service.DocTemplateFileStorage;
@@ -125,29 +126,47 @@ public class DocTemplateAutoConfiguration {
     public DocTemplateJdbcTemplate docTemplateJdbcTemplate(DocTemplateDataSourceResolver dataSourceResolver) {
         return new DocTemplateJdbcTemplate(dataSourceResolver.moduleDataSource());
     }
+
+    /**
+     * 数据库方言（MySQL / MariaDB、PostgreSQL）。
+     *
+     * <p>第一次拼 SQL 时才连库读一次产品名并缓存，所以关掉自动建表、自己执行过 DDL 的宿主
+     * 不会因为启动阶段识别数据库而失败。</p>
+     */
     @Bean
-    public DocTemplateRepository docTemplateRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate) {
-        return new DocTemplateRepository(jdbcTemplate);
+    public DocTemplateDialectProvider docTemplateDialectProvider(DocTemplateDataSourceResolver dataSourceResolver) {
+        return new DocTemplateDialectProvider(dataSourceResolver.moduleDataSource());
+    }
+
+    @Bean
+    public DocTemplateRepository docTemplateRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                      DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateRepository(jdbcTemplate, dialectProvider);
     }
     @Bean
-    public DocTemplateVersionRepository docTemplateVersionRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate) {
-        return new DocTemplateVersionRepository(jdbcTemplate);
+    public DocTemplateVersionRepository docTemplateVersionRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                                     DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateVersionRepository(jdbcTemplate, dialectProvider);
     }
     @Bean
-    public DocTemplateDataBlockRepository docTemplateDataBlockRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate) {
-        return new DocTemplateDataBlockRepository(jdbcTemplate);
+    public DocTemplateDataBlockRepository docTemplateDataBlockRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                                         DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateDataBlockRepository(jdbcTemplate, dialectProvider);
     }
     @Bean
-    public DocTemplateGenerateRecordRepository docTemplateGenerateRecordRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate) {
-        return new DocTemplateGenerateRecordRepository(jdbcTemplate);
+    public DocTemplateGenerateRecordRepository docTemplateGenerateRecordRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                                                   DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateGenerateRecordRepository(jdbcTemplate, dialectProvider);
     }
     @Bean
-    public DocTemplateDictRepository docTemplateDictRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate) {
-        return new DocTemplateDictRepository(jdbcTemplate);
+    public DocTemplateDictRepository docTemplateDictRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                               DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateDictRepository(jdbcTemplate, dialectProvider);
     }
     @Bean
-    public DocTemplateDictItemRepository docTemplateDictItemRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate) {
-        return new DocTemplateDictItemRepository(jdbcTemplate);
+    public DocTemplateDictItemRepository docTemplateDictItemRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                                       DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateDictItemRepository(jdbcTemplate, dialectProvider);
     }
     @Bean
     public DocTemplateService docTemplateService(
