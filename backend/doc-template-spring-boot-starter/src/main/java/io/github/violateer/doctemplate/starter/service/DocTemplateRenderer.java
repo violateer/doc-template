@@ -19,6 +19,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.*;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDecimalNumber;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTR;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
@@ -507,88 +508,198 @@ public class DocTemplateRenderer {
     }
 
     /**
-     * Replaces placeholders inside a paragraph. Word often splits one placeholder across several
-     * runs, so the paragraph text is rebuilt first and written back into the leading run to keep
-     * that run's character formatting.
+     * 替换段落里的占位符。
      *
-     * <p>段落里出现声明为图片的占位符时，整段按「文本片段 + 图片」重建，字体格式取自原来的首个 run。</p>
+     * <p>Word 经常把一个占位符拆到好几个 run 里（{@code ${amo} + {unt}}），所以先把整段文本拼起来定位，
+     * 再<b>按 run 边界切成片段</b>写回去：替换出来的值沿用「占位符起点所在 run」的字符格式，
+     * 其余 run 一个字节都不动。这样同一段里「合计：」加粗、{@code ${amount}} 常规、「元」斜体
+     * 各留各的格式，不会整段塌成第一个 run 的样式。</p>
+     *
+     * <p>段落里有声明为图片的占位符时整段重建 run —— POI 只能在 run 末尾追加图片，文字和图片混排
+     * 必须重排；重建时每个片段也带自己来源 run 的格式，不再统一套第一个 run 的。</p>
      */
     private void replaceInParagraph(XWPFParagraph paragraph, Map<String, Object> params,
                                     List<DocTemplateImageSpec> images) {
         List<XWPFRun> runs = paragraph.getRuns();
         if (runs == null || runs.isEmpty()) return;
+        String original = paragraphText(runs);
+        if (original.isEmpty() || original.indexOf('{') < 0) return;
+        List<ParagraphSegment> segments = paragraphSegments(original, params, images, runs);
+        if (segments == null) return;
+        if (segments.stream().anyMatch(segment -> segment.image() != null)) {
+            DocTemplateImageSpec layout = null;
+            for (ParagraphSegment segment : segments) {
+                if (segment.image() != null) {
+                    layout = segment.image().spec();
+                    break;
+                }
+            }
+            rebuildParagraph(paragraph, segments);
+            // 只有「图片独占段落」时才动对齐和留白：混排时改了会把同一段的文字一起挪位置，
+            // 那种情况交给模板自己排版（在 Word 里设对齐/缩进即可）。
+            if (imageOnly(segments)) applyImageLayout(paragraph, layout);
+            return;
+        }
+        writeBackRuns(runs, segments);
+    }
+
+    /**
+     * 把整段文本按占位符切成片段，每片带上来源 run 的格式。
+     *
+     * @return 片段列表；整段没有任何改动时返回 {@code null}，调用方据此保持段落原样
+     */
+    private List<ParagraphSegment> paragraphSegments(String text, Map<String, Object> params,
+                                                     List<DocTemplateImageSpec> images, List<XWPFRun> runs) {
+        int[] starts = runStarts(runs);
+        List<CTRPr> formats = runFormats(runs);
+        List<ParagraphSegment> segments = new ArrayList<>();
+        Matcher matcher = PLACEHOLDER.matcher(text);
+        int cursor = 0;
+        boolean changed = false;
+        while (matcher.find()) {
+            String token = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            checkToken(token);
+            if (isStructuralMarker(token)) {
+                // 整段只有这一个结构标记，说明它本该被行展开、列区展开或段落展开消费掉，却没被认出来
+                // （缺数组名、关键字拼错、角色写错…）。混在文字里的（正文当例子讲的）原样保留。
+                if (FULL_PLACEHOLDER.matcher(text).matches()) {
+                    throw new IllegalArgumentException(residueMessage(matcher.group()));
+                }
+                continue;
+            }
+            DocTemplateImageSpec spec = specFor(keyOf(token), images);
+            if (spec != null) {
+                DocTemplateImageLoader.ImagePayload payload =
+                        imageLoader.load(resolve(token, params), spec, params, keyOf(token));
+                // 值为空：保留占位符文本，交给普通文本替换（走默认值或空串）
+                if (payload != null) {
+                    appendLiteral(segments, text, cursor, matcher.start(), starts, formats);
+                    segments.add(ParagraphSegment.ofImage(new ImageSegment(payload, spec),
+                            formattingAt(starts, formats, matcher.start())));
+                    cursor = matcher.end();
+                    changed = true;
+                    continue;
+                }
+            }
+            appendLiteral(segments, text, cursor, matcher.start(), starts, formats);
+            String replaced = stringify(resolve(token, params));
+            if (!replaced.equals(matcher.group())) changed = true;
+            segments.add(ParagraphSegment.ofText(replaced, formattingAt(starts, formats, matcher.start()),
+                    runAt(starts, matcher.start())));
+            cursor = matcher.end();
+        }
+        if (!changed) return null;
+        appendLiteral(segments, text, cursor, text.length(), starts, formats);
+        return segments;
+    }
+
+    /** 追加一段字面文本，按 run 边界切开，保证每片只带一个 run 的格式。 */
+    private static void appendLiteral(List<ParagraphSegment> segments, String text, int from, int to,
+                                      int[] starts, List<CTRPr> formats) {
+        int cursor = from;
+        while (cursor < to) {
+            int run = runAt(starts, cursor);
+            int end = Math.min(to, starts[run + 1]);
+            segments.add(ParagraphSegment.ofText(text.substring(cursor, end), formattingOf(formats, run), run));
+            cursor = end;
+        }
+    }
+
+    /**
+     * 按 run 归并片段后原地写回，只改文本真的变了的 run。
+     *
+     * <p>没被占位符覆盖的 run（制表符、换行、域代码）一个字节都不动；被整个占位符吃掉的 run
+     * 归并结果是空串，会被清空，不会留下「100unt}」这种残尾。</p>
+     */
+    private static void writeBackRuns(List<XWPFRun> runs, List<ParagraphSegment> segments) {
+        String[] merged = new String[runs.size()];
+        for (ParagraphSegment segment : segments) {
+            if (segment.image() != null) continue;
+            merged[segment.run()] = (merged[segment.run()] == null ? "" : merged[segment.run()]) + segment.text();
+        }
+        for (int i = 0; i < runs.size(); i++) {
+            String value = merged[i] == null ? "" : merged[i];
+            if (value.equals(runText(runs.get(i)))) continue;
+            setRunText(runs.get(i), value);
+        }
+    }
+
+    /**
+     * 把一个 run 的文本整体换成 {@code text}，只留一个 {@code w:t}。
+     *
+     * <p>POI 的 {@code setText(value, 0)} 只改第 0 个 {@code w:t}，一个 run 里有多段文本
+     * （Word 另存、跨版本复制常见）时后面的会残留成重影，所以多出来的手动删掉。</p>
+     */
+    private static void setRunText(XWPFRun run, String text) {
+        run.setText(text, 0);
+        CTR ctr = run.getCTR();
+        for (int i = ctr.sizeOfTArray() - 1; i >= 1; i--) ctr.removeT(i);
+    }
+
+    private static String paragraphText(List<XWPFRun> runs) {
         StringBuilder sb = new StringBuilder();
-        for (XWPFRun run : runs) sb.append(run.text());
-        String original = sb.toString();
-        if (original.isEmpty()) return;
-        if (images != null && !images.isEmpty() && replaceImagesInParagraph(paragraph, original, params, images)) return;
-        String replaced = replaceText(original, params);
-        if (replaced.equals(original)) return;
-        List<XWPFRun> current = paragraph.getRuns();
-        if (current.isEmpty()) return;
-        XWPFRun first = current.get(0);
-        first.setText(replaced, 0);
-        for (int i = 1; i < current.size(); i++) current.get(i).setText("", 0);
+        for (XWPFRun run : runs) sb.append(runText(run));
+        return sb.toString();
+    }
+
+    private static String runText(XWPFRun run) {
+        String text = run.text();
+        return text == null ? "" : text;
+    }
+
+    /** 每个 run 的起始字符偏移；末尾多一个元素是整段长度，方便直接取 run 的结束位置。 */
+    private static int[] runStarts(List<XWPFRun> runs) {
+        int[] starts = new int[runs.size() + 1];
+        for (int i = 0; i < runs.size(); i++) starts[i + 1] = starts[i] + runText(runs.get(i)).length();
+        return starts;
+    }
+
+    /** 字符偏移落在第几个 run。空 run 会被跳过，落到后面第一个有文本的 run。 */
+    private static int runAt(int[] starts, int offset) {
+        int last = starts.length - 2;
+        int run = 0;
+        while (run < last && starts[run + 1] <= offset) run++;
+        return run;
+    }
+
+    /** 预先拷一份每个 run 的字符格式：重建前要先删 run，不能直接引用被删掉的 XML 节点。 */
+    private static List<CTRPr> runFormats(List<XWPFRun> runs) {
+        List<CTRPr> formats = new ArrayList<>(runs.size());
+        for (XWPFRun run : runs) {
+            CTRPr formatting = run.getCTR().getRPr();
+            formats.add(formatting == null ? null : (CTRPr) formatting.copy());
+        }
+        return formats;
+    }
+
+    private static CTRPr formattingAt(int[] starts, List<CTRPr> formats, int offset) {
+        return formattingOf(formats, runAt(starts, offset));
+    }
+
+    private static CTRPr formattingOf(List<CTRPr> formats, int run) {
+        return run < formats.size() ? formats.get(run) : null;
     }
 
     // ------------------------------------------------------------------ images
 
-    /**
-     * 段落里的图片占位符：把文本拆成「文本 / 图片」片段后整段重建。
-     *
-     * @return 是否命中过图片字段；没命中时返回 {@code false}，交给普通文本替换
-     */
-    private boolean replaceImagesInParagraph(XWPFParagraph paragraph, String text, Map<String, Object> params,
-                                             List<DocTemplateImageSpec> images) {
-        List<Object> segments = new ArrayList<>();
-        Matcher matcher = PLACEHOLDER.matcher(text);
-        int cursor = 0;
-        DocTemplateImageSpec layout = null;
-        while (matcher.find()) {
-            String token = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
-            checkToken(token);
-            DocTemplateImageSpec spec = specFor(keyOf(token), images);
-            if (spec == null) continue;
-            DocTemplateImageLoader.ImagePayload payload =
-                    imageLoader.load(resolve(token, params), spec, params, keyOf(token));
-            // 值为空：保留占位符文本，交给后面的文本替换（走默认值或空串）
-            if (payload == null) continue;
-            if (matcher.start() > cursor) segments.add(replaceText(text.substring(cursor, matcher.start()), params));
-            segments.add(new ImageSegment(payload, spec));
-            if (layout == null) layout = spec;
-            cursor = matcher.end();
-        }
-        if (layout == null) return false;
-        if (cursor < text.length()) segments.add(replaceText(text.substring(cursor), params));
-        rebuildParagraph(paragraph, segments);
-        // 只有「图片独占段落」时才动对齐和留白：混排时改了会把同一段的文字一起挪位置，
-        // 那种情况交给模板自己排版（在 Word 里设对齐/缩进即可）。
-        if (imageOnly(segments)) applyImageLayout(paragraph, layout);
-        return true;
-    }
-
-    private boolean imageOnly(List<Object> segments) {
-        for (Object segment : segments) {
-            if (segment instanceof ImageSegment) continue;
-            if (segment instanceof String text && text.isBlank()) continue;
+    private static boolean imageOnly(List<ParagraphSegment> segments) {
+        for (ParagraphSegment segment : segments) {
+            if (segment.image() != null) continue;
+            if (segment.text() != null && segment.text().isBlank()) continue;
             return false;
         }
         return true;
     }
 
-    /** 清空原 runs，按片段顺序重建；文本片段沿用原首个 run 的字符格式。 */
-    private void rebuildParagraph(XWPFParagraph paragraph, List<Object> segments) {
+    /** 清空原 runs，按片段顺序重建；每片带上自己来源 run 的字符格式。 */
+    private void rebuildParagraph(XWPFParagraph paragraph, List<ParagraphSegment> segments) {
         List<XWPFRun> runs = paragraph.getRuns();
-        CTRPr formatting = null;
-        if (!runs.isEmpty() && runs.get(0).getCTR().getRPr() != null) {
-            formatting = (CTRPr) runs.get(0).getCTR().getRPr().copy();
-        }
         for (int i = runs.size() - 1; i >= 0; i--) paragraph.removeRun(i);
-        for (Object segment : segments) {
+        for (ParagraphSegment segment : segments) {
             XWPFRun run = paragraph.createRun();
-            if (formatting != null) run.getCTR().setRPr((CTRPr) formatting.copy());
-            if (segment instanceof ImageSegment image) {
-                DocTemplateImageLoader.ImagePayload payload = image.payload();
+            if (segment.formatting() != null) run.getCTR().setRPr((CTRPr) segment.formatting().copy());
+            if (segment.image() != null) {
+                DocTemplateImageLoader.ImagePayload payload = segment.image().payload();
                 try {
                     run.addPicture(new ByteArrayInputStream(payload.bytes()), payload.pictureType(), payload.fileName(),
                             payload.widthPx() * DocTemplateImageLoader.EMU_PER_PIXEL,
@@ -596,9 +707,8 @@ public class DocTemplateRenderer {
                 } catch (Exception error) {
                     throw new IllegalStateException("图片写入 DOCX 失败：" + error.getMessage(), error);
                 }
-            } else {
-                String value = String.valueOf(segment);
-                if (!value.isEmpty()) run.setText(value, 0);
+            } else if (segment.text() != null && !segment.text().isEmpty()) {
+                run.setText(segment.text(), 0);
             }
         }
     }
@@ -633,6 +743,23 @@ public class DocTemplateRenderer {
 
     /** 段落重建用的图片片段：图片数据 + 该字段的排版声明。 */
     private record ImageSegment(DocTemplateImageLoader.ImagePayload payload, DocTemplateImageSpec spec) {
+    }
+
+    /**
+     * 段落里的一个片段：文本或图片。
+     *
+     * <p>{@code formatting} 是来源 run 的字符格式（原地写回时用不上，重建时按片套回去）；
+     * {@code run} 是来源 run 的下标，图片片段为 -1。</p>
+     */
+    private record ParagraphSegment(String text, ImageSegment image, CTRPr formatting, int run) {
+
+        static ParagraphSegment ofText(String text, CTRPr formatting, int run) {
+            return new ParagraphSegment(text, null, formatting, run);
+        }
+
+        static ParagraphSegment ofImage(ImageSegment image, CTRPr formatting) {
+            return new ParagraphSegment(null, image, formatting, -1);
+        }
     }
 
     private DocTemplateImageSpec specFor(String key, List<DocTemplateImageSpec> images) {
