@@ -21,7 +21,7 @@ Starter 与任何业务框架、认证框架、权限体系都无关。只要宿
 <dependency>
   <groupId>io.github.violateer</groupId>
   <artifactId>doc-template-spring-boot-starter</artifactId>
-  <version>0.1.2</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 

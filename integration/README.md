@@ -24,7 +24,7 @@ mvn clean install
 <dependency>
   <groupId>io.github.violateer</groupId>
   <artifactId>doc-template-spring-boot-starter</artifactId>
-  <version>0.1.2</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 

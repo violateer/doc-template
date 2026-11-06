@@ -16,6 +16,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-06
+
 ### 新增
 
 - **表格动态列**：表格的列数、列标题、每列取哪个字段都可以由数据决定，用来出「检验项多少条就多少列」这类列数不固定的表。数据块里可以再挂一份列定义，三种取数方式都能用、参数映射与主数据共用；模板里表头行写 `header`、数据行写 `data`，两处标记各自标明角色，展开成 N 列，合计行写 `span` 让整格横向盖住整个列区。数据行还可以在行首行尾各写一个循环标记，把这一行取自哪个数据块标在行上，中间的格子就不用逐个写块前缀。展开出来的格子完全复制标记格的格式，字体、边框、底纹、对齐都不用再配一遍；列区两侧的固定列照常写占位符，两行分组表头、横向合并、竖向合并都可以和动态列一起用。列宽按相对权重分配。不配列定义时行为完全不变。
@@ -72,7 +74,8 @@
 - **运行接入**：复用宿主 `DataSource` 或配置独立库；MySQL 8 / MariaDB 自动建表；文件存储支持本地磁盘与 S3 兼容对象存储；同时兼容 Spring Boot 3.x / 4.x 的 Servlet Web 应用。
 - **内嵌管理界面**：模板、数据块、字典、生成记录的管理页随 JAR 发布，可 iframe 嵌入或同源部署。
 
-[Unreleased]: https://github.com/violateer/doc-template/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/violateer/doc-template/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/violateer/doc-template/releases/tag/v0.2.0
 [0.1.2]: https://github.com/violateer/doc-template/releases/tag/v0.1.2
 [0.1.1]: https://github.com/violateer/doc-template/releases/tag/v0.1.1
 [0.1.0]: https://github.com/violateer/doc-template/releases/tag/v0.1.0
