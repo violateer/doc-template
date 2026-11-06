@@ -122,7 +122,7 @@ export const configFields: Record<DataSourceType, ConfigField[]> = {
       // 主信息查询更常见，默认按单条返回；做明细行时再改成多条
       defaultValue: 'true',
       desc:
-        '单条：结果按一条记录放进数据块（主信息）；多条：结果按多行返回，配合模板里的 {{#each 块编码}} 做明细行。',
+        '单条：结果按一条记录放进数据块（主信息）；多条：结果按多行返回，配合模板里的 {{#each 块编码}}…{{/each}} 做明细行。',
       sample: 'true'
     },
     {
@@ -219,3 +219,54 @@ export const paramFieldNotes = [
 export const paramSample: Record<string, string> = {
   reportNo: '$request.reportNo'
 };
+
+/* ------------------------------------------------------------------ 表格动态列 */
+
+/** 列源配置在 data_source_config 里的键名：{ type, sql, provider, ... } */
+export const COLUMN_KEY = 'columns';
+
+/** 列源字段在表单里的键名前缀（支持点号路径读写，写回时按嵌套对象保存） */
+export const COLUMN_PREFIX = `${COLUMN_KEY}.`;
+
+export const columnTypeOptions: ConfigOption[] = [
+  { label: 'Java Provider', value: 'JAVA' },
+  { label: 'SQL 数据源', value: 'SQL' },
+  { label: 'API 数据源', value: 'API' }
+];
+
+/**
+ * 动态列的列源配置项：列源自己选类型，键名统一加 `columns.` 前缀。
+ *
+ * 其余键与主数据源**同名同义**（`provider` / `url` / `sql` / `dataSource` / `maxRows` …），
+ * 参数映射共用块级 `param_config`，不另开一份；`single` 对列源没有意义（列源永远是数组），所以不出现在表单里。
+ */
+export function columnFields(type: DataSourceType): ConfigField[] {
+  const fields: ConfigField[] = [
+    {
+      key: `${COLUMN_PREFIX}type`,
+      label: '列源类型',
+      type: 'select',
+      group: '动态列',
+      options: columnTypeOptions,
+      desc: '列定义从哪里来。三种取数方式与数据块完全一致，参数映射共用下面那一份，不用再配一遍。',
+      sample: 'SQL'
+    }
+  ];
+  for (const field of configFields[type] ?? []) {
+    if (field.key === 'single') continue;
+    fields.push({ ...field, key: `${COLUMN_PREFIX}${field.key}`, group: '动态列' });
+  }
+  return fields;
+}
+
+/** 列定义元素的三个键，说明文字里要写清（样式不在这里配，跟模板那一格走） */
+export const columnElementNote =
+  '元素是对象时认三个键：field（取值字段名，必填）、label（列标题，留空用 field）、' +
+  'width（相对宽度，缺省 1）。元素直接写字符串时按 field = label = 该值处理。' +
+  '字体、边框、底纹、对齐都不用配：展开出来的格子直接复制模板里那个标记格的格式。';
+
+export const columnTemplateNote =
+  '模板里表头行写 {{#columns 块编码 header}} 独占一格，展开成 N 格并填列标题；' +
+  '数据行写 {{#columns 块编码 data}}，展开成 N 格、每格取对应字段，并按该数组循环；' +
+  '合计行、说明行写 {{#columns 块编码 span}} 则整格横向盖住整个列区。角色必须写，两个标记才不会混。';
+

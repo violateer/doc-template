@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -87,7 +86,7 @@ public class DocTemplateConverterRegistry {
         if (source == null) return;
         for (DocTemplateValueConverter converter : source) {
             if (converter == null) continue;
-            String code = StrUtil.blankToDefault(converter.code(), "").trim().toLowerCase(Locale.ROOT);
+            String code = StrUtil.blankToDefault(converter.code(), "").trim();
             if (code.isEmpty()) {
                 throw new IllegalStateException("DocTemplateValueConverter code must not be blank: "
                         + converter.getClass().getName());
@@ -104,13 +103,18 @@ public class DocTemplateConverterRegistry {
         }
     }
 
-    /** 已注册的转换器编码，供管理页做下拉选项。 */
+    /**
+     * 已注册的转换器编码，供管理页做下拉选项。
+     *
+     * <p>返回<b>注册时声明的写法</b>（宿主 {@code code()} 里写的大小写），并按该写法精确排序：
+     * 编码是严格区分大小写的标识符，管理页把它直接当配置值用，不能在这里换一种写法。</p>
+     */
     public List<String> codes() {
         return converters.keySet().stream().sorted().toList();
     }
 
     public boolean supports(String code) {
-        return code != null && converters.containsKey(code.trim().toLowerCase(Locale.ROOT));
+        return code != null && converters.containsKey(code.trim());
     }
 
     /**
@@ -154,12 +158,17 @@ public class DocTemplateConverterRegistry {
         return converted;
     }
 
+    /**
+     * 按编码取转换器。编码**严格区分大小写**：配置里写 {@code DemoSku} 而 {@code code()} 声明的是
+     * {@code demoSku} 时直接报「未知的转换器」，并列出可用编码，而不是猜一个。
+     */
     private DocTemplateValueConverter require(String type) {
-        String code = type.trim().toLowerCase(Locale.ROOT);
+        String code = type.trim();
         DocTemplateValueConverter converter = converters.get(code);
         if (converter == null) {
             throw new IllegalArgumentException("未知的转换器「" + type + "」，可用："
-                    + (converters.isEmpty() ? "（没有注册任何转换器）" : String.join("、", codes())));
+                    + (converters.isEmpty() ? "（没有注册任何转换器）" : String.join("、", codes()))
+                    + "；转换器编码区分大小写");
         }
         return converter;
     }
@@ -229,7 +238,7 @@ public class DocTemplateConverterRegistry {
         Map<CallKey, List<Target>> groups = new LinkedHashMap<>();
         for (Target target : targets) {
             Rule rule = target.rule();
-            CallKey key = new CallKey(rule.type().trim().toLowerCase(Locale.ROOT), rule.args());
+            CallKey key = new CallKey(rule.type().trim(), rule.args());
             groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(target);
         }
         for (Map.Entry<CallKey, List<Target>> entry : groups.entrySet()) {
@@ -243,12 +252,10 @@ public class DocTemplateConverterRegistry {
         }
     }
 
+    /** 按字段名找转换规则：严格区分大小写，配置里写 {@code Material_Code} 不等于 {@code material_code}。 */
     private static Rule ruleFor(String key, List<Rule> rules) {
         for (Rule rule : rules) {
             if (rule.field().equals(key)) return rule;
-        }
-        for (Rule rule : rules) {
-            if (rule.field().equalsIgnoreCase(key)) return rule;
         }
         return null;
     }
@@ -333,7 +340,9 @@ public class DocTemplateConverterRegistry {
     private static Map<String, Object> argsOf(String type, String inner, String separator) {
         Map<String, Object> args = new LinkedHashMap<>();
         if (StrUtil.isBlank(inner)) return args;
-        List<String> positional = POSITIONAL.getOrDefault(type.toLowerCase(Locale.ROOT), List.of());
+        // 位置参数名按内置编码查：编码严格区分大小写，这里也精确匹配（写错大小写就当没有位置参数名，
+        // 值会落到 _1 / _2 上，随后由 require() 报「未知的转换器」）
+        List<String> positional = POSITIONAL.getOrDefault(type, List.of());
         String[] parts = inner.split(separator, -1);
         int index = 0;
         for (String raw : parts) {

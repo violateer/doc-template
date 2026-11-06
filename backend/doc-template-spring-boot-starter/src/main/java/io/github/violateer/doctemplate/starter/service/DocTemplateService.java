@@ -15,9 +15,10 @@ import io.github.violateer.doctemplate.starter.repository.DocTemplateGenerateRec
 import io.github.violateer.doctemplate.starter.repository.DocTemplateRepository;
 import io.github.violateer.doctemplate.starter.repository.DocTemplateVersionRepository;
 import io.github.violateer.doctemplate.starter.support.DocTemplateImageSpec;
-import io.github.violateer.doctemplate.starter.support.DocTemplateMergeAlign;
 import io.github.violateer.doctemplate.starter.support.DocTemplateJson;
+import io.github.violateer.doctemplate.starter.support.DocTemplateMergeAlign;
 import io.github.violateer.doctemplate.starter.support.DocTemplateQrCodeSpec;
+import io.github.violateer.doctemplate.starter.support.DocTemplateRenderData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.multipart.MultipartFile;
@@ -144,11 +145,8 @@ public class DocTemplateService {
     public Map<String, Object> createTemplate(Map<String, Object> body) {
         String code = req(body, "templateCode"), name = req(body, "templateName");
         // 类型在首次上传文件前仅作默认值；上传成功后始终以真实扩展名覆盖。
-        String fileType = upper(body.getOrDefault("fileType", "DOCX")), export = upper(body.getOrDefault("exportType", "ORIGINAL"));
-        if (!Set.of("DOCX", "XLSX").contains(fileType))
-            throw new IllegalArgumentException("fileType must be DOCX or XLSX");
-        if (!Set.of("ORIGINAL", "PDF").contains(export))
-            throw new IllegalArgumentException("exportType must be ORIGINAL or PDF");
+        String fileType = DocTemplateRenderer.fileTypeOf(str(body.get("fileType")));
+        String export = exportTypeOf(body.get("exportType"));
         if (templateRepository.findByCode(code) != null)
             throw new IllegalArgumentException("模板编码已存在：" + code);
         DocTemplateEntity e = new DocTemplateEntity();
@@ -179,7 +177,7 @@ public class DocTemplateService {
             e.setTemplateCode(code);
         }
         e.setTemplateName(req(b, "templateName"));
-        e.setExportType(upper(b.getOrDefault("exportType", "ORIGINAL")));
+        e.setExportType(exportTypeOf(b.get("exportType")));
         e.setStatus(String.valueOf(b.getOrDefault("status", "ENABLED")));
         e.setRemark(str(b.get("remark")));
         e.setUpdateTime(LocalDateTime.now());
@@ -378,6 +376,10 @@ public class DocTemplateService {
      *
      * <p>失败不抛 500：把错误消息放进 {@code ok=false} 的响应里，页面直接展示，
      * 省得一次配置错误就变成「服务内部错误」。</p>
+     *
+     * <p>{@code fieldsOnly=true} 时只返回 {@code {ok, fields, elapsed_ms}}，不把整份结果传给前端——
+     * 管理页要的是「有哪些字段可选」，几百行数据传过去没人看。字段名只取第一层键（数组取前 20 项的并集），
+     * 嵌套路径（{@code item.name}）仍然靠手填。</p>
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> previewBlock(Map<String, Object> b) {
@@ -394,13 +396,16 @@ public class DocTemplateService {
         e.setParamConfig(json(b.getOrDefault("paramConfig", Map.of())));
         Object rawParams = b.get("requestParams");
         Map<String, Object> requestParams = rawParams instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        boolean fieldsOnly = Convert.toBool(b.get("fieldsOnly"), false);
 
         long started = System.currentTimeMillis();
         Map<String, Object> result = new LinkedHashMap<>();
         dictService.beginScope();
         try {
             result.put("ok", true);
-            result.put("data", dataBlockExecutor.execute(e, requestParams));
+            Object data = dataBlockExecutor.execute(e, requestParams);
+            result.put("fields", fieldsOf(data));
+            if (!fieldsOnly) result.put("data", data);
         } catch (Exception error) {
             result.put("ok", false);
             result.put("error", rootMessage(error));
@@ -411,6 +416,29 @@ public class DocTemplateService {
         }
         result.put("elapsed_ms", System.currentTimeMillis() - started);
         return result;
+    }
+
+    /**
+     * 从取数结果里抽出可选的字段名：数组取前 20 项的键并集（按首次出现顺序去重），
+     * 对象取第一层键，其余（空、标量、非对象数组）返回空列表。
+     */
+    private List<String> fieldsOf(Object data) {
+        Set<String> keys = new LinkedHashSet<>();
+        if (data instanceof List<?> list) {
+            int limit = Math.min(20, list.size());
+            for (int i = 0; i < limit; i++) {
+                if (list.get(i) instanceof Map<?, ?> map) {
+                    for (Object key : map.keySet()) {
+                        if (key != null) keys.add(String.valueOf(key));
+                    }
+                }
+            }
+        } else if (data instanceof Map<?, ?> map) {
+            for (Object key : map.keySet()) {
+                if (key != null) keys.add(String.valueOf(key));
+            }
+        }
+        return new ArrayList<>(keys);
     }
 
     public List<Map<String, Object>> records() {
@@ -481,7 +509,8 @@ public class DocTemplateService {
         Long versionId = body.get("templateVersionId") == null
                 ? currentVersionId(t)
                 : Long.valueOf(String.valueOf(body.get("templateVersionId")));
-        String export = upper(body.getOrDefault("exportType", t.getExportType() == null ? "ORIGINAL" : t.getExportType()));
+        String export = exportTypeOf(body.get("exportType") != null
+                ? body.get("exportType") : t.getExportType());
         Map<String, Object> params = paramsOf(body.get("requestParams") != null ? body.get("requestParams") : body.get("params"));
         DocTemplateGenerateRecordEntity e = new DocTemplateGenerateRecordEntity();
         e.setTemplateId(templateId);
@@ -503,8 +532,9 @@ public class DocTemplateService {
             byte[] source = fileStorage.read(v.getFileUrl());
             String fileType = t.getFileType() == null ? "DOCX" : t.getFileType();
             List<DocTemplateDataBlockEntity> blocks = blocksOf(templateId);
-            byte[] rendered = renderer.render(source, fileType, withDataBlocks(blocks, params),
-                    imageSpecsOf(blocks), mergeAlignOf(blocks));
+            DocTemplateRenderData renderData = withDataBlocks(blocks, params);
+            byte[] rendered = renderer.render(source, fileType, renderData.data(),
+                    imageSpecsOf(blocks), mergeAlignOf(blocks), renderData.columnIndex());
             String ext = "XLSX".equalsIgnoreCase(fileType) ? ".xlsx" : ".docx";
             byte[] output = rendered;
             if ("PDF".equals(export)) {
@@ -534,15 +564,17 @@ public class DocTemplateService {
      * 手填的空串不覆盖数据块已取到的值——模拟生成弹窗「填充占位符」会给所有键补空串，
      * 若不这样处理，数据块取到的值会被空串冲掉。
      */
-    private Map<String, Object> withDataBlocks(List<DocTemplateDataBlockEntity> blocks, Map<String, Object> requestParams) {
-        Map<String, Object> merged = new LinkedHashMap<>(dataBlockExecutor.collect(blocks, requestParams));
+    private DocTemplateRenderData withDataBlocks(List<DocTemplateDataBlockEntity> blocks,
+                                                 Map<String, Object> requestParams) {
+        DocTemplateRenderData collected = dataBlockExecutor.collect(blocks, requestParams);
+        Map<String, Object> merged = new LinkedHashMap<>(collected.data());
         for (Map.Entry<String, Object> entry : requestParams.entrySet()) {
             Object value = entry.getValue();
             boolean blank = value == null || (value instanceof String s && s.isBlank());
             if (blank && lookupPath(merged, entry.getKey()) != null) continue;
             merged.put(entry.getKey(), value);
         }
-        return merged;
+        return new DocTemplateRenderData(merged, collected.columns());
     }
 
     /** 模板下启用的数据块，按执行顺序排好（生成与图片字段解析共用同一份数据）。 */
@@ -564,11 +596,17 @@ public class DocTemplateService {
             if (block == null) continue;
             if (!"ENABLED".equalsIgnoreCase(StrUtil.blankToDefault(block.getStatus(), "ENABLED"))) continue;
             Map<String, Object> config = DocTemplateJson.readMap(block.getDataSourceConfig());
-            for (DocTemplateImageSpec spec : DocTemplateImageSpec.fromConfig(config)) {
-                merged.putIfAbsent(spec.field().toLowerCase(Locale.ROOT), spec);
-            }
-            for (DocTemplateQrCodeSpec qr : DocTemplateQrCodeSpec.fromConfig(config)) {
-                merged.put(qr.field().toLowerCase(Locale.ROOT), qr.toImageSpec());
+            // 声明写错（字段名带路径）时补上块编码，否则整篇文档几十个块，报错只说字段名根本找不到出处
+            try {
+                for (DocTemplateImageSpec spec : DocTemplateImageSpec.fromConfig(config)) {
+                    merged.putIfAbsent(spec.field().toLowerCase(Locale.ROOT), spec);
+                }
+                for (DocTemplateQrCodeSpec qr : DocTemplateQrCodeSpec.fromConfig(config)) {
+                    merged.put(qr.field().toLowerCase(Locale.ROOT), qr.toImageSpec());
+                }
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("数据块「" + block.getBlockCode() + "」的配置有误："
+                        + error.getMessage(), error);
             }
         }
         return new ArrayList<>(merged.values());
@@ -790,6 +828,20 @@ public class DocTemplateService {
 
     private String upper(Object o) {
         return StrUtil.blankToDefault(str(o), "").trim().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * 导出类型只认 ORIGINAL / PDF（大小写都行），写错直接报错。
+     *
+     * <p>以前「不是 PDF 就按 ORIGINAL」，于是 {@code exportType=pdff} 会安静地给你一份 docx。</p>
+     */
+    static String exportTypeOf(Object raw) {
+        String type = StrUtil.blankToDefault(Convert.toStr(raw), "ORIGINAL").trim().toUpperCase(Locale.ROOT);
+        if (!"ORIGINAL".equals(type) && !"PDF".equals(type)) {
+            throw new IllegalArgumentException("导出类型「" + raw
+                    + "」不支持，只能是 ORIGINAL（原格式）或 PDF");
+        }
+        return type;
     }
 
     private int intVal(Object o) {

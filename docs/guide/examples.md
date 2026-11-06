@@ -4,8 +4,8 @@
 
 | 模板 | 模板编码 / 文件 | 格式 | 数据块 | 覆盖的写法 |
 | --- | --- | --- | --- | --- |
-| 综合示例（Word） | `WordShowcase`<br>`word-showcase.docx` | DOCX / ORIGINAL | 5 个 SQL 块 + `demoProvider`(JAVA) + `demoApi`(API) + 3 本字典 | 占位符与默认值、手填参数、点号取嵌套、三种循环、嵌套与 `where`、竖向合并、`converters` 与字典、宿主自定义转换器、图片与二维码、三种数据源 |
-| 综合示例（Excel） | `ExcelShowcase`<br>`excel-showcase.xlsx` | XLSX / ORIGINAL | 5 个 SQL 块 + 3 本字典 | 整格数字与混排文本、行内与区域循环、嵌套与 `where`、`merge` 两种列写法、转换与字典、图片与二维码、循环体逐行出图、多 sheet |
+| 综合示例（Word） | `WordShowcase`<br>`word-showcase.docx` | DOCX / ORIGINAL | 6 个 SQL 块 + `demoProvider`(JAVA) + `demoApi`(API) + 3 本字典 | 占位符与默认值、手填参数、点号取嵌套、三种循环、嵌套与 `where`、竖向合并、**动态列**、`converters` 与字典、宿主自定义转换器、图片与二维码、三种数据源 |
+| 综合示例（Excel） | `ExcelShowcase`<br>`excel-showcase.xlsx` | XLSX / ORIGINAL | 6 个 SQL 块 + 3 本字典 | 整格数字与混排文本、行内与区域循环、嵌套与 `where`、`merge` 两种列写法、**动态列**、转换与字典、图片与二维码、循环体逐行出图、多 sheet |
 | 正式验收报告（Word） | `WordAcceptanceReport`<br>`word-acceptance-report.docx` | DOCX / ORIGINAL | 20 个 SQL 块 | 多级标题、目录域、三段式页眉页脚、斑马纹表格、KPI 卡片、图片字段 |
 | 正式验收报告（Excel） | `ExcelAcceptanceReport`<br>`excel-acceptance-report.xlsx` | XLSX / ORIGINAL | 5 个 SQL 块 | 多 sheet、合并单元格、KPI 卡片、冻结窗格、打印区域、行循环 |
 
@@ -65,7 +65,7 @@ scripts/seed-demo.sh           # Linux / macOS
 
 这两套是「一份文档把所有写法摆全」的对照模板：生成一次，就能看到每种标记写出来是什么效果。文档本身样式很朴素（标题 + 带边框的表格），重点全在数据展示和写法对照上。
 
-### 数据块（Word 7 个 / Excel 5 个）
+### 数据块（Word 8 个 / Excel 6 个）
 
 | 块编码 | 类型 | Word | Excel | 内容 |
 | --- | --- | --- | --- | --- |
@@ -74,6 +74,7 @@ scripts/seed-demo.sh           # Linux / macOS
 | `orders` | SQL `single=false` | ✓ | ✓ | 3 个订单，`items` 列是 `json_array(json_object(...))` 拼出的嵌套数组 |
 | `order_items` | SQL `single=false` | ✓ | ✓ | 6 行扁平明细，模板里用 `where` 关联过滤 |
 | `stock_items` | SQL `single=false` | ✓ | ✓ | 7 行入库明细，用于竖向合并；配了 `mergeCellAlign=center` |
+| `inspection` | SQL `single=false` + `columns` | ✓ | ✓ | 4 行检验项目；列定义由 `columns` 里的另一个 SQL 给（3 列样品），用于动态列 |
 | `demoProvider` | JAVA | ✓ | — | 调 example 的 `DemoOrderProvider`（编码 `demoOrder`） |
 | `demoApi` | API | ✓ | — | 调 example 的 `POST /demo/api/orders/{orderNo}`，同时演示路径、查询串、body 三处传参 |
 
@@ -87,7 +88,7 @@ scripts/seed-demo.sh           # Linux / macOS
 
 模拟生成时要填的参数：`inspector`（模板里手填的审核人，不填显示「未填写」）、`orderNo`（`demoProvider` 用）、`channel`（`demoApi` 用）。
 
-### Word 版：七个章节对应七类写法
+### Word 版：八个章节对应八类写法
 
 | 章节 | 演示的写法 | 用到的块 |
 | --- | --- | --- |
@@ -98,6 +99,7 @@ scripts/seed-demo.sh           # Linux / macOS
 | 五、字段值转换 | 数据块 `converters` 的转换结果对照（含字典与宿主自定义转换器） | `report` |
 | 六、图片与二维码 | `imageFields` 出图；`qrCodes` 出码，中间小图取同块的 `qr_logo` | `report` |
 | 七、三种数据源 | JAVA Provider / API / SQL 各来一段 | `demoProvider`、`demoApi`、其余 SQL 块 |
+| 八、动态列 | 固定列 + 动态列混排；表头 `header` / 数据行 `data` 两种角色；数据行行首行尾标出块名；两行分组表头；列级 `width`；`span` 静态行；`_index` 序号 | `inspection` |
 
 页眉页脚也放了占位符（`${report.title:未命名}` / `${report.report_no}`），顺带验证这两个位置同样生效。
 
@@ -108,7 +110,7 @@ scripts/seed-demo.sh           # Linux / macOS
 - **`demoApi` 的 `request_body` 是对象**，所以 `${demoApi.request_body.channel}` 能逐级取到 body 里传进去的 `channel`，用来演示点号路径。
 - **`material_code` 用的是宿主自定义转换器 `demoSku`**（example 里注册的 Bean，物料编码 → 物料名称），演示 `DocTemplateValueConverter` 的接入方式。
 
-### Excel 版：六个工作表
+### Excel 版：七个工作表
 
 | 工作表 | 演示的写法 |
 | --- | --- |
@@ -116,6 +118,7 @@ scripts/seed-demo.sh           # Linux / macOS
 | 明细循环 | 行内标记（标记写在行尾单元格）/ 区域循环（标记行生成后删掉） |
 | 嵌套循环 | 嵌套字段 + `where` 关联过滤 |
 | 合并单元格 | 列字母写法 `merge=A,B by=material_code` / 列号写法 `merge=1`（不写 `by`，按文本比较） |
+| 动态列 | 列数由列源决定；表头 `header` / 数据行 `data` 两种角色；分组表头用 `span` 盖住列区；列宽按权重分配，字体对齐全部沿用标记格 |
 | 转换与字典 | 转换前后的原始值 → 显示值对照 |
 | 图片与二维码 | 图片与二维码都必须**独占单元格**；循环体里逐行出图 |
 
@@ -127,10 +130,10 @@ scripts/seed-demo.sh           # Linux / macOS
 
 - **图片字段会真的发起下载**。`logo` / `pic` / `qr_logo` 指向公网图片地址（5 秒超时、单张 5MB）。离线或内网环境请换成本地可访问的地址，否则**整次生成会 FAILED**（二维码的小图是例外：取不到只打 warn，二维码照常输出）。
 - **`demoProvider` / `demoApi` 依赖 example 模块**。只有 `doc-template-example` 启动着才有数据；`demoApi` 回调的是 `127.0.0.1:9150`（示例宿主自己就是这个端口，容器里自调也成立），接口挂在别的地址时改 `url` 即可。换成自己的宿主时把这两个块删掉，其余块和文档结构不受影响。
-- **区域标记必须独占一行 / 一段**。写成 `${order_no}{{#each items}}` 就变成单行循环，配对的 `{{/each}}` 会白写。
+- **区域标记必须独占一行 / 一段**。写成 `${order_no}{{#each items}}` 就不是区域了：生成时会报「没有配对的 `{{/each}}`」，因为行内循环要求两个标记写在同一行里。
 - **`where` 右边是当前作用域的键**，不是字面量。`where order_no = order_no` 表示「明细的 order_no 等于当前订单的 order_no」；比字符串常量要加引号：`where status = 'open'`。
 - **合并格默认靠上**。示例 SQL 给 `stock_items` 配了 `"mergeCellAlign": "center"`，删掉就回到靠上，三种取值见[合并单元格对齐](/guide/data-blocks#合并单元格对齐)。
-- **标记格会被清空**。行内单行循环里写 `{{#each ...}}` 的那一格渲染完是空的，所以 `merge=` 不要指向它（要么指向别的列，要么用 `by=`）。
+- **标记格会被清空**。行内循环里写 `{{#each ...}}` 的那一格渲染完是空的，所以 `merge=` 不要指向它（要么指向别的列，要么用 `by=`）。
 
 ## 正式验收报告（WordAcceptanceReport / ExcelAcceptanceReport）
 
@@ -149,7 +152,7 @@ scripts/seed-demo.sh           # Linux / macOS
 
 两类循环都在这份模板里用到了：
 
-- **表格行循环**（12 处）：`units` / `items` / `metrics` / `issues` / `revisions` / `distribution` / `methods` / `issue_levels` / `scores` / `glossary` / `ref_docs` / `signers`。标记写在循环行**最后一格**的占位符后面，例如 `${item.c4}{{#each revisions}}`。
+- **表格行循环**（12 处）：`units` / `items` / `metrics` / `issues` / `revisions` / `distribution` / `methods` / `issue_levels` / `scores` / `glossary` / `ref_docs` / `signers`。循环行的**第一格开头**写 `{{#each 块}}`、**最后一格末尾**写 `{{/each}}`，例如 `{{#each revisions}}${item.c1}` … `${item.c4}{{/each}}`。
 - **段落块循环**（7 处）：`goals` / `scope` / `checklist` / `basis` / `criteria` / `security` / `suggestions`。`{{#each xxx}}` 与 `{{/each}}` 各占一段，两段之间的段落整体重复；标记段渲染后会被删除。
 
 ### 列名约定（c1~c5）

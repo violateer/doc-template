@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: 模板即配置
-    details: 普通 Word / Excel 文件，直接写 ${占位符} 和 {{#each 明细}}，无需学习模板 DSL，业务人员自己就能改。
+    details: 普通 Word / Excel 文件，直接写 ${占位符} 和 {{#each 明细}}…{{/each}}，无需学习模板 DSL，业务人员自己就能改。
   - title: 三种取数方式
     details: JAVA Provider（最安全）、API 接口、SQL 查询，按推荐顺序选择；执行结果按块编码注入渲染参数。
   - title: 零外部依赖导出
@@ -82,8 +82,8 @@ POST /api/doc-template/templates/{id}/generate
 
 | 模板 | 文件 | 数据块 | 覆盖的写法 |
 | --- | --- | --- | --- |
-| 综合示例（Word） | [word-showcase.docx](/demo/word-showcase.docx) | 5 个 SQL 块 + `demoProvider`(JAVA) + `demoApi`(API) + 3 本字典 | 占位符与默认值、手填参数、三种循环、嵌套与 `where`、竖向合并、转换与字典、图片与二维码、三种数据源 |
-| 综合示例（Excel） | [excel-showcase.xlsx](/demo/excel-showcase.xlsx) | 5 个 SQL 块 + 3 本字典 | 整格数字与混排文本、行内与区域循环、嵌套、`merge` 两种列写法、转换与字典、图片与二维码、多 sheet |
+| 综合示例（Word） | [word-showcase.docx](/demo/word-showcase.docx) | 6 个 SQL 块 + `demoProvider`(JAVA) + `demoApi`(API) + 3 本字典 | 占位符与默认值、手填参数、三种循环、嵌套与 `where`、竖向合并、动态列、转换与字典、图片与二维码、三种数据源 |
+| 综合示例（Excel） | [excel-showcase.xlsx](/demo/excel-showcase.xlsx) | 6 个 SQL 块 + 3 本字典 | 整格数字与混排文本、行内与区域循环、嵌套、`merge` 两种列写法、动态列、转换与字典、图片与二维码、多 sheet |
 | 正式验收报告（Word） | [word-acceptance-report.docx](/demo/word-acceptance-report.docx) | 20 个 SQL 块 | 交付级长文档、目录域、页眉页脚 |
 | 正式验收报告（Excel） | [excel-acceptance-report.xlsx](/demo/excel-acceptance-report.xlsx) | 5 个 SQL 块 | 多 sheet、合并单元格、KPI 卡片 |
 

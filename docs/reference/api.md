@@ -10,7 +10,7 @@
 | `GET` | `/templates/stats` | `{total,enabled,uploaded}` 总览统计，不受分页影响 |
 | `GET` | `/templates/{id}` | 模板详情 |
 | `POST` | `/templates` | 新建模板 |
-| `PUT` | `/templates/{id}` | 更新模板，body `{templateCode?, templateName, exportType, status, remark?}`；`templateCode` 可改，需非空且全局唯一，不传则保持原值 |
+| `PUT` | `/templates/{id}` | 更新模板，body `{templateCode?, templateName, exportType, status, remark?}`；`templateCode` 可改，需非空且全局唯一，不传则保持原值；`exportType` 只认 `ORIGINAL` / `PDF`（大小写不敏感），写别的直接报错 |
 | `DELETE` | `/templates/{id}` | 删除模板（连带删除文件与版本） |
 | `GET` | `/templates/{id}/placeholders` | 列出模板文件里的 `${placeholder}` |
 
@@ -29,7 +29,7 @@
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `POST` | `/templates/{id}/generate` | 生成文档，body：`{templateVersionId?, exportType?, requestParams?}` |
+| `POST` | `/templates/{id}/generate` | 生成文档，body：`{templateVersionId?, exportType?, requestParams?}`；`exportType` 只认 `ORIGINAL` / `PDF`（大小写不敏感），写别的直接报错 |
 
 ## 数据块
 
@@ -84,7 +84,7 @@
 | --- | --- | --- |
 | `GET` | `/system/providers` | 已注册的 `DocumentDataProvider` 列表，数据块 `JAVA` 类型下拉项来源 |
 | `GET` | `/system/data-sources` | SQL 数据块可用的数据源（`dataSource` 字段下拉项） |
-| `GET` | `/system/converters` | 可用的字段值转换器编码（内置 + 宿主注册），字符串数组 |
+| `GET` | `/system/converters` | 可用的字段值转换器编码（内置 + 宿主注册），字符串数组；编码按注册时声明的写法原样返回，使用时代码也按原样匹配（区分大小写） |
 
 ## 错误响应
 

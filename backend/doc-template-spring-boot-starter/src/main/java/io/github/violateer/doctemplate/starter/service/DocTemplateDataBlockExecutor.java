@@ -8,7 +8,9 @@ import io.github.violateer.doctemplate.starter.autoconfigure.DocTemplateDataSour
 import io.github.violateer.doctemplate.starter.autoconfigure.DocTemplateProperties;
 import io.github.violateer.doctemplate.starter.convert.DocTemplateConverterRegistry;
 import io.github.violateer.doctemplate.starter.entity.DocTemplateDataBlockEntity;
+import io.github.violateer.doctemplate.starter.support.DocTemplateColumnSpec;
 import io.github.violateer.doctemplate.starter.support.DocTemplateJson;
+import io.github.violateer.doctemplate.starter.support.DocTemplateRenderData;
 import io.github.violateer.doctemplate.starter.support.DocTemplateSqlValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,12 +94,15 @@ public class DocTemplateDataBlockExecutor {
     }
 
     /**
-     * 依次执行启用状态的数据块，返回 {@code blockCode -> 取数结果} 的有序 Map。
+     * 依次执行启用状态的数据块，返回「行数据 + 表格动态列的列定义」。
      * 任一数据块失败都会抛出异常（消息里带上数据块名称），让生成记录能定位到具体配置。
      */
-    public Map<String, Object> collect(List<DocTemplateDataBlockEntity> blocks, Map<String, Object> requestParams) {
+    public DocTemplateRenderData collect(List<DocTemplateDataBlockEntity> blocks, Map<String, Object> requestParams) {
         Map<String, Object> data = new LinkedHashMap<>();
-        if (!props.getDataBlock().isEnabled() || blocks == null || blocks.isEmpty()) return data;
+        Map<String, List<DocTemplateColumnSpec>> columns = new LinkedHashMap<>();
+        if (!props.getDataBlock().isEnabled() || blocks == null || blocks.isEmpty()) {
+            return new DocTemplateRenderData(data, columns);
+        }
         Map<String, Object> request = requestParams == null ? Map.of() : requestParams;
         for (DocTemplateDataBlockEntity block : blocks) {
             if (block == null || !"ENABLED".equalsIgnoreCase(StrUtil.blankToDefault(block.getStatus(), "ENABLED"))) continue;
@@ -105,6 +110,8 @@ public class DocTemplateDataBlockExecutor {
             if (code.isBlank()) continue;
             try {
                 data.put(code, execute(block, request));
+                List<DocTemplateColumnSpec> specs = columnsOf(block, request);
+                if (!specs.isEmpty()) columns.put(code, specs);
             } catch (Exception error) {
                 // SQL 失败的消息已经脱敏过，不要再用 rootCause 把数据库原文捞出来
                 String detail = error instanceof DocTemplateSqlException
@@ -114,7 +121,7 @@ public class DocTemplateDataBlockExecutor {
                         + "」执行失败：" + detail, error);
             }
         }
-        return data;
+        return new DocTemplateRenderData(data, columns);
     }
 
     /**
@@ -124,15 +131,50 @@ public class DocTemplateDataBlockExecutor {
      * 结果里的嵌套对象和数组会递归处理，明细行里的字段同样生效。</p>
      */
     public Object execute(DocTemplateDataBlockEntity block, Map<String, Object> requestParams) {
-        String type = StrUtil.blankToDefault(block.getDataSourceType(), "JAVA").trim().toUpperCase(Locale.ROOT);
         Map<String, Object> config = config(block);
-        Object raw = switch (type) {
+        Object raw = fetch(block, requestParams, config, typeOf(block.getDataSourceType()));
+        return converters.apply(raw, config.get("converters"));
+    }
+
+    /**
+     * 表格动态列的列定义：{@code data_source_config.columns} 自己配一份取数方式
+     * （{@code type} 缺省沿用数据块的类型），取回来的数组按 {@link DocTemplateColumnSpec} 解析。
+     *
+     * <p>列源和主数据源共用块级 {@code param_config}，不另开一份参数映射；
+     * {@code single} 对列源没有意义，这里强制按数组取。</p>
+     *
+     * @return 没配 {@code columns} 时返回空列表
+     */
+    public List<DocTemplateColumnSpec> columnsOf(DocTemplateDataBlockEntity block, Map<String, Object> requestParams) {
+        Map<String, Object> config = config(block);
+        Object raw = config.get("columns");
+        if (raw == null) return List.of();
+        if (!(raw instanceof Map<?, ?> map)) {
+            throw new IllegalArgumentException("columns 配置必须是一个对象（含 type / sql / provider 等键），实际是 "
+                    + raw.getClass().getSimpleName());
+        }
+        Map<String, Object> columnConfig = new LinkedHashMap<>();
+        map.forEach((key, value) -> columnConfig.put(String.valueOf(key), value));
+        String type = typeOf(StrUtil.blankToDefault(Convert.toStr(columnConfig.get("type")), block.getDataSourceType()));
+        // 列源永远是数组：单条返回会变成 Map，解析不出来
+        columnConfig.put("single", false);
+        Object result = fetch(block, requestParams, columnConfig, type);
+        return DocTemplateColumnSpec.parse(result);
+    }
+
+    private String typeOf(String raw) {
+        return StrUtil.blankToDefault(raw, "JAVA").trim().toUpperCase(Locale.ROOT);
+    }
+
+    /** 按 type 取数，主数据源与列源共用这一份实现（含 SQL 的只读连接、脱敏、只读校验）。 */
+    private Object fetch(DocTemplateDataBlockEntity block, Map<String, Object> requestParams,
+                         Map<String, Object> config, String type) {
+        return switch (type) {
             case "JAVA" -> viaProvider(block, requestParams, config);
             case "SQL" -> viaSql(block, requestParams, config);
             case "API" -> viaApi(block, requestParams, config);
             default -> throw new IllegalArgumentException("不支持的数据源类型：" + type);
         };
-        return converters.apply(raw, config.get("converters"));
     }
 
     // ------------------------------------------------------------------ JAVA

@@ -10,9 +10,11 @@
 --   五、字段值转换      数据块 converters（含字典、宿主自定义转换器）+ 占位符就地转换
 --   六、图片与二维码    imageFields / qrCodes（二维码中间叠同块另一个字段的小图）
 --   七、三种数据源      JAVA Provider / API / SQL
+--   八、动态列          列定义由列源决定：固定列混排 / 两行分组表头 / 列级宽度与对齐 / span 静态行
 --
--- 7 个数据块：report / items / orders / order_items / stock_items（SQL）、
+-- 8 个数据块：report / items / orders / order_items / stock_items / inspection（SQL）、
 --             demoProvider（JAVA）、demoApi（API）
+--             inspection 的 data_source_config 里多挂了一个 columns（列源），列数由它决定
 -- 3 本字典：order_status / pay_channel / item_status（与 Excel 那份共用，脚本幂等）
 --
 -- 模拟生成时要填的参数（参数映射里以 $request. 开头的键）：
@@ -94,6 +96,13 @@ VALUES
   (@template_id, 'stock_items', '入库明细（竖向合并）', 'SQL',
    '{"sql":"select ''M-1001'' as material_code, ''不锈钢法兰 DN100'' as material_name, ''B2601-A'' as batch_no, ''原料库'' as warehouse, 120 as qty, ''合格'' as result union all select ''M-1001'', ''不锈钢法兰 DN100'', ''B2601-B'', ''原料库'', 120, ''合格'' union all select ''M-1001'', ''不锈钢法兰 DN100'', ''B2601-C'', ''原料库'', 80, ''让步接收'' union all select ''M-1002'', ''石墨缠绕垫片 DN100'', ''B2602-A'', ''半成品库'', 240, ''合格'' union all select ''M-1002'', ''石墨缠绕垫片 DN100'', ''B2602-B'', ''半成品库'', 240, ''合格'' union all select ''M-1003'', ''压力表 Y-100'', ''B2603-A'', null, 40, ''合格'' union all select ''M-1004'', ''六角螺栓套装 M20×90'', ''B2604-A'', null, 480, ''合格''","single":false,"maxRows":500,"mergeCellAlign":"center"}',
    '{}', 50, 'ENABLED'),
+
+  -- 动态列：行数据是「检验项目」，列定义由 columns 里的另一个 SQL 给（3 列样品）。
+  -- 列源的参数映射与主数据共用块级 param_config；single 对列源没有意义，配了也忽略。
+  -- 元素四个键：field（取值字段名，必填）/ label（列标题）/ width（相对权重）/ align（left|center|right）
+  (@template_id, 'inspection', '检验结果（动态列）', 'SQL',
+   '{"sql":"select ''抗拉强度'' as item_name, ''MPa'' as unit, 520 as s1, 515 as s2, 530 as s3 union all select ''伸长率'', ''%'', 28, 29, 27 union all select ''硬度'', ''HB'', 180, 178, 182 union all select ''冲击功（-20℃）'', ''J'', 46, 44, 47","single":false,"maxRows":500,"columns":{"type":"SQL","sql":"select ''s1'' as field, ''样品 1#'' as label, 1 as width union all select ''s2'', ''样品 2#'', 1 union all select ''s3'', ''样品 3#'', 2"}}',
+   '{}', 55, 'ENABLED'),
 
   -- JAVA Provider：参数映射把生成时传的 orderNo 交给 Provider，不传就用 Provider 的默认单号
   (@template_id, 'demoProvider', '订单（Java Provider）', 'JAVA',

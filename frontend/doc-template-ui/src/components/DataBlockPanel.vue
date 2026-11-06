@@ -19,13 +19,23 @@ import {
   useDialog,
   useMessage
 } from 'naive-ui';
-import { WarningOutline } from '@vicons/ionicons5';
+import { WarningOutline, RefreshOutline } from '@vicons/ionicons5';
 import type { DataTableColumns } from 'naive-ui';
 import { api } from '../api';
 import type { DataBlockRow, DataSourceItem, DictRow, ProviderItem } from '../types';
 import { batchDeleteSummary, isInteractiveClick, tryParseJson } from '../utils';
 import type { BatchDeleteResult } from '../utils';
-import { configFields, dataSourceMeta, paramFieldNotes, paramSample } from '../dataBlockFields';
+import {
+  COLUMN_KEY,
+  COLUMN_PREFIX,
+  columnElementNote,
+  columnFields,
+  columnTemplateNote,
+  configFields,
+  dataSourceMeta,
+  paramFieldNotes,
+  paramSample
+} from '../dataBlockFields';
 import type { ConfigField, DataSourceType } from '../dataBlockFields';
 import { rowActions } from './rowActions';
 import BatchBar from './BatchBar.vue';
@@ -93,9 +103,9 @@ function fieldSpan(field: ConfigField) {
 }
 
 /** 按 field.group 分组展示，未标注分组的字段自成一组且不显示小标题 */
-const fieldGroups = computed(() => {
+function groupFields(list: ConfigField[]) {
   const groups: Array<{ title: string; fields: ConfigField[] }> = [];
-  for (const field of fields.value) {
+  for (const field of list) {
     const title = field.group ?? '';
     let group = groups.find((item) => item.title === title);
     if (!group) {
@@ -105,7 +115,30 @@ const fieldGroups = computed(() => {
     group.fields.push(field);
   }
   return groups;
+}
+
+const fieldGroups = computed(() => groupFields(fields.value));
+
+/* ------------------------------------------------------------ 动态列（列源） */
+/**
+ * 表格的列由数据源决定时打开：列源自己选一种取数方式，配置写在 data_source_config.columns 里。
+ * 不启用就不写这个键，模板里的 {{#columns 块编码 header}} 会直接报错说「没有配置列源」。
+ */
+const columnsEnabled = ref(false);
+/** 当前列源类型：直接读表单值，保证下拉和保存的配置永远一致 */
+const columnType = computed<DataSourceType>(
+  () => ((configValues.value[`${COLUMN_PREFIX}type`] as DataSourceType) || 'SQL')
+);
+const columnFieldList = computed<ConfigField[]>(() => (columnsEnabled.value ? columnFields(columnType.value) : []));
+const columnGroups = computed(() => groupFields(columnFieldList.value));
+/** 表单里真正渲染的分组：数据源配置 + 动态列（关闭时也保留一个分组标题，否则没有入口打开） */
+const allGroups = computed(() => {
+  const groups = [...fieldGroups.value];
+  if (columnsEnabled.value && columnGroups.value.length) groups.push(...columnGroups.value);
+  else groups.push({ title: '动态列', fields: [] as ConfigField[] });
+  return groups;
 });
+
 /** 表单值：键名与 data_source_config 一致，类型按字段类型转换 */
 const configValues = ref<Record<string, any>>({});
 /** 配置里不认识、但需要原样保留的键 */
@@ -523,14 +556,17 @@ const customCodes = computed(() => converterCodes.value.filter((code) => !isBuil
 /**
  * 「转换器」下拉：只列内置转换器，外加一个「自定义转换器」入口。
  * 宿主注册了几个自定义转换器不影响这里 —— 具体是哪一个在下面的参数区选。
+ *
+ * <p>编码严格区分大小写：`Date` 不是内置的 `date`，既不会出现在这里，保存后也会被后端拒绝。</p>
  */
 const converterOptions = computed(() => {
-  const codes = new Set(converterCodes.value.filter((code) => isBuiltin(code)));
+  const codes = new Set<string>();
+  for (const code of converterCodes.value) if (isBuiltin(code)) codes.add(code);
   // 已配置但后端没返回的编码也补进来，避免下拉显示空白
   for (const row of converterRows.value) if (row.type && isBuiltin(row.type)) codes.add(row.type);
   const options: Array<{ label: string; value: string; disabled?: boolean }> = [...codes]
-    .sort((left, right) => CONVERTER_ORDER.indexOf(left.toLowerCase()) - CONVERTER_ORDER.indexOf(right.toLowerCase()))
-    .map((code) => ({ label: `${CONVERTER_META[code.toLowerCase()].label}（${code}）`, value: code }));
+    .sort((left, right) => CONVERTER_ORDER.indexOf(left) - CONVERTER_ORDER.indexOf(right))
+    .map((code) => ({ label: `${CONVERTER_META[code].label}（${code}）`, value: code }));
   options.push({
     label: '自定义转换器',
     value: CUSTOM_TYPE,
@@ -545,19 +581,26 @@ function typeSelectValue(row: ConverterRow): string {
   return row.custom ? CUSTOM_TYPE : row.type;
 }
 
-/** 某个自定义转换器编码的候选（后端注册的 + 配置里已经在用的，后者可能已经下线） */
+/**
+ * 某个自定义转换器编码的候选（后端注册的 + 配置里已经在用的，后者可能已经下线）。
+ *
+ * <p>编码严格区分大小写，这里也按原样去重：`demoSku` 和 `demosku` 是两个不同的编码，
+ * 混进同一条选项里只会让人写出后端不认的配置。</p>
+ */
 function customOptionsFor(row: ConverterRow): Array<{ label: string; value: string }> {
   const codes = new Set(customCodes.value);
   if (row.type && !isBuiltin(row.type)) codes.add(row.type);
   return [...codes].sort().map((code) => ({ label: code, value: code }));
 }
 
-/** 「转换器」下拉切换：选到「自定义转换器」就切到自定义模式，具体编码留给下面的下拉 */
+/**
+ * 「转换器」下拉切换：选到「自定义转换器」就切到自定义模式，具体编码留给下面的下拉。
+ * 换转换器一律重置参数，理由见 resetConverterArgs。
+ */
 function handleTypeSelect(row: ConverterRow, value: string) {
   if (value === CUSTOM_TYPE) {
-    row.custom = true;
-    row.type = customCodes.value[0] ?? '';
-    row.args = {};
+    if (row.custom) return;
+    resetConverterArgs(row, customCodes.value[0] ?? '', true);
     return;
   }
   handleConverterTypeChange(row, value);
@@ -565,18 +608,18 @@ function handleTypeSelect(row: ConverterRow, value: string) {
 
 /** 该类型在界面上的固定参数表；宿主自定义的返回空数组 */
 function specArgs(row: ConverterRow): ConverterArg[] {
-  return CONVERTER_META[(row.type ?? '').toLowerCase()]?.args ?? [];
+  return CONVERTER_META[row.type ?? '']?.args ?? [];
 }
 
 function isBuiltin(type: string): boolean {
-  return Boolean(CONVERTER_META[(type ?? '').toLowerCase()]);
+  return Boolean(CONVERTER_META[type ?? '']);
 }
 
 function converterDesc(row: ConverterRow): string {
   const customDesc = '宿主自定义转换器：具体是哪个在下面选，参数名由它的实现决定';
   if (row.custom) return customDesc;
   if (!row.type) return '先选转换器';
-  const meta = CONVERTER_META[row.type.toLowerCase()];
+  const meta = CONVERTER_META[row.type];
   return meta ? meta.desc : customDesc;
 }
 
@@ -616,7 +659,7 @@ function missingRequired(row: ConverterRow): string[] {
 /** 该类型的默认参数（只有明确写了 defaultValue 的才带上） */
 function seedArgs(type: string): Record<string, string> {
   const seeded: Record<string, string> = {};
-  for (const arg of CONVERTER_META[(type ?? '').toLowerCase()]?.args ?? []) {
+  for (const arg of CONVERTER_META[type ?? '']?.args ?? []) {
     if (arg.defaultValue) seeded[arg.key] = arg.defaultValue;
   }
   return seeded;
@@ -653,7 +696,7 @@ function readConverters(config: Record<string, any>): ConverterRow[] {
 }
 
 function specKeys(type: string): string[] {
-  return (CONVERTER_META[(type ?? '').toLowerCase()]?.args ?? []).map((arg) => arg.key);
+  return (CONVERTER_META[type ?? '']?.args ?? []).map((arg) => arg.key);
 }
 
 /** 行 → `[{field,type,args}]`；参数值统一按字符串写，转换器自己解析 */
@@ -689,23 +732,32 @@ function removeConverter(index: number) {
   converterRows.value.splice(index, 1);
 }
 
-/** 换类型时只保留同名参数（number 与 percent 都有 scale），其余挪进「自定义参数」不丢 */
+/**
+ * 换转换器：参数整体重置，只带上新类型自己声明的默认值。
+ *
+ * <p>参数名是跟着转换器走的：`date` 的 `pattern` 对 `number` 没有意义，沿用它只会在保存时
+ * 写出一条转换器不认识的参数（界面上还显示成「自定义参数」）。所以旧参数一律不保留，
+ * 新类型重新从 `defaultValue` 起步。</p>
+ */
+function resetConverterArgs(row: ConverterRow, type: string, custom: boolean) {
+  row.type = type;
+  row.custom = custom;
+  row.args = custom ? {} : seedArgs(type);
+  row.extraArgs = [];
+}
+
+/** 换内置类型：点到同一个类型不重置，免得把已经调好的参数冲掉 */
 function handleConverterTypeChange(row: ConverterRow, type?: string) {
-  if (type) row.type = type;
-  row.custom = false;
-  const spec = specArgs(row);
-  const known = new Set(spec.map((arg) => arg.key));
-  const next: Record<string, string> = {};
-  for (const arg of spec) {
-    const current = row.args?.[arg.key];
-    if (current) next[arg.key] = current;
-    else if (arg.defaultValue) next[arg.key] = arg.defaultValue;
-  }
-  if (!row.extraArgs) row.extraArgs = [];
-  for (const [key, value] of Object.entries(row.args ?? {})) {
-    if (!known.has(key) && value) row.extraArgs.push({ key, value });
-  }
-  row.args = next;
+  const next = (type ?? row.type ?? '').trim();
+  if (!row.custom && next === row.type) return;
+  resetConverterArgs(row, next, false);
+}
+
+/** 换自定义转换器编码：同样重置参数，不同转换器的参数名不一样 */
+function handleCustomCodeChange(row: ConverterRow, code: string | null) {
+  const next = (code ?? '').trim();
+  if (next === row.type) return;
+  resetConverterArgs(row, next, true);
 }
 
 /** 一键填一组能跑的示例值 */
@@ -757,15 +809,21 @@ function filterOption(pattern: string, option: Record<string, any>) {
   return text.includes(keyword);
 }
 
-/** 新建时的默认值 */
-function defaultsFor(type: DataSourceType): Record<string, any> {
+/** 一组字段的默认值（布尔用 'true'/'false' 两个字符串，写回配置时再转成真正的布尔） */
+function defaultsForFields(list: ConfigField[]): Record<string, any> {
   const values: Record<string, any> = {};
-  for (const field of configFields[type] ?? []) {
+  for (const field of list) {
     if (field.type === 'number') values[field.key] = null;
     else if (field.type === 'kv') values[field.key] = [];
     else if (field.type === 'boolean') values[field.key] = field.defaultValue ?? 'false';
     else values[field.key] = '';
   }
+  return values;
+}
+
+/** 新建时的默认值 */
+function defaultsFor(type: DataSourceType): Record<string, any> {
+  const values = defaultsForFields(configFields[type] ?? []);
   if (type === 'JAVA') values.provider = providers.value[0]?.code ?? '';
   if (type === 'API') {
     values.method = 'GET';
@@ -791,31 +849,54 @@ function rowsToKv(list: Array<{ key: string; value: string }>): Record<string, s
   return result;
 }
 
+/** 按 `a.b` 路径取值，供 `columns.provider` 这类带前缀的字段用 */
+function readPath(source: Record<string, any>, path: string): unknown {
+  let node: any = source;
+  for (const part of path.split('.')) {
+    if (!node || typeof node !== 'object') return undefined;
+    node = node[part];
+  }
+  return node;
+}
+
+/** 配置里的原始值 → 表单值 */
+function readFieldValue(field: ConfigField, raw: unknown): any {
+  switch (field.type) {
+    case 'boolean':
+      return raw == null ? (field.defaultValue ?? 'false') : raw === true || raw === 'true' ? 'true' : 'false';
+    case 'number':
+      return raw == null || raw === '' ? null : Number(raw);
+    case 'kv':
+      return kvToRows(raw);
+    case 'json':
+      return raw == null ? '' : JSON.stringify(raw, null, 2);
+    default:
+      return raw == null ? '' : String(raw);
+  }
+}
+
 /** 把已有的 JSON 配置拆成「表单值 + 未识别键」 */
 function applyConfig(type: DataSourceType, config: Record<string, any>) {
   const values: Record<string, any> = {};
   const known = new Set<string>();
   for (const field of configFields[type] ?? []) {
     known.add(field.key);
-    const raw = config?.[field.key];
-    switch (field.type) {
-      case 'boolean':
-        // 表单里用 'true' / 'false' 两个字符串，写回配置时再转成真正的布尔
-        values[field.key] =
-          raw == null ? (field.defaultValue ?? 'false') : raw === true || raw === 'true' ? 'true' : 'false';
-        break;
-      case 'number':
-        values[field.key] = raw == null || raw === '' ? null : Number(raw);
-        break;
-      case 'kv':
-        values[field.key] = kvToRows(raw);
-        break;
-      case 'json':
-        values[field.key] = raw == null ? '' : JSON.stringify(raw, null, 2);
-        break;
-      default:
-        values[field.key] = raw == null ? '' : String(raw);
-    }
+    values[field.key] = readFieldValue(field, config?.[field.key]);
+  }
+
+  // 动态列：只有配了 columns 才打开；列源类型缺省沿用数据块的类型
+  const rawColumns = config?.[COLUMN_KEY];
+  const columnConfig =
+    rawColumns && typeof rawColumns === 'object' && !Array.isArray(rawColumns)
+      ? (rawColumns as Record<string, any>)
+      : null;
+  columnsEnabled.value = !!columnConfig;
+  const declared = String(columnConfig?.type ?? type).toUpperCase();
+  const columnSource = (['JAVA', 'SQL', 'API'] as string[]).includes(declared) ? declared : type;
+  values[`${COLUMN_PREFIX}type`] = columnSource;
+  for (const field of columnFields(columnSource as DataSourceType)) {
+    if (field.key === `${COLUMN_PREFIX}type`) continue;
+    values[field.key] = readFieldValue(field, readPath(columnConfig ?? {}, field.key.slice(COLUMN_PREFIX.length)));
   }
   configValues.value = values;
 
@@ -823,6 +904,7 @@ function applyConfig(type: DataSourceType, config: Record<string, any>) {
   for (const [key, value] of Object.entries(config ?? {})) {
     if (
       known.has(key) ||
+      key === COLUMN_KEY ||
       IMAGE_KEYS.includes(key) ||
       QR_KEYS.includes(key) ||
       MERGE_ALIGN_KEYS.includes(key) ||
@@ -841,46 +923,70 @@ function numberOrNull(value: unknown): number | null {
   return Number.isFinite(num) ? Math.round(num) : null;
 }
 
+/** 单个字段的表单值 → 配置项；JSON 写坏了返回 false */
+function writeFieldValue(config: Record<string, any>, field: ConfigField, value: unknown): boolean {
+  if (field.type === 'boolean') {
+    config[field.key] = value === 'true';
+    return true;
+  }
+  if (field.type === 'number') {
+    const num = numberOrNull(value);
+    if (num != null) config[field.key] = num;
+    return true;
+  }
+  if (field.type === 'kv') {
+    const map = rowsToKv((value as Array<{ key: string; value: string }>) ?? []);
+    if (Object.keys(map).length) config[field.key] = map;
+    return true;
+  }
+  if (field.type === 'json') {
+    const text = String(value ?? '').trim();
+    if (!text) return true;
+    const parsed = tryParseJson(text);
+    if (!parsed.ok) {
+      message.error(`「${field.label}」不是合法 JSON：${parsed.error}`);
+      return false;
+    }
+    config[field.key] = parsed.value;
+    return true;
+  }
+  const text = String(value ?? '').trim();
+  if (text) config[field.key] = text;
+  return true;
+}
+
+/** 必填校验：按点号路径取值，`columns.sql` 这种也能一起校验 */
+function firstMissingRequired(config: Record<string, any>, list: ConfigField[]): ConfigField | null {
+  for (const field of list) {
+    if (!field.required) continue;
+    const value = readPath(config, field.key);
+    if (value === undefined || value === null || value === '') return field;
+  }
+  return null;
+}
+
 /** 表单值 → data_source_config 对象（未识别的键原样带回） */
 function buildConfig(): Record<string, any> | null {
   const config: Record<string, any> = { ...extraConfig.value };
   for (const field of fields.value) {
-    const value = configValues.value[field.key];
-    if (field.type === 'boolean') {
-      config[field.key] = value === 'true';
-      continue;
-    }
-    if (field.type === 'number') {
-      const num = numberOrNull(value);
-      if (num != null) config[field.key] = num;
-      continue;
-    }
-    if (field.type === 'kv') {
-      const map = rowsToKv(value ?? []);
-      if (Object.keys(map).length) config[field.key] = map;
-      continue;
-    }
-    if (field.type === 'json') {
-      const text = String(value ?? '').trim();
-      if (!text) continue;
-      const parsed = tryParseJson(text);
-      if (!parsed.ok) {
-        message.error(`「${field.label}」不是合法 JSON：${parsed.error}`);
-        return null;
-      }
-      config[field.key] = parsed.value;
-      continue;
-    }
-    const text = String(value ?? '').trim();
-    if (text) config[field.key] = text;
+    if (!writeFieldValue(config, field, configValues.value[field.key])) return null;
   }
-  for (const field of fields.value) {
-    if (!field.required) continue;
-    const value = config[field.key];
-    if (value === undefined || value === null || value === '') {
-      message.warning(`请填写「${field.label}」`);
-      return null;
+  // 动态列：不启用就不写这个键，宿主升级后行为完全不变
+  if (columnsEnabled.value) {
+    const columnConfig: Record<string, any> = { type: columnType.value };
+    for (const field of columnFields(columnType.value)) {
+      if (field.key === `${COLUMN_PREFIX}type`) continue;
+      const target: Record<string, any> = {};
+      const nested = { ...field, key: field.key.slice(COLUMN_PREFIX.length) };
+      if (!writeFieldValue(target, nested, configValues.value[field.key])) return null;
+      Object.assign(columnConfig, target);
     }
+    config[COLUMN_KEY] = columnConfig;
+  }
+  const missing = firstMissingRequired(config, [...fields.value, ...columnFieldList.value]);
+  if (missing) {
+    message.warning(`请填写「${missing.label}」`);
+    return null;
   }
   return config;
 }
@@ -1009,6 +1115,9 @@ function openCreate() {
   qrCodes.value = [];
   converterRows.value = [];
   mergeAlign.value = '';
+  columnsEnabled.value = false;
+  configValues.value[`${COLUMN_PREFIX}type`] = 'SQL';
+  resetFieldCandidates();
   asideOpen.value = false;
   showEditor.value = true;
   void loadDicts();
@@ -1026,16 +1135,34 @@ function openEdit(row: DataBlockRow) {
   qrCodes.value = readQrCodes(config as Record<string, any>);
   converterRows.value = readConverters(config as Record<string, any>);
   mergeAlign.value = readMergeAlign(config as Record<string, any>);
+  resetFieldCandidates();
   asideOpen.value = false;
   showEditor.value = true;
   void loadDicts();
 }
 
-/** 切换数据源类型：配置项完全不同，直接按新类型重置（参数映射与图片字段保留） */
+/** 切换数据源类型：配置项完全不同，直接按新类型重置（参数映射、图片字段、动态列保留） */
 function handleTypeChange(next: DataSourceType) {
-  configValues.value = defaultsFor(next);
+  const kept: Record<string, any> = {};
+  for (const [key, value] of Object.entries(configValues.value)) {
+    if (key.startsWith(COLUMN_PREFIX)) kept[key] = value;
+  }
+  configValues.value = { ...defaultsFor(next), ...kept };
   extraConfig.value = {};
+  resetFieldCandidates();
   message.info(`已切换为「${dataSourceMeta[next].label}」，配置项已重置`);
+}
+
+/** 切换列源类型：只重置列源那几项，主数据源不动 */
+function handleColumnTypeChange(next: DataSourceType) {
+  configValues.value[`${COLUMN_PREFIX}type`] = next;
+  const defaults = defaultsForFields(columnFields(next));
+  for (const [key, value] of Object.entries(defaults)) {
+    if (key === `${COLUMN_PREFIX}type`) continue;
+    configValues.value[key] = value;
+  }
+  resetFieldCandidates();
+  message.info(`列源已切换为「${dataSourceMeta[next].label}」，列源配置项已重置`);
 }
 
 /** 新建数据块排在最后：取现有最大 sort_order + 1，避免和历史数据撞号插到中间 */
@@ -1232,6 +1359,16 @@ function previewFromRow(row: DataBlockRow) {
   );
 }
 
+/** 预览弹窗里手填的 `$request.*` 值 → 嵌套请求参数（和生成时的取法一致） */
+function previewRequestParams(): Record<string, any> {
+  const requestParams: Record<string, any> = {};
+  for (const param of previewParams.value) {
+    const value = (param.value ?? '').trim();
+    if (value) setParamPath(requestParams, param.key, value);
+  }
+  return requestParams;
+}
+
 async function runPreview() {
   if (!previewSource.value) return;
   previewLoading.value = true;
@@ -1240,14 +1377,9 @@ async function runPreview() {
   previewData.value = null;
   previewDone.value = false;
   try {
-    const requestParams: Record<string, any> = {};
-    for (const param of previewParams.value) {
-      const value = (param.value ?? '').trim();
-      if (value) setParamPath(requestParams, param.key, value);
-    }
     const res = await api<any>('/data-blocks/preview', {
       method: 'POST',
-      body: JSON.stringify({ ...previewSource.value, requestParams })
+      body: JSON.stringify({ ...previewSource.value, requestParams: previewRequestParams() })
     });
     previewElapsed.value = typeof res?.elapsed_ms === 'number' ? res.elapsed_ms : null;
     if (res?.ok) {
@@ -1255,6 +1387,8 @@ async function runPreview() {
       previewDone.value = true;
       previewJson.value = JSON.stringify(res.data ?? null, null, 2);
       if (previewJson.value === 'null') previewJson.value = '（空结果）';
+      // 一次预览两用：顺手把字段名填进「字段名」控件的候选，不再额外发一次请求
+      if (showEditor.value) applyFieldCandidates(res.fields, fingerprintOf(previewSource.value));
     } else {
       previewError.value = res?.error ?? '执行失败';
     }
@@ -1263,6 +1397,102 @@ async function runPreview() {
   } finally {
     previewLoading.value = false;
   }
+}
+
+/* ------------------------------------------------------------ 字段名候选 */
+/**
+ * 「字段名」输入框的候选值：来自该数据块最近一次取数结果的第一层键（由后端抽取）。
+ *
+ * <p>预览会真的执行 SQL / 调接口 / 调 Provider，所以<b>只在显式操作时取</b>：点「预览数据源」成功后
+ * 顺带填一次，或者点字段名旁边的刷新按钮。打开弹窗、敲键盘都不发请求。</p>
+ */
+const fieldCandidates = ref<string[]>([]);
+const fieldLoading = ref(false);
+/** 候选值对应的配置指纹：配置一改就失效，避免拿着旧字段名去填新配置 */
+const fieldFingerprint = ref('');
+/** 本次弹窗里是否已经自动取过：失败时不要每点一次下拉就再跑一遍取数 */
+const fieldTried = ref(false);
+const fieldOptionsList = computed(() => fieldCandidates.value.map((value) => ({ label: value, value })));
+
+/** 数据源类型 + 配置 + 参数映射的指纹，用来判断候选是不是当前配置的 */
+function fingerprintOf(source: Record<string, any>): string {
+  return JSON.stringify([source?.dataSourceType ?? '', source?.dataSourceConfig ?? {}, source?.paramConfig ?? {}]);
+}
+
+function applyFieldCandidates(fields: unknown, fingerprint: string) {
+  const list = Array.isArray(fields) ? fields.filter((item): item is string => typeof item === 'string') : [];
+  fieldCandidates.value = list;
+  fieldFingerprint.value = fingerprint;
+}
+
+function resetFieldCandidates() {
+  fieldCandidates.value = [];
+  fieldFingerprint.value = '';
+  fieldTried.value = false;
+}
+
+/** 编辑器里当前的块定义，和预览用的是同一份（未保存的改动也算） */
+function editorSource(): Record<string, any> | null {
+  const config = buildConfig();
+  if (!config) return null;
+  const title = editing.value?.block_name || editing.value?.block_code || '数据块';
+  return {
+    blockName: title,
+    dataSourceType: sourceType.value,
+    dataSourceConfig: withRenderOptions(config),
+    paramConfig: buildParams()
+  };
+}
+
+/** 刷新字段名候选：只取字段，不把整份结果拉回来 */
+async function refreshFields() {
+  if (!editing.value) return;
+  const source = editorSource();
+  if (!source) {
+    message.warning('先把数据源配置填完整，才能取到字段名；也可以直接手填');
+    return;
+  }
+  const fingerprint = fingerprintOf(source);
+  if (fieldFingerprint.value === fingerprint && fieldCandidates.value.length) {
+    message.success(`已是最新字段（${fieldCandidates.value.length} 个）`);
+    return;
+  }
+  fieldLoading.value = true;
+  try {
+    const res = await api<any>('/data-blocks/preview', {
+      method: 'POST',
+      body: JSON.stringify({ ...source, requestParams: previewRequestParams(), fieldsOnly: true })
+    });
+    if (res?.ok) {
+      applyFieldCandidates(res.fields, fingerprint);
+      if (fieldCandidates.value.length) {
+        message.success(`取到 ${fieldCandidates.value.length} 个字段，可在下拉里选`);
+      } else {
+        message.info('这次结果里没有可选的字段（结果为空或不是对象数组），直接手填即可');
+      }
+    } else {
+      // 取不到字段不影响配置，$request.* 没填值本来就取不到数据
+      message.warning(`${res?.error ?? '取字段失败'}；可以直接手填字段名`);
+    }
+  } catch (e: any) {
+    message.warning(`${e.message}；可以直接手填字段名`);
+  } finally {
+    fieldLoading.value = false;
+  }
+}
+
+/**
+ * 字段名下拉第一次展开时自动取一次候选。
+ *
+ * <p>不这么做的话，用户看到的是一个空下拉，得先知道「要去点旁边的刷新按钮」才有内容 ——
+ * 取一次是用户点开下拉这个明确意图带来的，不是打开弹窗就偷偷跑 SQL。失败也不重复跑：
+ * 本次弹窗只试一次，之后靠刷新按钮。</p>
+ */
+function onFieldSelectShow(show: boolean) {
+  if (!show || fieldLoading.value || fieldTried.value) return;
+  if (fieldCandidates.value.length) return;
+  fieldTried.value = true;
+  void refreshFields();
 }
 
 /* ------------------------------------------------------------ 预览表格化 */
@@ -1545,7 +1775,7 @@ onMounted(() => {
               <NInput v-model:value="editing.block_code" placeholder="例如 report" class="mono" />
               <template #feedback>
                 <span v-if="editing.id && editing.block_code !== originalCode" class="code-hint">
-                  <span v-pre>改编码不会动模板文件，记得同步改模板里的 ${编码.字段} / {{#each 编码}}，否则生成时取不到这个块。</span>
+                  <span v-pre>改编码不会动模板文件，记得同步改模板里的 ${编码.字段} / {{#each 编码}}…{{/each}}，否则生成时取不到这个块。</span>
                 </span>
               </template>
             </NFormItem>
@@ -1571,8 +1801,21 @@ onMounted(() => {
 
           <!-- 所有配置项共用一张网格：分组标题占满一行，窄字段一行排三个 -->
           <div class="cfg-grid">
-            <template v-for="(group, groupIndex) in fieldGroups" :key="group.title || groupIndex">
+            <template v-for="(group, groupIndex) in allGroups" :key="group.title || groupIndex">
               <div v-if="group.title" class="cfg-group-title">{{ group.title }}</div>
+              <!-- 动态列：不启用就不写 columns 这个键，宿主升级后行为完全不变 -->
+              <div v-if="group.title === '动态列'" class="cfg-field" style="grid-column: span 3">
+                <div class="column-toggle">
+                  <NSwitch v-model:value="columnsEnabled" size="small" />
+                  <span class="extra-hint">
+                    打开后表格的列由数据源决定：列数、列标题、每列取哪个字段都来自列源，固定列照常写在列区两侧。
+                  </span>
+                </div>
+                <div v-if="!columnsEnabled" class="extra-hint" v-pre>
+                  模板里表头行写 {{#columns 块编码 header}} 展开成 N 列并填列标题，数据行写 {{#columns 块编码 data}}
+                  按数组循环，合计行写 {{#columns 块编码 span}} 整格横向盖住列区。角色必须写，两个标记才不会混。
+                </div>
+              </div>
               <div
                 v-for="field in group.fields"
                 :key="field.key"
@@ -1631,6 +1874,11 @@ onMounted(() => {
                   :filter-option="filterOption"
                   :tag="field.dynamic === 'providers'"
                   :consistent-menu-width="false"
+                  @update:value="
+                    (value: string) => {
+                      if (field.key === 'columns.type') handleColumnTypeChange(value as DataSourceType);
+                    }
+                  "
                 />
                 <div v-else-if="field.type === 'kv'" class="kv-list">
                   <div v-for="(item, index) in configValues[field.key]" :key="index" class="kv-row">
@@ -1682,7 +1930,32 @@ onMounted(() => {
             <div class="field-body">
               <div v-if="imageFields.length" class="kv-list">
                 <div v-for="(row, index) in imageFields" :key="index" class="image-row">
-                  <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，如 logo / photo" />
+                  <div class="field-with-refresh">
+                    <NSelect
+                      v-model:value="row.field"
+                      size="small"
+                      class="mono"
+                      filterable
+                      tag
+                      :options="fieldOptionsList"
+                      :loading="fieldLoading"
+                      @update:show="onFieldSelectShow"
+                      placeholder="字段名，如 logo / photo"
+                      :consistent-menu-width="false"
+                    />
+                    <NButton
+                      size="small"
+                      quaternary
+                      circle
+                      :loading="fieldLoading"
+                      title="刷新字段：跑一次取数，把结果里的字段名填进下拉"
+                      @click="refreshFields"
+                    >
+                      <template #icon>
+                        <NIcon><RefreshOutline /></NIcon>
+                      </template>
+                    </NButton>
+                  </div>
                   <NInputNumber v-model:value="row.width" size="small" :min="1" :max="4000" placeholder="宽 px" />
                   <NInputNumber v-model:value="row.height" size="small" :min="1" :max="4000" placeholder="高 px" />
                   <NSelect v-model:value="row.align" size="small" :options="alignOptions" />
@@ -1702,7 +1975,32 @@ onMounted(() => {
               <div v-if="qrCodes.length" class="qr-list">
                 <div v-for="(row, index) in qrCodes" :key="index" class="qr-item">
                   <div class="qr-main">
-                    <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，如 verify_url" />
+                    <div class="field-with-refresh">
+                      <NSelect
+                        v-model:value="row.field"
+                        size="small"
+                        class="mono"
+                        filterable
+                        tag
+                        :options="fieldOptionsList"
+                        :loading="fieldLoading"
+                        @update:show="onFieldSelectShow"
+                        placeholder="字段名，如 verify_url"
+                        :consistent-menu-width="false"
+                      />
+                      <NButton
+                        size="small"
+                        quaternary
+                        circle
+                        :loading="fieldLoading"
+                        title="刷新字段：跑一次取数，把结果里的字段名填进下拉"
+                        @click="refreshFields"
+                      >
+                        <template #icon>
+                          <NIcon><RefreshOutline /></NIcon>
+                        </template>
+                      </NButton>
+                    </div>
                     <NInputNumber v-model:value="row.width" size="small" :min="1" :max="4000" placeholder="宽 px" />
                     <NInputNumber v-model:value="row.height" size="small" :min="1" :max="4000" placeholder="高 px" />
                     <NSelect v-model:value="row.align" size="small" :options="alignOptions" />
@@ -1718,13 +2016,32 @@ onMounted(() => {
                       class="mono"
                       placeholder="图片地址，支持 http(s) 与 data:image/png;base64,..."
                     />
-                    <NInput
-                      v-else-if="row.logoSource === 'field'"
-                      v-model:value="row.logoField"
-                      size="small"
-                      class="mono"
-                      placeholder="本数据块里的图片字段名，如 logo"
-                    />
+                    <div v-else-if="row.logoSource === 'field'" class="field-with-refresh">
+                      <NSelect
+                        v-model:value="row.logoField"
+                        size="small"
+                        class="mono"
+                        filterable
+                        tag
+                        :options="fieldOptionsList"
+                        :loading="fieldLoading"
+                        @update:show="onFieldSelectShow"
+                        placeholder="本数据块里的图片字段名，如 logo"
+                        :consistent-menu-width="false"
+                      />
+                      <NButton
+                        size="small"
+                        quaternary
+                        circle
+                        :loading="fieldLoading"
+                        title="刷新字段：跑一次取数，把结果里的字段名填进下拉"
+                        @click="refreshFields"
+                      >
+                        <template #icon>
+                          <NIcon><RefreshOutline /></NIcon>
+                        </template>
+                      </NButton>
+                    </div>
                     <span v-else class="qr-hint">只出二维码，不叠加小图</span>
                   </div>
                 </div>
@@ -1749,7 +2066,32 @@ onMounted(() => {
                 <div v-for="(row, index) in converterRows" :key="index" class="converter-item">
                   <div class="converter-main">
                     <span class="converter-label">字段</span>
-                    <NInput v-model:value="row.field" size="small" class="mono" placeholder="字段名，多个用逗号分隔" />
+                    <div class="field-with-refresh">
+                      <NSelect
+                        v-model:value="row.field"
+                        size="small"
+                        class="mono"
+                        filterable
+                        tag
+                        :options="fieldOptionsList"
+                        :loading="fieldLoading"
+                        @update:show="onFieldSelectShow"
+                        placeholder="字段名，多个用逗号分隔"
+                        :consistent-menu-width="false"
+                      />
+                      <NButton
+                        size="small"
+                        quaternary
+                        circle
+                        :loading="fieldLoading"
+                        title="刷新字段：跑一次取数，把结果里的字段名填进下拉"
+                        @click="refreshFields"
+                      >
+                        <template #icon>
+                          <NIcon><RefreshOutline /></NIcon>
+                        </template>
+                      </NButton>
+                    </div>
                     <span class="converter-label">转换器</span>
                     <NSelect
                       size="small"
@@ -1776,7 +2118,7 @@ onMounted(() => {
                           :options="customOptionsFor(row)"
                           :value="row.type || null"
                           placeholder="搜索转换器编码，如 demoSku"
-                          @update:value="(value: string | null) => (row.type = value ?? '')"
+                          @update:value="(value: string | null) => handleCustomCodeChange(row, value)"
                         />
                       </div>
                     </div>
@@ -1954,6 +2296,34 @@ onMounted(() => {
             <div class="aside-item">
               <div class="aside-item-desc">
                 模板里用 merge= 竖向合并出来的那一格，内容垂直怎么对齐。水平方向跟随原单元格；不设置时保持模板原样（默认靠上）。
+              </div>
+            </div>
+          </div>
+
+          <div class="aside-group">
+            <div class="aside-group-title">动态列</div>
+            <div class="aside-item">
+              <div class="aside-item-desc">{{ columnTemplateNote }}</div>
+            </div>
+            <div class="aside-item">
+              <div class="aside-item-desc">{{ columnElementNote }}</div>
+            </div>
+            <div v-for="field in columnFieldList" :key="field.key" class="aside-item">
+              <div class="aside-item-head">
+                <span class="aside-item-label">{{ field.label }}</span>
+                <code class="cfg-key">{{ field.key }}</code>
+              </div>
+              <div class="aside-item-desc">{{ field.desc }}</div>
+            </div>
+          </div>
+
+          <div class="aside-group">
+            <div class="aside-group-title">字段名候选</div>
+            <div class="aside-item">
+              <div class="aside-item-desc">
+                字段名控件可以直接手填，也可以从下拉里选。候选来自该数据块最近一次取数结果的第一层字段名：
+                第一次点开字段名下拉会自动取一次，点「预览数据源」成功后也会填入，之后可用旁边的刷新按钮重取。
+                打开弹窗、输入内容都不会发请求；取不到（结果为空、参数没填）就退回纯手输。嵌套路径（item.name）请直接手填。
               </div>
             </div>
           </div>
@@ -2313,6 +2683,31 @@ onMounted(() => {
 .cfg-field :deep(.n-select),
 .cfg-field :deep(.n-input) {
   width: 100%;
+}
+
+/* 动态列开关：小号开关 + 一行说明，占满整行 */
+.column-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 字段名控件 + 取字段按钮：下拉占满剩余宽度，按钮固定尺寸不被压缩 */
+.field-with-refresh {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field-with-refresh :deep(.n-select) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.field-with-refresh :deep(.n-button) {
+  flex: none;
 }
 
 /* -------------------------------------------------- 图片字段 / 参数映射 */

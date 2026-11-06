@@ -36,7 +36,7 @@ import java.util.Set;
  * <p>也接受 {@code qr_codes} / {@code qrcodes} 两种写法，以及字符串简写
  * （{@code "qrCodes": "verify_url,trace_url"}）。</p>
  *
- * @param field     字段名（可带命名空间，如 {@code report.verify_url}）
+ * @param field     字段名，只写字段名本身（如 {@code verify_url}），不要带块编码或路径
  * @param width     目标宽度（像素），为空时默认 140
  * @param height    目标高度（像素），为空时按宽度等比（二维码是正方形）
  * @param align     单元格内水平对齐：{@code CENTER}（默认）/ {@code LEFT} / {@code RIGHT}
@@ -71,7 +71,7 @@ public record DocTemplateQrCodeSpec(String field, Integer width, Integer height,
     private static final List<String> LOGO_RATIO_KEYS = List.of("logoRatio", "logo_ratio", "logoScale", "logo_scale");
 
     public DocTemplateQrCodeSpec {
-        field = StrUtil.trimToEmpty(field);
+        field = DocTemplateImageSpec.requirePlainField(field, "二维码字段");
         align = DocTemplateImageSpec.normalizeAlign(align);
         padding = padding == null ? DocTemplateImageSpec.DEFAULT_PADDING
                 : Math.min(60, Math.max(0, padding));
@@ -99,13 +99,19 @@ public record DocTemplateQrCodeSpec(String field, Integer width, Integer height,
         return new DocTemplateImageSpec(field, width, height, align, padding, this);
     }
 
-    /** 纠错级别归一化：只认 L / M / Q / H，其余返回 {@code null} 表示按是否有小图自动选。 */
+    /**
+     * 纠错级别归一化：只认 L / M / Q / H（大小写都行），其余<b>直接报错</b>。
+     *
+     * <p>以前认不出来就返回 {@code null}，静默退回「按有没有中间小图自动选」，
+     * 于是 {@code level: "X"} 会安静地用 H 或 M，扫不出来才知道配错了。</p>
+     */
     public static String normalizeLevel(String level) {
         if (StrUtil.isBlank(level)) return null;
         String text = level.trim().toUpperCase(Locale.ROOT);
         return switch (text) {
             case "L", "M", "Q", "H" -> text;
-            default -> null;
+            default -> throw new IllegalArgumentException("二维码纠错级别「" + level
+                    + "」不认识，可选：L / M / Q / H（不写时带中间小图用 H，不带用 M）");
         };
     }
 

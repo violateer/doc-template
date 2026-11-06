@@ -3,6 +3,8 @@ package io.github.violateer.doctemplate.starter.convert;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.StrUtil;
 import io.github.violateer.doctemplate.core.convert.DocTemplateValueConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -10,6 +12,8 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * {@code number}：千分位 / 固定小数位 / 前后缀。
@@ -23,6 +27,13 @@ import java.util.Map;
  * </ul>
  */
 final class NumberConverter implements DocTemplateValueConverter {
+
+    private static final Logger log = LoggerFactory.getLogger(NumberConverter.class);
+    /** 认识的舍入方式（含同义词）。 */
+    private static final Set<String> ROUNDINGS =
+            Set.of("half_up", "half-up", "half_even", "half-even", "banker", "down", "floor", "truncate", "up", "ceiling");
+    /** 同一个写错的 rounding 只告警一次：明细几百行时逐行 warn 会把日志刷满。 */
+    private static final Set<String> WARNED_ROUNDINGS = ConcurrentHashMap.newKeySet();
 
     @Override
     public String code() {
@@ -52,6 +63,11 @@ final class NumberConverter implements DocTemplateValueConverter {
 
     private static RoundingMode rounding(Object raw) {
         String text = StrUtil.blankToDefault(Convert.toStr(raw), "half_up").trim().toLowerCase(Locale.ROOT);
+        // 认不出来不报错（金额格式化写错参数不该让整份文档失败），但告警一次，别静默按 half_up 舍入
+        if (!ROUNDINGS.contains(text) && WARNED_ROUNDINGS.add(text)) {
+            log.warn("number 的 rounding「{}」不认识，已按 half_up 舍入；可选：half_up / half_even（banker）"
+                    + " / down（truncate）/ up（ceiling）", text);
+        }
         return switch (text) {
             case "half_even", "half-even", "banker" -> RoundingMode.HALF_EVEN;
             case "down", "floor", "truncate" -> RoundingMode.DOWN;

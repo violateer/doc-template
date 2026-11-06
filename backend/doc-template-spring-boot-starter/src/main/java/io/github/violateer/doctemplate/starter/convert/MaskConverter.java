@@ -3,8 +3,12 @@ package io.github.violateer.doctemplate.starter.convert;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.StrUtil;
 import io.github.violateer.doctemplate.core.convert.DocTemplateValueConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * {@code mask}：手机号 / 身份证等敏感字段脱敏。
@@ -21,6 +25,12 @@ import java.util.Map;
  */
 final class MaskConverter implements DocTemplateValueConverter {
 
+    private static final Logger log = LoggerFactory.getLogger(MaskConverter.class);
+    /** 认识的 mode（含同义词）。 */
+    private static final Set<String> MODES = Set.of("phone", "mobile", "idcard", "id");
+    /** 同一个写错的 mode 只告警一次：明细几百行时逐行 warn 会把日志刷满。 */
+    private static final Set<String> WARNED_MODES = ConcurrentHashMap.newKeySet();
+
     private static final int DEFAULT_KEEP_START = 3;
     private static final int DEFAULT_KEEP_END = 4;
 
@@ -36,6 +46,11 @@ final class MaskConverter implements DocTemplateValueConverter {
         if (text.isEmpty()) return text;
 
         String mode = StrUtil.blankToDefault(Convert.toStr(args.get("mode")), "").trim().toLowerCase(java.util.Locale.ROOT);
+        // 认不出来的 mode 不报错（脱敏写错不该让整份文档失败），但要告警一次，别静默按默认位数脱敏
+        if (!mode.isEmpty() && !MODES.contains(mode) && WARNED_MODES.add(mode)) {
+            log.warn("mask 的 mode「{}」不认识，已按默认「前 {} 后 {}」脱敏；可选：phone / idcard，"
+                    + "或用 keepStart / keepEnd 直接指定", mode, DEFAULT_KEEP_START, DEFAULT_KEEP_END);
+        }
         int keepStart = switch (mode) {
             case "phone", "mobile" -> 3;
             case "idcard", "id" -> 6;

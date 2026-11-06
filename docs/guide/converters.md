@@ -49,17 +49,18 @@ ${amount:0|number:2}                        → 默认值也走转换链，输�
 | 编码 | 作用 | 参数（都可选） |
 | --- | --- | --- |
 | `date` | 时间格式化 | `pattern`，默认 `yyyy-MM-dd` |
-| `number` | 小数位 / 千分位 / 前后缀 | `scale`、`grouping`（默认 `false`）、`rounding`、`prefix`、`suffix` |
+| `number` | 小数位 / 千分位 / 前后缀 | `scale`、`grouping`（默认 `false`）、`rounding`（默认 `half_up`，写错按默认值并告警）、`prefix`、`suffix` |
 | `boolean` | `0/1`、`Y/N` → 文本 | `trueText`（默认「是」）、`falseText`（默认「否」） |
 | `percent` | 小数 → 百分比 | `scale`（默认 2）、`symbol`（默认 `%`）、`multiply`（默认 `true`） |
 | `upper` / `lower` | 大小写 | 无 |
 | `trim` | 去首尾空白 | `collapse=true` 顺带压缩中间空白 |
-| `mask` | 手机号 / 身份证脱敏 | `mode`（`phone` / `idcard`）、`keepStart`、`keepEnd`、`mask` |
+| `mask` | 手机号 / 身份证脱敏 | `mode`（`phone` / `idcard`，写错按默认位数并告警）、`keepStart`、`keepEnd`、`mask` |
 | `dict` | 按字典编码换显示名 | `code`（必填）、`fallback` |
 
 ::: warning 转换失败不会中断生成
 认不出来的值**原样输出**：`date` 收到「不适用」、`number` 收到「—」都只是不转，不会让整篇文档失败。
 但**参数写错**（日期格式非法、`dict` 少了 `code`、转换器编码不存在）会直接报错，错误信息带转换器名，生成记录里能看到。
+`mask` 的 `mode` 和 `number` 的 `rounding` 是例外：写错不失败，按默认位数 / `half_up` 处理，只在日志里告警一次（同一个写错的词不会反复刷）。
 :::
 
 ## 数据字典
@@ -106,9 +107,11 @@ public class OrderStateConverter implements DocTemplateValueConverter {
 }
 ```
 
-- `code()` 就是配置里的 `type`，大小写不敏感；**同名会覆盖内置实现**，启动日志会打一条 info。
+- `code()` 就是配置里的 `type`，**严格区分大小写**：`code()` 返回 `demoSku` 时，配置和模板里都得写
+  `demoSku`，写 `Demosku` 会直接报「未知的转换器」并列出可用编码。**同名会覆盖内置实现**，启动日志会打一条 info。
 - `args` 是配置里的 `args`（模板占位符里的具名参数也会并进来），不会为 `null`。
-- 注册后 `GET /system/converters` 就能看到。管理页的「转换器」下拉里不逐个列你的编码，而是统一显示
+- 注册后 `GET /system/converters` 就能看到，列表里返回的就是你 `code()` 里写的写法，原样返回、原样匹配。
+  管理页的「转换器」下拉里不逐个列你的编码，而是统一显示
   一项**「自定义转换器」**；选中后在下面的参数区用查询下拉挑具体是哪一个，参数按「参数名 / 参数值」填
   （宿主转换器没有参数元数据，界面不知道它有哪些参数）。
 
@@ -151,6 +154,8 @@ public class SkuNameConverter implements DocTemplateValueConverter {
 ::: tip 界面上的参数是固定的
 管理页「字段值转换」里，内置转换器的参数名由程序固定，每个输入框都有中文 label（小数位、千分位、脱敏方案…），
 `dict` 的字典编码是**可搜索下拉**（选项来自 `/dicts`），不需要记参数名、也不用背编码。
+换转换器时参数会整体重置，只带上新转换器自己声明的默认值（日期格式、脱敏方案这类）；
+上一个转换器填过的参数不会留在配置里，点到当前已选中的转换器不会清空已填好的值。
 :::
 
 ::: tip MySQL / MariaDB / PostgreSQL 之外的宿主

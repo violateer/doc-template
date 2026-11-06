@@ -3,6 +3,7 @@ package io.github.violateer.doctemplate.starter.service;
 import cn.hutool.core.util.StrUtil;
 import io.github.violateer.doctemplate.starter.convert.DocTemplateConverterRegistry;
 import io.github.violateer.doctemplate.starter.convert.DocTemplateConverterRegistry.ConverterCall;
+import io.github.violateer.doctemplate.starter.support.DocTemplateColumnSpec;
 import io.github.violateer.doctemplate.starter.support.DocTemplateImageSpec;
 import io.github.violateer.doctemplate.starter.support.DocTemplateJson;
 import io.github.violateer.doctemplate.starter.support.DocTemplateMergeAlign;
@@ -16,13 +17,20 @@ import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.*;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDecimalNumber;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTc;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTVMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTVerticalJc;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STVerticalJc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -60,6 +69,10 @@ import java.util.regex.Pattern;
  * 例如 {@code {{#each items merge=1,2 by=material_id}}}。写 {@code by=} 时按该字段的值比较，
  * 不写时按渲染后的文本比较；空值永不合并。详见 {@link #mergeSpans}。</p>
  *
+ * <p>表格动态列：表头行写 {@code {{#columns 块 header}}}、数据行写 {@code {{#columns 块 data}}}，
+ * 展开成 N 个真实单元格，列数由数据块配置里的列源决定；{@code {{#columns 块 span}}} 不拆格、
+ * 整格横向盖住整个列区。角色必须写明，表头行和数据行的标记文字才不会混在一起。</p>
+ *
  * <p>图片字段：数据块配置里用 {@code imageFields} 声明某个字段是图片后，该占位符会渲染成图片
  * （值可以是 http(s) 地址、data URI 或裸 Base64，也可以是 SQL 返回的 byte[]）。DOCX 走
  * {@code XWPFRun#addPicture}，XLSX 走 {@code XSSFDrawing} 锚定到单元格。</p>
@@ -81,20 +94,43 @@ public class DocTemplateRenderer {
      * <p>等号右边可以是当前作用域里的键（{@code order_no} / {@code item.order_no}），
      * 也可以是带引号的字面量（{@code 'open'}）。不能写 {@code ${...}}：循环标记本身就在
      * 花括号里，再嵌一层会让占位符正则提前截断。</p>
+     *
+     * <p><b>关键字不区分大小写</b>：标记是写在 Word 里的文字，Word 的「句首字母大写」会把
+     * {@code {{#each}} 改成 {@code {{#Each}}，写错了看不出来，所以这里一律宽容；
+     * 但「只有标记、却没被识别」会报错（见 {@link #replaceText}），不会静默留在文档里。</p>
      */
     private static final Pattern LOOP_START = Pattern.compile(
-            "(?:\\$\\{|\\{\\{)\\s*#each\\s+([A-Za-z0-9_.]+)([^{}]*)\\s*}?}?");
+            "(?:\\$\\{|\\{\\{)\\s*#each\\s+([A-Za-z0-9_.]+)([^{}]*)\\s*}?}?", Pattern.CASE_INSENSITIVE);
     /** {@code where 字段 = 取值}：取值可以是 {@code 'x'}、{@code "x"} 或单个词。 */
     private static final Pattern LOOP_WHERE = Pattern.compile(
-            "\\bwhere\\s+([A-Za-z0-9_.]+)\\s*=\\s*('(?:[^']*)'|\"(?:[^\"]*)\"|[^\\s]+)");
+            "\\bwhere\\s+([A-Za-z0-9_.]+)\\s*=\\s*('(?:[^']*)'|\"(?:[^\"]*)\"|[^\\s}]+)", Pattern.CASE_INSENSITIVE);
     /** {@code merge=1,2} / {@code merge=A,C}：要竖向合并的列，逗号分隔，不能带空格。 */
-    private static final Pattern LOOP_MERGE = Pattern.compile("\\bmerge\\s*=\\s*([^\\s}]+)");
+    private static final Pattern LOOP_MERGE = Pattern.compile("\\bmerge\\s*=\\s*([^\\s}]+)", Pattern.CASE_INSENSITIVE);
     /** {@code by=order_no}：合并分组键，不写就按渲染后的文本比较。 */
-    private static final Pattern LOOP_BY = Pattern.compile("\\bby\\s*=\\s*([A-Za-z0-9_.]+)");
+    private static final Pattern LOOP_BY = Pattern.compile("\\bby\\s*=\\s*([A-Za-z0-9_.]+)", Pattern.CASE_INSENSITIVE);
     /**
      * {@code {{/each}}} 或 {@code ${/each}}}
      */
-    private static final Pattern LOOP_END = Pattern.compile("(?:\\$\\{|\\{\\{)\\s*/each\\s*}?}?");
+    private static final Pattern LOOP_END = Pattern.compile("(?:\\$\\{|\\{\\{)\\s*/each\\s*}?}?", Pattern.CASE_INSENSITIVE);
+    /**
+     * 表格列区标记：{@code {{#columns 块编码 角色}}}，角色是 {@code header} / {@code data} / {@code span}。
+     *
+     * <p>角色必须写：表头行和数据行的标记文字长得一样，写明角色才不用靠行号去猜。
+     * 标记必须独占一格：拆格形式后面不能再写别的文字，想加文字用 {@code span} 形式。</p>
+     */
+    private static final Pattern COLUMNS_START = Pattern.compile(
+            "(?:\\$\\{|\\{\\{)\\s*#columns\\s+([A-Za-z0-9_.]+)([^{}]*)\\s*}?}?", Pattern.CASE_INSENSITIVE);
+    /** 列区标记的角色关键字，写在块编码后面、{@code where} / {@code merge} / {@code by} 前面。 */
+    private static final Pattern COLUMNS_ROLE = Pattern.compile("\\b(header|data|span)\\b", Pattern.CASE_INSENSITIVE);
+    /**
+     * 列区标记里的参数关键字：角色只认它前面那一段，否则 {@code where status = 'data'} 会被当成角色。
+     */
+    private static final Pattern COLUMNS_MODIFIER = Pattern.compile("\\b(where|merge|by)\\b", Pattern.CASE_INSENSITIVE);
+
+    /** 没有 {@code tblGrid}、也读不到 {@code tblW} 时按这个总宽（twips）估算，约 A4 正文宽。 */
+    private static final int DEFAULT_TABLE_WIDTH = 9000;
+    /** 单列太窄时的告警阈值（twips），约 0.5cm。 */
+    private static final int NARROW_COLUMN_TWIPS = 280;
 
     private final DocTemplateImageLoader imageLoader;
     private final DocTemplateConverterRegistry converters;
@@ -152,7 +188,8 @@ public class DocTemplateRenderer {
     }
 
     private static Loop parseLoop(String text) {
-        if (text == null || text.indexOf("each") < 0) return null;
+        // 快路径用 # 而不是 "each"：关键字大小写不敏感，拿小写字面量去 indexOf 会把 {{#EACH}} 漏掉
+        if (text == null || text.indexOf('#') < 0) return null;
         Matcher matcher = LOOP_START.matcher(text);
         if (!matcher.find()) return null;
         String array = matcher.group(1);
@@ -183,6 +220,105 @@ public class DocTemplateRenderer {
         return List.copyOf(columns);
     }
 
+    /** 列区标记的角色：靠它区分表头行和数据行，不用再按行号猜。 */
+    private enum ColumnsRole {
+        /** 表头行：展开成 N 格，每格写列标题。 */
+        HEADER("header"),
+        /** 数据行：展开成 N 格，每格取一个字段，并按该数组循环。 */
+        DATA("data"),
+        /** 不拆格，整格横向盖住整个列区（合计行、说明行用）。 */
+        SPAN("span");
+
+        private final String keyword;
+
+        ColumnsRole(String keyword) {
+            this.keyword = keyword;
+        }
+
+        static ColumnsRole of(String word) {
+            for (ColumnsRole role : values()) {
+                if (role.keyword.equalsIgnoreCase(word)) return role;
+            }
+            return null;
+        }
+    }
+
+    /**
+     * 解析出来的列区标记。
+     *
+     * @param block     列定义所在的数据块编码
+     * @param role      角色；没写时是 {@code null}，由调用方带上行号列号报错
+     * @param ambiguous 同一个标记里写了两个不同的角色
+     */
+    private record ColumnsMarker(String block, ColumnsRole role, boolean ambiguous) {
+
+        boolean span() {
+            return role == ColumnsRole.SPAN;
+        }
+    }
+
+    private static ColumnsMarker parseColumns(String text) {
+        // 快路径用 # 而不是 #columns：关键字大小写不敏感，不能拿小写字面量去 indexOf
+        if (text == null || text.indexOf('#') < 0) return null;
+        Matcher matcher = COLUMNS_START.matcher(text);
+        if (!matcher.find()) return null;
+        String tail = matcher.group(2) == null ? "" : matcher.group(2);
+        Matcher cut = COLUMNS_MODIFIER.matcher(tail);
+        String head = cut.find() ? tail.substring(0, cut.start()) : tail;
+        ColumnsRole role = null;
+        boolean ambiguous = false;
+        Matcher roles = COLUMNS_ROLE.matcher(head);
+        while (roles.find()) {
+            ColumnsRole found = ColumnsRole.of(roles.group(1));
+            if (found == null) continue;
+            if (role != null && role != found) ambiguous = true;
+            if (role == null) role = found;
+        }
+        return new ColumnsMarker(matcher.group(1), role, ambiguous);
+    }
+
+    /** 角色必须写明：只有写清是表头行还是数据行，才不用靠行号去猜。 */
+    private static void requireColumnsRole(ColumnsMarker marker, String where) {
+        String hint = "表头行写 {{#columns " + marker.block() + " header}}，数据行写 {{#columns "
+                + marker.block() + " data}}，整格横向盖住列区写 {{#columns " + marker.block() + " span}}";
+        if (marker.ambiguous()) {
+            throw new IllegalArgumentException(where + "的 {{#columns}} 里写了多个角色，只能写一个；" + hint);
+        }
+        if (marker.role() == null) {
+            throw new IllegalArgumentException(where + "的 {{#columns " + marker.block()
+                    + "}} 没写角色，分不清是表头行还是数据行；" + hint);
+        }
+    }
+
+    /**
+     * 数据行上允许再写一对 {@code {{#each 块}}…{{/each}}} 把块名标在行首行尾，格子里就不用逐个写块前缀。
+     *
+     * <p>它只用来校验块编码：真正驱动循环的是 {@code data} 角色，展开时这对标记会被清掉，
+     * 免得同一行上出现两个循环。{@code where=} / {@code merge=} / {@code by=} 必须写在
+     * {@code {{#columns}}} 标记里 —— 写在行上指的是展开前的位置，列展开后就错位了。</p>
+     */
+    private static void checkRowLoopAnnotation(String rowText, ColumnsMarker marker, String where) {
+        Loop loop = parseLoop(rowText);
+        if (loop == null) return;
+        if (!loop.array().equalsIgnoreCase(marker.block())) {
+            throw new IllegalArgumentException(where + " 的 {{#each " + loop.array() + "}} 与列区标记的数据块 "
+                    + marker.block() + " 不一致；数据行里的循环标记要和 {{#columns}} 写同一个块");
+        }
+        if (loop.filtered() || loop.merging() || (loop.mergeBy() != null && !loop.mergeBy().isBlank())) {
+            throw new IllegalArgumentException(where + " 的 {{#each " + loop.array()
+                    + "}} 上不要写 where= / merge= / by=，这些参数写在 {{#columns "
+                    + marker.block() + " data ...}} 里");
+        }
+    }
+
+    /** 整格只有 {@code {{#columns ...}}} 才算标记格；带别的文字是配置错误，不是「顺便渲染一下」。 */
+    private static boolean isColumnsOnly(String text) {
+        if (text == null) return false;
+        Matcher full = FULL_PLACEHOLDER.matcher(text);
+        if (!full.matches() || full.group(1) == null) return false;
+        return full.group(1).trim().toLowerCase(Locale.ROOT).startsWith("#columns");
+    }
+
     /**
      * Convenience for building a parameter map from a dotted key path.
      */
@@ -191,7 +327,7 @@ public class DocTemplateRenderer {
     }
 
     public byte[] render(byte[] template, String fileType, Map<String, Object> params) throws Exception {
-        return render(template, fileType, params, List.of(), DocTemplateMergeAlign.DEFAULT);
+        return render(template, fileType, params, List.of(), DocTemplateMergeAlign.DEFAULT, Map.of());
     }
 
     /**
@@ -199,7 +335,7 @@ public class DocTemplateRenderer {
      */
     public byte[] render(byte[] template, String fileType, Map<String, Object> params,
                          List<DocTemplateImageSpec> images) throws Exception {
-        return render(template, fileType, params, images, DocTemplateMergeAlign.DEFAULT);
+        return render(template, fileType, params, images, DocTemplateMergeAlign.DEFAULT, Map.of());
     }
 
     /**
@@ -207,11 +343,36 @@ public class DocTemplateRenderer {
      */
     public byte[] render(byte[] template, String fileType, Map<String, Object> params,
                          List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign) throws Exception {
+        return render(template, fileType, params, images, mergeAlign, Map.of());
+    }
+
+    /**
+     * @param columns {@code 块编码 -> 列定义}（数据块配置里的 {@code columns}），
+     *                模板里写 {@code {{#columns 块编码 header/data/span}}} 时用它展开表格列
+     */
+    public byte[] render(byte[] template, String fileType, Map<String, Object> params,
+                         List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign,
+                         Map<String, List<DocTemplateColumnSpec>> columns) throws Exception {
         Map<String, Object> safe = params == null ? Map.of() : params;
         List<DocTemplateImageSpec> specs = images == null ? List.of() : images;
         DocTemplateMergeAlign align = mergeAlign == null ? DocTemplateMergeAlign.DEFAULT : mergeAlign;
-        if ("XLSX".equalsIgnoreCase(fileType)) return renderXlsx(template, safe, specs, align);
-        return renderDocx(template, safe, specs, align);
+        Map<String, List<DocTemplateColumnSpec>> columnIndex = columns == null ? Map.of() : columns;
+        if ("XLSX".equals(fileTypeOf(fileType))) return renderXlsx(template, safe, specs, align, columnIndex);
+        return renderDocx(template, safe, specs, align, columnIndex);
+    }
+
+    /**
+     * 文件类型只认 DOCX / XLSX，写错直接报错。
+     *
+     * <p>以前是「不是 XLSX 就当 DOCX」，于是 {@code fileType=PDF} 会安静地按 DOCX 渲染，
+     * 拿到一份和预期完全不同的文件却没有任何提示。</p>
+     */
+    static String fileTypeOf(String raw) {
+        String type = StrUtil.blankToDefault(raw, "DOCX").trim().toUpperCase(Locale.ROOT);
+        if (!"DOCX".equals(type) && !"XLSX".equals(type)) {
+            throw new IllegalArgumentException("不支持的文件类型「" + raw + "」，只能是 DOCX 或 XLSX");
+        }
+        return type;
     }
 
     public Set<String> placeholders(byte[] template, String fileType) throws Exception {
@@ -272,21 +433,27 @@ public class DocTemplateRenderer {
     }
 
     public byte[] renderDocx(byte[] template, Map<String, Object> params) throws Exception {
-        return renderDocx(template, params, List.of(), DocTemplateMergeAlign.DEFAULT);
+        return renderDocx(template, params, List.of(), DocTemplateMergeAlign.DEFAULT, Map.of());
     }
 
     public byte[] renderDocx(byte[] template, Map<String, Object> params,
                              List<DocTemplateImageSpec> images) throws Exception {
-        return renderDocx(template, params, images, DocTemplateMergeAlign.DEFAULT);
+        return renderDocx(template, params, images, DocTemplateMergeAlign.DEFAULT, Map.of());
     }
 
     public byte[] renderDocx(byte[] template, Map<String, Object> params,
                              List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign) throws Exception {
-        log.debug("渲染 DOCX，参数：{}，图片字段：{}，合并对齐：{}",
-                describeParams(params), describeImages(images), mergeAlign);
+        return renderDocx(template, params, images, mergeAlign, Map.of());
+    }
+
+    public byte[] renderDocx(byte[] template, Map<String, Object> params,
+                             List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign,
+                             Map<String, List<DocTemplateColumnSpec>> columns) throws Exception {
+        log.debug("渲染 DOCX，参数：{}，图片字段：{}，合并对齐：{}，列区：{}",
+                describeParams(params), describeImages(images), mergeAlign, describeColumns(columns));
         try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(template));
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            expandDocxLoops(document, params, images, mergeAlign);
+            expandDocxLoops(document, params, images, mergeAlign, columns);
             for (XWPFParagraph paragraph : document.getParagraphs()) replaceInParagraph(paragraph, params, images);
             for (XWPFTable table : document.getTables()) replaceInTable(table, params, images);
             for (XWPFHeader header : document.getHeaderList()) {
@@ -493,13 +660,14 @@ public class DocTemplateRenderer {
      * 先展开循环，再做整篇替换：循环体用「当前项 + 外层参数」的上下文替换。
      */
     private void expandDocxLoops(XWPFDocument document, Map<String, Object> params,
-                                 List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign) {
-        for (XWPFTable table : document.getTables()) expandTableLoops(table, params, images, mergeAlign);
+                                 List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign,
+                                 Map<String, List<DocTemplateColumnSpec>> columns) {
+        for (XWPFTable table : document.getTables()) expandTableLoops(table, params, images, mergeAlign, columns);
         for (XWPFHeader header : document.getHeaderList()) {
-            for (XWPFTable table : header.getTables()) expandTableLoops(table, params, images, mergeAlign);
+            for (XWPFTable table : header.getTables()) expandTableLoops(table, params, images, mergeAlign, columns);
         }
         for (XWPFFooter footer : document.getFooterList()) {
-            for (XWPFTable table : footer.getTables()) expandTableLoops(table, params, images, mergeAlign);
+            for (XWPFTable table : footer.getTables()) expandTableLoops(table, params, images, mergeAlign, columns);
         }
         expandBodyParagraphLoops(document, params, images);
     }
@@ -518,17 +686,30 @@ public class DocTemplateRenderer {
      * 带着上一项的值」。</p>
      */
     private void expandTableLoops(XWPFTable table, Map<String, Object> params,
-                                  List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign) {
+                                  List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign,
+                                  Map<String, List<DocTemplateColumnSpec>> columns) {
         List<XWPFTableRow> rows = table.getRows();
         if (rows.isEmpty()) return;
+        // 列区展开必须发生在 planRows 之前：展开完表格退回成「普通表格 + 普通占位符」，
+        // 行循环、占位符替换、竖向合并一行都不用改。
+        // 列定义为空也要进来扫一遍：模板写了 {{#columns}} 却没配列源时，这里会给出明确的报错
+        boolean columnsExpanded = false;
+        if (columns != null) {
+            List<CTRow> expanded = expandDocxColumns(table, rows, columns);
+            if (expanded != null) {
+                rows = replaceRows(table, expanded);
+                columnsExpanded = true;
+            }
+        }
         List<String> texts = new ArrayList<>(rows.size());
         for (XWPFTableRow row : rows) texts.add(rowText(row));
         List<PlannedRow> plan = planRows(texts, 0, texts.size(), params);
-        if (planIsIdentity(plan, texts)) return;
+        // 展开过列区的表一定要走重建：表格里那批行对象是新建的，只有重建这一遍才会把占位符替换掉
+        if (!columnsExpanded && planIsIdentity(plan, texts)) return;
         // 快照模板行：原行会被第一项渲染掉，后续项必须用「未渲染」的副本
         List<CTRow> templates = new ArrayList<>(rows.size());
         for (XWPFTableRow row : rows) templates.add((CTRow) row.getCtRow().copy());
-        for (int i = rows.size() - 1; i >= 0; i--) table.removeRow(i);
+        for (int i = table.getRows().size() - 1; i >= 0; i--) table.removeRow(i);
         // 建出来的行要用「重新包一层」的副本：createRow 那个对象缓存的是空单元格，
         // 直接 table.getRow(p) 拿到的是缓存对象，读不到 set 进去的内容
         List<XWPFTableRow> built = new ArrayList<>(plan.size());
@@ -541,14 +722,33 @@ public class DocTemplateRenderer {
             created.getCtRow().set(templates.get(planned.index()));
             XWPFTableRow row = new XWPFTableRow(created.getCtRow(), table);
             built.add(row);
-            renderRowWithScope(row, planned, images, mergeAlign);
+            renderRowWithScope(row, planned, images, mergeAlign, columns);
         }
         // 行已经按计划建好，位置即计划下标，合并按这个下标算
         applyTableMerges(built, plan, mergeAlign);
     }
 
+    /**
+     * 用一批 {@code CTRow} 整体替换表格的行，返回「重新包一层」的行对象。
+     *
+     * <p>{@code XWPFTableRow} 在构造时就把单元格缓存下来了，直接改它背后的 {@code CTRow} 读不到新内容，
+     * 所以每次重建都要新建包装对象；表格自身的行列表里那份缓存对象只用于定位，不再读写内容。</p>
+     */
+    private List<XWPFTableRow> replaceRows(XWPFTable table, List<CTRow> ctRows) {
+        for (int i = table.getRows().size() - 1; i >= 0; i--) table.removeRow(i);
+        List<XWPFTableRow> built = new ArrayList<>(ctRows.size());
+        for (CTRow ctRow : ctRows) {
+            XWPFTableRow created = table.createRow();
+            if (created == null) continue;
+            created.getCtRow().set(ctRow);
+            built.add(new XWPFTableRow(created.getCtRow(), table));
+        }
+        return built;
+    }
+
     private void renderRowWithScope(XWPFTableRow row, PlannedRow planned,
-                                    List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign) {
+                                    List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign,
+                                    Map<String, List<DocTemplateColumnSpec>> columns) {
         clearLoopMarkers(row);
         for (XWPFTableCell cell : row.getTableCells()) {
             // 循环复制出来的行不能沿用模板里的 vMerge：restart / continue 是按行的物理顺序解释的，
@@ -556,9 +756,488 @@ public class DocTemplateRenderer {
             if (planned.repeated()) clearVerticalMerge(cell);
             for (XWPFParagraph paragraph : cell.getParagraphs()) replaceInParagraph(paragraph, planned.scope(), images);
             for (XWPFTable nested : cell.getTables()) {
-                expandTableLoops(nested, planned.scope(), images, mergeAlign);
+                expandTableLoops(nested, planned.scope(), images, mergeAlign, columns);
             }
         }
+    }
+
+    // ------------------------------------------------------------------ 列区（DOCX）
+
+    /**
+     * 展开计划里的一处列区标记。
+     *
+     * @param gridColumn 标记格在展开前的起始网格列（前面各格 {@code gridSpan} 累加，不是数组下标）
+     * @param gridSpan   标记格自己占几个网格列（模板里预先横向合并过就会大于 1）
+     */
+    private record ColumnsSlot(int row, int cell, int gridColumn, int gridSpan, ColumnsMarker marker) {
+    }
+
+    /**
+     * 把表格里的 {@code {{#columns 块编码 角色}}} 展开成 N 个真实单元格。
+     *
+     * <p>一次处理这张表的<b>所有行</b>：表头行、数据行、静态行一起，因为加宽和右移是跨行的。
+     * 展开完表格退回成「普通表格 + 普通占位符」，后面的行循环、占位符替换、竖向合并一行都不用改。</p>
+     *
+     * <p>行角色由标记里的关键字决定，不靠行号猜：{@code header} 拆成 N 格、每格写 {@code label}；
+     * {@code data} 拆成 N 格、每格 {@code ${字段}} 并按该数组循环，一表只能有一行；
+     * {@code span} 不拆格，整格横向盖住整个列区。分组表头写几行 {@code header} 都行。</p>
+     *
+     * @return 展开后的行快照；表格里没有列区标记时返回 {@code null}
+     */
+    private List<CTRow> expandDocxColumns(XWPFTable table, List<XWPFTableRow> rows,
+                                          Map<String, List<DocTemplateColumnSpec>> columns) {
+        List<ColumnsSlot> slots = new ArrayList<>();
+        for (int r = 0; r < rows.size(); r++) {
+            List<XWPFTableCell> cells = rows.get(r).getTableCells();
+            int grid = 0;
+            for (int c = 0; c < cells.size(); c++) {
+                XWPFTableCell cell = cells.get(c);
+                String text = cell.getText();
+                ColumnsMarker marker = parseColumns(text);
+                if (marker != null) {
+                    requireColumnsRole(marker, "表格第 " + (r + 1) + " 行第 " + (c + 1) + " 格");
+                    // span 形式允许格内另有文字（合计行、说明行）；拆格形式必须整格只有标记
+                    if (!marker.span() && !isColumnsOnly(text)) {
+                        throw new IllegalArgumentException("表格第 " + (r + 1) + " 行第 " + (c + 1)
+                                + " 格的 {{#columns}} 必须独占一格；想在这一格里同时写文字，"
+                                + "请改用 {{#columns " + marker.block() + " span}}（整格横向盖住列区）");
+                    }
+                    slots.add(new ColumnsSlot(r, c, grid, gridSpan(cell), marker));
+                }
+                grid += gridSpan(cell);
+            }
+        }
+        if (slots.isEmpty()) return null;
+
+        String block = slots.get(0).marker().block();
+        Set<Integer> rowsWithSlot = new HashSet<>();
+        for (ColumnsSlot slot : slots) {
+            if (!slot.marker().block().equalsIgnoreCase(block)) {
+                throw new IllegalArgumentException("同一张表里出现了两个列区标记且编码不一致（"
+                        + block + " / " + slot.marker().block() + "），一张表只能有一个列区");
+            }
+            if (!rowsWithSlot.add(slot.row())) {
+                throw new IllegalArgumentException("表格第 " + (slot.row() + 1)
+                        + " 行里有两个列区标记，一行只能有一个");
+            }
+            if (slot.gridColumn() != slots.get(0).gridColumn()) {
+                throw new IllegalArgumentException("列区标记必须落在同一个网格列：第 "
+                        + (slots.get(0).row() + 1) + " 行在第 " + (slots.get(0).gridColumn() + 1)
+                        + " 列，第 " + (slot.row() + 1) + " 行在第 " + (slot.gridColumn() + 1) + " 列");
+            }
+        }
+        List<DocTemplateColumnSpec> specs = columnSpecs(columns, block);
+
+        List<String> texts = new ArrayList<>(rows.size());
+        for (XWPFTableRow row : rows) texts.add(rowText(row));
+        // 嵌套循环里的列区第一版不支持：外层 {{#each}} 会把数据行复制多份，列区展开顺序说不清
+        for (int[] region : loopRegions(texts)) {
+            for (ColumnsSlot slot : slots) {
+                if (slot.row() > region[0] && slot.row() < region[1]) {
+                    throw new IllegalArgumentException("表格第 " + (slot.row() + 1)
+                            + " 行的 {{#columns}} 落在 {{#each}} 区域里，嵌套循环里的列区暂不支持；"
+                            + "请把列区那一行移出 {{#each}} 区域");
+                }
+            }
+        }
+
+        int regionStart = slots.get(0).gridColumn();
+        int regionSpan = Math.max(1, slots.get(0).gridSpan());
+        int n = specs.size();
+        int columnCount = Math.max(regionStart + regionSpan, 1);
+        for (XWPFTableRow row : rows) {
+            int sum = 0;
+            for (XWPFTableCell cell : row.getTableCells()) sum += gridSpan(cell);
+            columnCount = Math.max(columnCount, sum);
+        }
+        List<Integer> oldWidths = docxGridWidths(table, columnCount);
+        List<Integer> newWidths = new ArrayList<>(columnCount);
+        for (int i = 0; i < regionStart; i++) newWidths.add(oldWidths.get(i));
+        if (n > 0) {
+            int regionWidth = 0;
+            for (int i = 0; i < regionSpan; i++) regionWidth += oldWidths.get(regionStart + i);
+            newWidths.addAll(allocateWidths(regionWidth, specs));
+        }
+        for (int i = regionStart + regionSpan; i < columnCount; i++) newWidths.add(oldWidths.get(i));
+
+        ColumnsSlot dataSlot = null;
+        for (ColumnsSlot slot : slots) {
+            if (slot.marker().role() != ColumnsRole.DATA) continue;
+            if (dataSlot != null) {
+                throw new IllegalArgumentException("表格第 " + (dataSlot.row() + 1) + " 行和第 "
+                        + (slot.row() + 1) + " 行都写了 {{#columns " + block + " data}}，数据行只能有一行");
+            }
+            dataSlot = slot;
+        }
+        if (dataSlot == null) {
+            throw new IllegalArgumentException("表格里的列区没有数据行标记：把要按数组重复的那一行写成 {{#columns "
+                    + block + " data}}，这一行会展开成 N 列并按数据重复");
+        }
+        int dataRow = dataSlot.row();
+        checkRowLoopAnnotation(rowText(rows.get(dataRow)), dataSlot.marker(), "表格第 " + (dataRow + 1) + " 行");
+
+        List<CTRow> expanded = new ArrayList<>(rows.size());
+        for (int r = 0; r < rows.size(); r++) {
+            ColumnsSlot slot = null;
+            for (ColumnsSlot candidate : slots) {
+                if (candidate.row() == r) {
+                    slot = candidate;
+                    break;
+                }
+            }
+            if (n == 0) {
+                CTRow stripped = stripColumnsRow(rows.get(r), slot, regionStart, regionSpan, newWidths);
+                if (stripped != null) expanded.add(stripped);
+                continue;
+            }
+            expanded.add(rebuildDocxRow(rows.get(r), slot, specs, regionStart, regionSpan,
+                    r == dataRow, newWidths));
+        }
+        rebuildDocxGrid(table, newWidths);
+        log.debug("表格列区展开：块 {}，列区起始网格列 {}，{} 列，数据行 {}", block, regionStart + 1, n, dataRow + 1);
+        return expanded;
+    }
+
+    /** 按块编码取列定义；模板里写了标记却没配列源时报错，而不是渲染出一张空表。 */
+    private List<DocTemplateColumnSpec> columnSpecs(Map<String, List<DocTemplateColumnSpec>> columns, String block) {
+        if (columns != null) {
+            List<DocTemplateColumnSpec> specs = columns.get(block);
+            if (specs == null) {
+                for (Map.Entry<String, List<DocTemplateColumnSpec>> entry : columns.entrySet()) {
+                    if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(block)) {
+                        specs = entry.getValue();
+                        break;
+                    }
+                }
+            }
+            if (specs != null) return specs;
+        }
+        throw new IllegalArgumentException("模板里的列区标记指向数据块 " + block
+                + "，但这个块没有配置列源。请在数据块配置里打开「动态列」并配好列定义的取数方式");
+    }
+
+    /** 模板里 {@code {{#each}}...{{/each}}} 各占一行的区域，返回 {@code [起始行, 结束行]}。 */
+    private List<int[]> loopRegions(List<String> texts) {
+        List<int[]> regions = new ArrayList<>();
+        int i = 0;
+        while (i < texts.size()) {
+            if (isLoopStart(texts.get(i))) {
+                int end = matchLoopEnd(texts, i, texts.size());
+                if (end > i) {
+                    regions.add(new int[]{i, end});
+                    i++;
+                    continue;
+                }
+            }
+            i++;
+        }
+        return regions;
+    }
+
+    /** 列区宽度按权重分配：固定列保留原宽，列区总宽不变。 */
+    private List<Integer> allocateWidths(int total, List<DocTemplateColumnSpec> specs) {
+        List<Integer> widths = new ArrayList<>(specs.size());
+        double sum = DocTemplateColumnSpec.totalWeight(specs);
+        if (sum <= 0) sum = specs.size();
+        int used = 0;
+        for (int i = 0; i < specs.size(); i++) {
+            int width = i == specs.size() - 1
+                    ? Math.max(1, total - used)
+                    : Math.max(1, (int) Math.round(total * specs.get(i).width() / sum));
+            widths.add(width);
+            used += width;
+        }
+        int narrowest = widths.stream().mapToInt(Integer::intValue).min().orElse(0);
+        if (total > 0 && narrowest < NARROW_COLUMN_TWIPS) {
+            log.warn("表格列区展开成 {} 列后最窄一列只有 {} twips（约 {} cm），可能挤在一起；"
+                            + "可以减少列数，或在模板里把列区起始列调宽",
+                    specs.size(), narrowest, String.format(Locale.ROOT, "%.1f", narrowest / 567.0));
+        }
+        return widths;
+    }
+
+    /** 读原始表格网格宽度；{@code tblGrid} 缺失或和实际列数对不上时按总宽均分兜底。 */
+    private List<Integer> docxGridWidths(XWPFTable table, int columnCount) {
+        List<Integer> widths = new ArrayList<>();
+        int total = 0;
+        CTTblGrid grid = table.getCTTbl().getTblGrid();
+        if (grid != null) {
+            for (int i = 0; i < grid.sizeOfGridColArray(); i++) {
+                int width = twips(grid.getGridColArray(i).getW());
+                widths.add(width);
+                total += width;
+            }
+        }
+        if (widths.size() == columnCount && total > 0) return widths;
+        int each = Math.max(1, docxTableWidth(table) / Math.max(1, columnCount));
+        widths.clear();
+        for (int i = 0; i < columnCount; i++) widths.add(each);
+        return widths;
+    }
+
+    private int docxTableWidth(XWPFTable table) {
+        CTTblPr properties = table.getCTTbl().getTblPr();
+        if (properties != null && properties.isSetTblW()) {
+            CTTblWidth width = properties.getTblW();
+            if (width.getType() == STTblWidth.DXA) {
+                int twips = twips(width.getW());
+                if (twips > 0) return twips;
+            }
+        }
+        return DEFAULT_TABLE_WIDTH;
+    }
+
+    /**
+     * {@code w:w} 在 schema 里是联合类型（数字 twips 或 {@code "20mm"} 这类通用度量），
+     * XmlBeans 给回来是 {@code Object}。这里只认数字，量不出来就返回 0 交给均分兜底。
+     */
+    private int twips(Object raw) {
+        if (raw instanceof Number number) return Math.max(0, number.intValue());
+        if (raw instanceof CharSequence text) {
+            try {
+                return Math.max(0, (int) Double.parseDouble(text.toString().trim()));
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    /** 重建 {@code tblGrid}：网格列数量必须和每格的 {@code tcW} 对齐，否则 Word 按旧网格显示，列宽全乱。 */
+    private void rebuildDocxGrid(XWPFTable table, List<Integer> widths) {
+        CTTbl ctTbl = table.getCTTbl();
+        CTTblGrid grid = ctTbl.getTblGrid();
+        if (grid == null) grid = ctTbl.addNewTblGrid();
+        while (grid.sizeOfGridColArray() > 0) grid.removeGridCol(0);
+        for (Integer width : widths) grid.addNewGridCol().setW(BigInteger.valueOf(Math.max(1, width)));
+    }
+
+    /**
+     * 重建一行：标记格按列定义拆成 N 格（或合并成 1 格），覆盖列区起始列的格加宽 N−1，
+     * 列区右侧的格自然右移（重建后位置由前面各格累加决定）。
+     */
+    private CTRow rebuildDocxRow(XWPFTableRow row, ColumnsSlot slot, List<DocTemplateColumnSpec> specs,
+                                 int regionStart, int regionSpan, boolean dataRow, List<Integer> widths) {
+        List<XWPFTableCell> cells = row.getTableCells();
+        int n = specs.size();
+        List<CTTc> out = new ArrayList<>();
+        int grid = 0;
+        int newGrid = 0;
+        for (int c = 0; c < cells.size(); c++) {
+            XWPFTableCell cell = cells.get(c);
+            int span = gridSpan(cell);
+            boolean marker = slot != null && slot.cell() == c;
+            int overlap = overlap(grid, span, regionStart, regionSpan);
+            if (marker) {
+                if (slot.marker().span()) {
+                    CTTc tc = copyCell(cell);
+                    setTcGridSpan(tc, n);
+                    stripColumnsMarker(new XWPFTableCell(tc, row, row.getTable().getBody()));
+                    setTcWidth(tc, sumWidths(widths, newGrid, n));
+                    out.add(tc);
+                    newGrid += n;
+                } else if (dataRow) {
+                    int markerCell = c;
+                    String loop = loopMarkerOf(slot.marker(), cell.getText(), spec -> {
+                        int index = docxColumn(spec);
+                        if (index == markerCell) {
+                            throw new IllegalArgumentException("merge=" + spec + " 指向了写 {{#columns}} 的那一格："
+                                    + "展开后它是 " + n + " 个动态列，纵向合并语义不明；请把 merge= 指向固定列");
+                        }
+                        return String.valueOf((index > markerCell ? index + n - 1 : index) + 1);
+                    });
+                    for (int i = 0; i < n; i++) {
+                        DocTemplateColumnSpec spec = specs.get(i);
+                        CTTc tc = copyCell(cell);
+                        XWPFTableCell wrapper = new XWPFTableCell(tc, row, row.getTable().getBody());
+                        // 循环标记成对生成：结束标记紧跟在开始标记后面，占的是同一格，不影响其它格的排版
+                        setCellText(wrapper, (i == 0 ? loop + "{{/each}}" : "") + "${" + spec.field() + "}");
+                        setTcWidth(tc, widths.get(newGrid));
+                        out.add(tc);
+                        newGrid += 1;
+                    }
+                } else {
+                    for (int i = 0; i < n; i++) {
+                        DocTemplateColumnSpec spec = specs.get(i);
+                        CTTc tc = copyCell(cell);
+                        XWPFTableCell wrapper = new XWPFTableCell(tc, row, row.getTable().getBody());
+                        setCellText(wrapper, spec.label());
+                        setTcWidth(tc, widths.get(newGrid));
+                        out.add(tc);
+                        newGrid += 1;
+                    }
+                }
+            } else {
+                if (slot != null && overlap > 0) {
+                    throw new IllegalArgumentException("表格第 " + (indexOfRow(row) + 1) + " 行第 " + (c + 1)
+                            + " 格用横向合并盖住了列区标记格，列区里放不下 N 列；"
+                            + "请去掉这一格的横向合并，或把列区标记挪到没被合并的格子里");
+                }
+                int newSpan = overlap > 0 ? span - overlap + n : span;
+                CTTc tc = copyCell(cell);
+                // 数据行行首行尾那对 {{#each}}/{{/each}} 只是把块名标出来，循环由 data 角色驱动
+                if (dataRow) stripRowLoopMarker(tc, row);
+                setTcGridSpan(tc, newSpan);
+                setTcWidth(tc, sumWidths(widths, newGrid, newSpan));
+                out.add(tc);
+                newGrid += newSpan;
+            }
+            grid += span;
+        }
+        CTRow ctRow = (CTRow) row.getCtRow().copy();
+        while (ctRow.sizeOfTcArray() > 0) ctRow.removeTc(0);
+        for (CTTc tc : out) ctRow.addNewTc().set(tc);
+        return ctRow;
+    }
+
+    /** 列定义为空数组时：表头行、数据行整行删掉，其它行里覆盖列区的格删掉，删空了整行删。 */
+    private CTRow stripColumnsRow(XWPFTableRow row, ColumnsSlot slot, int regionStart, int regionSpan,
+                                  List<Integer> widths) {
+        List<XWPFTableCell> cells = row.getTableCells();
+        List<CTTc> keep = new ArrayList<>();
+        int grid = 0;
+        int newGrid = 0;
+        for (int c = 0; c < cells.size(); c++) {
+            XWPFTableCell cell = cells.get(c);
+            int span = gridSpan(cell);
+            boolean marker = slot != null && slot.cell() == c;
+            boolean covers = overlap(grid, span, regionStart, regionSpan) > 0;
+            if (!marker && !covers) {
+                CTTc tc = copyCell(cell);
+                setTcGridSpan(tc, span);
+                setTcWidth(tc, sumWidths(widths, newGrid, span));
+                keep.add(tc);
+                newGrid += span;
+            }
+            grid += span;
+        }
+        if (keep.isEmpty()) return null;
+        CTRow ctRow = (CTRow) row.getCtRow().copy();
+        while (ctRow.sizeOfTcArray() > 0) ctRow.removeTc(0);
+        for (CTTc tc : keep) ctRow.addNewTc().set(tc);
+        return ctRow;
+    }
+
+    /**
+     * 数据行的循环标记：{@code {{#columns 块 merge=1}} → {{#each 块 merge=<改写后的列>}}。
+     *
+     * <p>列展开会把列号改掉，而 {@code merge=} 认的是展开前的物理位置，所以序号必须按映射改写，
+     * 否则合并会落到相邻的固定列上。</p>
+     *
+     * @param rewriteColumn 把 {@code merge=} 里的一项改写成展开后的写法；落在列区里时抛异常
+     */
+    private String loopMarkerOf(ColumnsMarker marker, String cellText, Function<String, String> rewriteColumn) {
+        Matcher matcher = COLUMNS_START.matcher(cellText);
+        String tail = matcher.find() && matcher.group(2) != null ? matcher.group(2) : "";
+        StringBuilder sb = new StringBuilder("{{#each ").append(marker.block());
+        Matcher where = LOOP_WHERE.matcher(tail);
+        if (where.find()) {
+            sb.append(" where ").append(where.group(1)).append(" = ").append(where.group(2).trim());
+        }
+        Matcher merge = LOOP_MERGE.matcher(tail);
+        if (merge.find()) {
+            List<String> columns = new ArrayList<>();
+            for (String spec : splitColumns(merge.group(1))) columns.add(rewriteColumn.apply(spec));
+            if (!columns.isEmpty()) sb.append(" merge=").append(String.join(",", columns));
+        }
+        Matcher by = LOOP_BY.matcher(tail);
+        if (by.find()) sb.append(" by=").append(by.group(1).trim());
+        return sb.append("}}").toString();
+    }
+
+    /** 一段网格区间与列区 {@code [regionStart, regionStart+regionSpan)} 的重叠格数。 */
+    private int overlap(int grid, int span, int regionStart, int regionSpan) {
+        int start = Math.max(grid, regionStart);
+        int end = Math.min(grid + span, regionStart + regionSpan);
+        return Math.max(0, end - start);
+    }
+
+    private CTTc copyCell(XWPFTableCell cell) {
+        return (CTTc) cell.getCTTc().copy();
+    }
+
+    /** 把整格内容换成一段文字，保留首个段落与首个 run 的格式（边框、底色、字体都还在 tcPr / pPr / rPr 上）。 */
+    private void setCellText(XWPFTableCell cell, String text) {
+        while (cell.getParagraphs().size() > 1) {
+            cell.removeParagraph(cell.getParagraphs().size() - 1);
+        }
+        XWPFParagraph paragraph = cell.getParagraphs().isEmpty() ? cell.addParagraph() : cell.getParagraphs().get(0);
+        List<XWPFRun> runs = paragraph.getRuns();
+        if (runs.isEmpty()) {
+            paragraph.createRun().setText(text, 0);
+            return;
+        }
+        runs.get(0).setText(text, 0);
+        for (int i = 1; i < runs.size(); i++) runs.get(i).setText("", 0);
+    }
+
+    private void stripColumnsMarker(XWPFTableCell cell) {
+        for (XWPFParagraph paragraph : cell.getParagraphs()) {
+            rewriteText(paragraph, text -> COLUMNS_START.matcher(text).replaceAll(""));
+        }
+    }
+
+    /**
+     * 清掉数据行上的行循环标记。
+     *
+     * <p>这一行的循环由 {@code data} 角色驱动（展开时会在第一个动态格里生成
+     * {@code {{#each 块 merge=…}}}），行首行尾那对标记只是给人看的，留着会让同一行出现两个循环。</p>
+     */
+    private void stripRowLoopMarker(CTTc tc, XWPFTableRow row) {
+        XWPFTableCell wrapper = new XWPFTableCell(tc, row, row.getTable().getBody());
+        for (XWPFParagraph paragraph : wrapper.getParagraphs()) {
+            rewriteText(paragraph, DocTemplateRenderer::stripLoopMarkers);
+        }
+    }
+
+    private int gridSpan(XWPFTableCell cell) {
+        CTTcPr properties = cell.getCTTc().getTcPr();
+        if (properties == null || !properties.isSetGridSpan() || properties.getGridSpan().getVal() == null) return 1;
+        return Math.max(1, properties.getGridSpan().getVal().intValue());
+    }
+
+    private void setTcGridSpan(CTTc tc, int span) {
+        CTTcPr properties = tc.isSetTcPr() ? tc.getTcPr() : tc.addNewTcPr();
+        if (span <= 1) {
+            if (properties.isSetGridSpan()) properties.unsetGridSpan();
+            return;
+        }
+        CTDecimalNumber gridSpan = properties.isSetGridSpan() ? properties.getGridSpan() : properties.addNewGridSpan();
+        gridSpan.setVal(BigInteger.valueOf(span));
+    }
+
+    private void setTcWidth(CTTc tc, int twips) {
+        if (twips <= 0) return;
+        CTTcPr properties = tc.isSetTcPr() ? tc.getTcPr() : tc.addNewTcPr();
+        CTTblWidth width = properties.isSetTcW() ? properties.getTcW() : properties.addNewTcW();
+        width.setType(STTblWidth.DXA);
+        width.setW(BigInteger.valueOf(twips));
+    }
+
+    private int sumWidths(List<Integer> widths, int from, int count) {
+        int sum = 0;
+        for (int i = 0; i < count; i++) {
+            int index = from + i;
+            if (index >= 0 && index < widths.size()) sum += widths.get(index);
+        }
+        return sum;
+    }
+
+    /** 行在表里的下标，只用于报错信息。 */
+    private int indexOfRow(XWPFTableRow row) {
+        List<XWPFTableRow> rows = row.getTable() == null ? List.of() : row.getTable().getRows();
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i) == row || rows.get(i).getCtRow() == row.getCtRow()) return i;
+        }
+        return -1;
+    }
+
+    private String describeColumns(Map<String, List<DocTemplateColumnSpec>> columns) {
+        if (columns == null || columns.isEmpty()) return "（无）";
+        List<String> parts = new ArrayList<>();
+        columns.forEach((code, specs) ->
+                parts.add(code + "(" + (specs == null ? 0 : specs.size()) + " 列)"));
+        return String.join("、", parts);
     }
 
     /**
@@ -668,14 +1347,22 @@ public class DocTemplateRenderer {
                 if (!isLoopStart(paragraph.getText())) continue;
                 int candidate = paragraphEnd(elements, i);
                 if (candidate < 0) {
-                    // 没有配对：清掉标记，避免反复命中同一段造成死循环
-                    rewriteText(paragraph, text -> LOOP_START.matcher(text).replaceAll(""));
-                    continue;
+                    throw new IllegalArgumentException("段落块循环 {{#each " + parseLoop(paragraph.getText())
+                            + "}} 没有配对的 {{/each}}；两个标记要各占一段，中间的段落整体重复");
                 }
                 start = i;
                 end = candidate;
             }
-            if (start < 0) return;
+            if (start < 0) {
+                // 循环段都展开完了，剩下的段落里还单独出现 {{/each}} 就是多写的
+                for (int i = 0; i < elements.size(); i++) {
+                    if (elements.get(i) instanceof XWPFParagraph paragraph && isLoopEnd(paragraph.getText())) {
+                        throw new IllegalArgumentException("第 " + (i + 1) + " 段的 {{/each}} 没有配对的 "
+                                + "{{#each}}；两个标记要各占一段");
+                    }
+                }
+                return;
+            }
             XWPFParagraph startParagraph = (XWPFParagraph) elements.get(start);
             XWPFParagraph endParagraph = (XWPFParagraph) elements.get(end);
 
@@ -688,8 +1375,9 @@ public class DocTemplateRenderer {
             // 外层循环在这里手动展开（要拿它的当前项做作用域），内层标记交给 planRowsInto 递归，
             // 所以内层数组既可以是外层项自带的字段，也可以是带 where 的扁平数组
             List<PlannedRow> plan = new ArrayList<>();
+            int index = 1;
             for (Object item : itemsOf(parseLoop(startParagraph.getText()), params)) {
-                planRowsInto(texts, 0, texts.size(), scopeOf(item, params), plan);
+                planRowsInto(texts, 0, texts.size(), scopeOf(item, params, index++), plan, "段");
             }
             // 写回时只是「按计划复制段落」
             for (PlannedRow planned : plan) {
@@ -782,42 +1470,63 @@ public class DocTemplateRenderer {
      * 每项的作用域是「外层参数 + 当前项字段」，内层循环取数组时自然能看到外层项的字段。</p>
      */
     private List<PlannedRow> planRows(List<String> texts, int from, int to, Map<String, Object> params) {
+        return planRows(texts, from, to, params, "行");
+    }
+
+    private List<PlannedRow> planRows(List<String> texts, int from, int to, Map<String, Object> params,
+                                      String unit) {
         List<PlannedRow> plan = new ArrayList<>();
-        planRowsInto(texts, from, to, params, plan);
+        planRowsInto(texts, from, to, params, plan, unit);
         return plan;
     }
 
+    /**
+     * @param unit 报错信息里用的量词（表格里是「行」、段落块里是「段」），只为把行号说清楚
+     */
     private void planRowsInto(List<String> texts, int from, int to, Map<String, Object> params,
-                              List<PlannedRow> plan) {
+                              List<PlannedRow> plan, String unit) {
         int i = from;
         while (i < to) {
             String text = texts.get(i);
             Loop loop = parseLoop(text);
             if (loop == null) {
+                // 区域循环的结束行在 matchLoopEnd 里就被跳过、走不到这里；行内循环的结束标记
+                // 和开始标记在同一行，也不会落到这个分支。所以这里还看到 {{/each}} 就是多写的。
+                if (LOOP_END.matcher(text).find()) {
+                    throw new IllegalArgumentException("第 " + (i + 1) + " " + unit + "的 {{/each}} 没有配对的 "
+                            + "{{#each}}；循环的开始和结束标记必须成对写");
+                }
                 plan.add(new PlannedRow(i, params));
                 i++;
                 continue;
             }
-            int end = isLoopStart(text) ? matchLoopEnd(texts, i, to) : -1;
+            boolean rowStart = isLoopStart(text);
+            int end = rowStart ? matchLoopEnd(texts, i, to) : -1;
             if (end > i) {
                 // 区域循环：区域内所有行按数组重复，内层标记在递归里继续展开
                 List<PlannedRow> body = new ArrayList<>();
+                int index = 1;
                 for (Object item : itemsOf(loop, params)) {
-                    planRowsInto(texts, i + 1, end, scopeOf(item, params), body);
+                    planRowsInto(texts, i + 1, end, scopeOf(item, params, index++), body, unit);
                 }
                 plan.addAll(tagLoop(body, loop));
                 i = end + 1;
                 continue;
             }
-            if (isLoopStart(text)) {
-                // 独占一行却没有配对的 {{/each}}：退回单行循环。这种情况最常见的后果是
-                // 「内层循环的数组在外层项里取不到」，报错信息很难指向真正原因，这里先留一条日志。
-                log.warn("模板里的循环标记 {} 独占一行，但没有配对的结束标记，已按单行循环处理；"
-                        + "如果是想做区域循环（循环里再套循环），请补上 {{/each}}", "{{#each " + loop + "}}");
+            if (rowStart) {
+                throw new IllegalArgumentException("第 " + (i + 1) + " " + unit + "的 {{#each " + loop
+                        + "}} 独占一" + unit + "，但没有配对的 {{/each}}；区域循环要把两个标记各写一" + unit
+                        + "，行内循环要把两个标记写在同一" + unit + "里");
             }
-            // 行内标记，或独占一行但没有配对的 {{/each}}：按单行循环处理（保持老模板行为）
+            if (!LOOP_END.matcher(text).find()) {
+                throw new IllegalArgumentException("第 " + (i + 1) + " " + unit + "的 {{#each " + loop
+                        + "}} 没有配对的 {{/each}}；行内循环要写成 {{#each 块}}…{{/each}}，"
+                        + "两个标记都写在同一" + unit + "里");
+            }
+            // 行内循环：两个标记写在同一行，整行按数组重复
             List<PlannedRow> single = new ArrayList<>();
-            for (Object item : itemsOf(loop, params)) single.add(new PlannedRow(i, scopeOf(item, params)));
+            int index = 1;
+            for (Object item : itemsOf(loop, params)) single.add(new PlannedRow(i, scopeOf(item, params, index++)));
             plan.addAll(tagLoop(single, loop));
             i++;
         }
@@ -893,13 +1602,19 @@ public class DocTemplateRenderer {
                     continue;
                 }
             }
-            if (inLoop || loop != null) indexes.add(i);
+            if (inLoop || loop != null || isColumnsDataRow(text)) indexes.add(i);
             i++;
         }
     }
 
     private boolean isLoopStart(String text) {
         return text != null && LOOP_START.matcher(text.trim()).matches();
+    }
+
+    /** 列区的数据行等价于一行 {@code {{#each 块}}}：里面的字段由数据给，不用手填。 */
+    private static boolean isColumnsDataRow(String text) {
+        ColumnsMarker marker = parseColumns(text);
+        return marker != null && marker.role() == ColumnsRole.DATA;
     }
 
     private boolean isLoopEnd(String text) {
@@ -932,9 +1647,13 @@ public class DocTemplateRenderer {
 
     /**
      * 循环体上下文：当前项的字段可直接取值（{@code ${report_no}}），也可用 {@code ${item.report_no}}。
+     *
+     * <p>另外塞一个 1 起始的行号 {@code ${_index}}：「序号」是最常见的固定列，没有它宿主只能在取数时
+     * 自己补一个字段。数据里本来就有同名键时以数据为准（这里先放，随后被当前项覆盖）。</p>
      */
-    private Map<String, Object> scopeOf(Object item, Map<String, Object> params) {
+    private Map<String, Object> scopeOf(Object item, Map<String, Object> params, int index) {
         Map<String, Object> scope = new LinkedHashMap<>(params);
+        scope.put("_index", index);
         if (item instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 scope.put(String.valueOf(entry.getKey()), entry.getValue());
@@ -1115,7 +1834,9 @@ public class DocTemplateRenderer {
         List<Object> matched = new ArrayList<>();
         for (Object item : items) {
             Object actual = item instanceof Map<?, ?> map ? mapValue(map, loop.field()) : null;
-            if (actual != null && String.valueOf(actual).trim().equalsIgnoreCase(target)) matched.add(item);
+            // 值比较也严格：只去首尾空格，不再忽略大小写 —— 'PAID' 和 'paid' 是两个值，
+            // 要合并成一个应该在数据源里统一，而不是靠渲染器猜
+            if (actual != null && String.valueOf(actual).trim().equals(target)) matched.add(item);
         }
         log.debug("循环「{}」按关联条件过滤：{} 条 → {} 条", loop, items.size(), matched.size());
         return matched;
@@ -1137,9 +1858,9 @@ public class DocTemplateRenderer {
         return found.value();
     }
 
+    /** 取明细项里的字段：键名严格区分大小写，和 {@link #lookupLenient} 一致。 */
     private Object mapValue(Map<?, ?> map, String key) {
-        String actual = matchKey(map, key);
-        return actual == null ? null : map.get(actual);
+        return key != null && map.containsKey(key) ? map.get(key) : null;
     }
 
 
@@ -1182,22 +1903,29 @@ public class DocTemplateRenderer {
     }
 
     public byte[] renderXlsx(byte[] template, Map<String, Object> params) throws Exception {
-        return renderXlsx(template, params, List.of(), DocTemplateMergeAlign.DEFAULT);
+        return renderXlsx(template, params, List.of(), DocTemplateMergeAlign.DEFAULT, Map.of());
     }
 
     public byte[] renderXlsx(byte[] template, Map<String, Object> params,
                              List<DocTemplateImageSpec> images) throws Exception {
-        return renderXlsx(template, params, images, DocTemplateMergeAlign.DEFAULT);
+        return renderXlsx(template, params, images, DocTemplateMergeAlign.DEFAULT, Map.of());
     }
 
     public byte[] renderXlsx(byte[] template, Map<String, Object> params,
                              List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign) throws Exception {
-        log.debug("渲染 XLSX，参数：{}，图片字段：{}，合并对齐：{}",
-                describeParams(params), describeImages(images), mergeAlign);
+        return renderXlsx(template, params, images, mergeAlign, Map.of());
+    }
+
+    public byte[] renderXlsx(byte[] template, Map<String, Object> params,
+                             List<DocTemplateImageSpec> images, DocTemplateMergeAlign mergeAlign,
+                             Map<String, List<DocTemplateColumnSpec>> columns) throws Exception {
+        log.debug("渲染 XLSX，参数：{}，图片字段：{}，合并对齐：{}，列区：{}",
+                describeParams(params), describeImages(images), mergeAlign, describeColumns(columns));
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(template));
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             for (int s = 0; s < workbook.getNumberOfSheets(); s++) {
                 Sheet sheet = workbook.getSheetAt(s);
+                expandSheetColumns(sheet, columns);
                 expandSheetLoops(sheet, params, images, mergeAlign);
                 for (Row row : sheet) {
                     for (Cell cell : row) renderCell(cell, params, images);
@@ -1315,6 +2043,263 @@ public class DocTemplateRenderer {
         }
     }
 
+    // ------------------------------------------------------------------ 列区（XLSX）
+
+    /** 工作表里的一处列区标记。 */
+    private record SheetColumnsSlot(int row, int column, ColumnsMarker marker) {
+    }
+
+    /**
+     * 把工作表里的 {@code {{#columns 块编码 角色}}} 展开成 N 个真实列：整行右移、按权重设列宽、套对齐，
+     * 合并区跟着重映射。角色与 DOCX 一致：{@code header} 表头行、{@code data} 数据行、{@code span} 静态行。
+     *
+     * <p>必须在 {@code expandSheetLoops} 之前跑完：展开完每行退回成「普通行 + 普通占位符」，
+     * 行循环只负责复制行。</p>
+     */
+    private void expandSheetColumns(Sheet sheet, Map<String, List<DocTemplateColumnSpec>> columns) {
+        if (columns == null) return;
+        int lastRow = sheet.getLastRowNum();
+        List<SheetColumnsSlot> slots = new ArrayList<>();
+        for (int r = 0; r <= lastRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            for (int c = 0; c < row.getLastCellNum(); c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null || cell.getCellType() != CellType.STRING) continue;
+                String text = cell.getStringCellValue();
+                ColumnsMarker marker = parseColumns(text);
+                if (marker == null) continue;
+                requireColumnsRole(marker, "工作表第 " + (r + 1) + " 行第 " + (c + 1) + " 列");
+                if (!marker.span() && !isColumnsOnly(text)) {
+                    throw new IllegalArgumentException("工作表第 " + (r + 1) + " 行第 " + (c + 1)
+                            + " 列的 {{#columns}} 必须独占一格；想在这一格里同时写文字，"
+                            + "请改用 {{#columns " + marker.block() + " span}}（横向盖住列区）");
+                }
+                slots.add(new SheetColumnsSlot(r, c, marker));
+            }
+        }
+        if (slots.isEmpty()) return;
+
+        String block = slots.get(0).marker().block();
+        Set<Integer> rowsWithSlot = new HashSet<>();
+        for (SheetColumnsSlot slot : slots) {
+            if (!slot.marker().block().equalsIgnoreCase(block)) {
+                throw new IllegalArgumentException("同一张工作表里出现了两个列区标记且编码不一致（"
+                        + block + " / " + slot.marker().block() + "），一张表只能有一个列区");
+            }
+            if (!rowsWithSlot.add(slot.row())) {
+                throw new IllegalArgumentException("工作表第 " + (slot.row() + 1) + " 行里有两个列区标记");
+            }
+            if (slot.column() != slots.get(0).column()) {
+                throw new IllegalArgumentException("列区标记必须落在同一列：第 " + (slots.get(0).row() + 1)
+                        + " 行在第 " + (slots.get(0).column() + 1) + " 列，第 " + (slot.row() + 1)
+                        + " 行在第 " + (slot.column() + 1) + " 列");
+            }
+        }
+        List<DocTemplateColumnSpec> specs = columnSpecs(columns, block);
+        int regionStart = slots.get(0).column();
+        int n = specs.size();
+
+        SheetColumnsSlot dataSlot = null;
+        for (SheetColumnsSlot slot : slots) {
+            if (slot.marker().role() != ColumnsRole.DATA) continue;
+            if (dataSlot != null) {
+                throw new IllegalArgumentException("工作表第 " + (dataSlot.row() + 1) + " 行和第 "
+                        + (slot.row() + 1) + " 行都写了 {{#columns " + block + " data}}，数据行只能有一行");
+            }
+            dataSlot = slot;
+        }
+        if (dataSlot == null) {
+            throw new IllegalArgumentException("工作表里的列区没有数据行标记：把要按数组重复的那一行写成 {{#columns "
+                    + block + " data}}，这一行会展开成 N 列并按数据重复");
+        }
+        int dataRow = dataSlot.row();
+
+        List<String> texts = sheetRowTexts(sheet);
+        for (int[] region : loopRegions(texts)) {
+            for (SheetColumnsSlot slot : slots) {
+                if (slot.row() > region[0] && slot.row() < region[1]) {
+                    throw new IllegalArgumentException("工作表第 " + (slot.row() + 1)
+                            + " 行的 {{#columns}} 落在 {{#each}} 区域里，嵌套循环里的列区暂不支持");
+                }
+            }
+        }
+        checkRowLoopAnnotation(texts.get(dataRow), dataSlot.marker(), "工作表第 " + (dataRow + 1) + " 行");
+
+        if (n == 0) {
+            removeSheetColumns(sheet, slots, regionStart);
+            return;
+        }
+
+        // 1. 列区右侧的格整体右移 N-1（从右往左搬，样式一起带走）
+        for (int r = 0; r <= lastRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            shiftSheetCells(row, regionStart + 1, n - 1);
+        }
+        // 2. 合并区跟着重映射
+        remapSheetRegions(sheet, regionStart, n, rowsWithSlot);
+        // 3. 标记行填内容
+        for (SheetColumnsSlot slot : slots) {
+            Row row = sheet.getRow(slot.row());
+            if (row == null) row = sheet.createRow(slot.row());
+            Cell markerCell = row.getCell(regionStart);
+            if (markerCell == null) markerCell = row.createCell(regionStart);
+            String markerText = markerCell.getCellType() == CellType.STRING ? markerCell.getStringCellValue() : "";
+            CellStyle style = markerCell.getCellStyle();
+            if (slot.marker().span()) {
+                prepareWrite(markerCell);
+                markerCell.setCellValue(stripColumnsText(markerText));
+                // 合并区里的每一格都要套上标记格的样式：Excel 的合并只是把区域盖住，边框仍然按格画，
+                // 只给第一格设边框的话，右边几格的上/下边框会缺一截
+                for (int i = 1; i < n; i++) {
+                    Cell cell = row.getCell(regionStart + i);
+                    if (cell == null) cell = row.createCell(regionStart + i);
+                    prepareWrite(cell);
+                    cell.setCellStyle(style);
+                }
+                if (n > 1) {
+                    sheet.addMergedRegion(new CellRangeAddress(slot.row(), slot.row(),
+                            regionStart, regionStart + n - 1));
+                }
+                continue;
+            }
+            boolean data = slot.row() == dataRow;
+            String loop = data ? loopMarkerOf(slot.marker(), markerText, spec -> {
+                int index = xlsxColumn(spec);
+                if (index == regionStart) {
+                    throw new IllegalArgumentException("merge=" + spec + " 指向了列区所在的列："
+                            + "展开后它是 " + n + " 个动态列，纵向合并语义不明；请把 merge= 指向固定列");
+                }
+                return String.valueOf((index > regionStart ? index + n - 1 : index) + 1);
+            }) : null;
+            for (int i = 0; i < n; i++) {
+                DocTemplateColumnSpec spec = specs.get(i);
+                Cell cell = row.getCell(regionStart + i);
+                if (cell == null) cell = row.createCell(regionStart + i);
+                prepareWrite(cell);
+                // 样式（字体、边框、底纹、对齐）整套沿用模板里写标记的那一格，列源只给字段名和标题
+                cell.setCellStyle(style);
+                // 循环标记成对生成：结束标记紧跟在开始标记后面，占的是同一格，不影响其它格的排版
+                cell.setCellValue(data
+                        ? (i == 0 ? loop + "{{/each}}" : "") + "${" + spec.field() + "}"
+                        : spec.label());
+            }
+        }
+        // 数据行行首行尾那对 {{#each}}/{{/each}} 只是把块名标出来，循环由 data 角色驱动
+        clearSheetRowLoop(sheet.getRow(dataRow), regionStart, regionStart + n);
+        // 4. 列宽：以列区起始列的现有宽度为基准，列区总宽 = 基准 × N，再按权重分配
+        int base = sheet.getColumnWidth(regionStart);
+        if (base <= 0) base = Math.max(1, sheet.getDefaultColumnWidth()) * 256;
+        int regionTotal = base * n;
+        double sum = DocTemplateColumnSpec.totalWeight(specs);
+        if (sum <= 0) sum = n;
+        int used = 0;
+        for (int i = 0; i < n; i++) {
+            int width = i == n - 1
+                    ? Math.max(256, regionTotal - used)
+                    : Math.max(256, (int) Math.round(regionTotal * specs.get(i).width() / sum));
+            sheet.setColumnWidth(regionStart + i, Math.min(255 * 256, width));
+            used += width;
+        }
+        log.debug("工作表列区展开：块 {}，起始列 {}，{} 列，数据行 {}",
+                block, CellReference.convertNumToColString(regionStart), n, dataRow + 1);
+    }
+
+    /** 列定义为空数组时：标记行整行删掉，其它行把列区那一格清空。 */
+    private void removeSheetColumns(Sheet sheet, List<SheetColumnsSlot> slots, int regionStart) {
+        Set<Integer> markerRows = new HashSet<>();
+        for (SheetColumnsSlot slot : slots) markerRows.add(slot.row());
+        for (int r = sheet.getLastRowNum(); r >= 0; r--) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            if (markerRows.contains(r)) {
+                sheet.removeRow(row);
+                int last = sheet.getLastRowNum();
+                if (r < last) sheet.shiftRows(r + 1, last, -1);
+                continue;
+            }
+            Cell cell = row.getCell(regionStart);
+            if (cell == null) continue;
+            prepareWrite(cell);
+            cell.setBlank();
+        }
+    }
+
+    /** 把 {@code [from, last]} 的单元格整体右移 {@code delta} 格，值、类型、样式一起带走。 */
+    private void shiftSheetCells(Row row, int from, int delta) {
+        int last = row.getLastCellNum() - 1;
+        if (delta <= 0 || last < from) return;
+        for (int c = last; c >= from; c--) {
+            Cell source = row.getCell(c);
+            if (source == null) continue;
+            Cell target = row.getCell(c + delta);
+            if (target == null) target = row.createCell(c + delta);
+            prepareWrite(target);
+            target.setCellStyle(source.getCellStyle());
+            copySheetValue(source, target);
+            row.removeCell(source);
+        }
+    }
+
+    private void copySheetValue(Cell source, Cell target) {
+        switch (source.getCellType()) {
+            case STRING -> target.setCellValue(source.getStringCellValue());
+            case NUMERIC -> target.setCellValue(source.getNumericCellValue());
+            case BOOLEAN -> target.setCellValue(source.getBooleanCellValue());
+            case FORMULA -> target.setCellFormula(source.getCellFormula());
+            default -> target.setBlank();
+        }
+    }
+
+    /** 列区右侧的合并区整体右移 N−1；跨列区的合并区右边界 +N−1；标记格自己的合并区丢掉重建。 */
+    private void remapSheetRegions(Sheet sheet, int regionStart, int n, Set<Integer> markerRows) {
+        List<CellRangeAddress> regions = new ArrayList<>(sheet.getMergedRegions());
+        for (int i = regions.size() - 1; i >= 0; i--) {
+            CellRangeAddress region = regions.get(i);
+            int first = region.getFirstColumn();
+            int last = region.getLastColumn();
+            if (last < regionStart) continue;
+            boolean singleCell = first == last && region.getFirstRow() == region.getLastRow();
+            sheet.removeMergedRegion(i);
+            if (first > regionStart) {
+                sheet.addMergedRegion(new CellRangeAddress(region.getFirstRow(), region.getLastRow(),
+                        first + n - 1, last + n - 1));
+                continue;
+            }
+            if (singleCell && markerRows.contains(region.getFirstRow())) {
+                // 标记格自己的合并区：拆成 N 格后由新格子替代
+                continue;
+            }
+            sheet.addMergedRegion(new CellRangeAddress(region.getFirstRow(), region.getLastRow(),
+                    first, last + n - 1));
+        }
+    }
+
+    private String stripColumnsText(String text) {
+        return text == null ? "" : COLUMNS_START.matcher(text).replaceAll("").trim();
+    }
+
+    /**
+     * 清掉数据行上的行循环标记（列区里的格子不碰，那里已经写好了生成出来的循环标记）。
+     *
+     * <p>这一行的循环由 {@code data} 角色驱动，行首行尾那对 {@code {{#each}}/{{/each}}}
+     * 只是给人看的，留着会让同一行出现两个循环。</p>
+     */
+    private void clearSheetRowLoop(Row row, int regionStart, int regionEnd) {
+        if (row == null) return;
+        for (int c = 0; c < row.getLastCellNum(); c++) {
+            if (c >= regionStart && c < regionEnd) continue;
+            Cell cell = row.getCell(c);
+            if (cell == null || cell.getCellType() != CellType.STRING) continue;
+            String text = cell.getStringCellValue();
+            String stripped = stripLoopMarkers(text);
+            if (stripped.equals(text)) continue;
+            prepareWrite(cell);
+            cell.setCellValue(stripped);
+        }
+    }
+
     /**
      * Excel 行循环，与 DOCX 表格同一套规则：行内标记按单行重复；{@code {{#each}}} 与
      * {@code {{/each}}} 各独占一行时是区域循环，区域内可再嵌套（递归渲染）。
@@ -1327,6 +2312,11 @@ public class DocTemplateRenderer {
             if (texts.isEmpty()) return;
             Loop loop = parseLoop(texts.get(0));
             if (loop == null) {
+                // 区域结束行在上面的 span 里被一起吃掉，走不到这里；能走到就说明这个 {{/each}} 是多写的
+                if (isLoopEnd(texts.get(0))) {
+                    throw new IllegalArgumentException("第 " + (index + 1) + " 行的 {{/each}} 没有配对的 "
+                            + "{{#each}}；循环的开始和结束标记必须成对写");
+                }
                 index++;
                 continue;
             }
@@ -1335,7 +2325,8 @@ public class DocTemplateRenderer {
                 int end = matchLoopEnd(texts, 0, texts.size());
                 if (end > 0) span = end + 1;
             }
-            List<PlannedRow> plan = planRows(texts.subList(0, span), 0, span, params);
+            // 传整份 texts 只取前 span 行：这样报错信息里的行号就是工作表里的真实行号
+            List<PlannedRow> plan = planRows(texts, 0, span, params, "行");
             applySheetBlock(sheet, index, span, plan, images, mergeAlign);
             index += plan.size();
         }
@@ -1617,11 +2608,49 @@ public class DocTemplateRenderer {
         while (matcher.find()) {
             String token = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
             checkToken(token);
+            if (isStructuralMarker(token)) {
+                // 整格/整段只有这一个结构标记，说明它本该被行展开、列区展开或段落展开消费掉，
+                // 却没被认出来（缺数组名、关键字拼错、角色写错…）。原样留着只会印一份带花括号的
+                // 文档，且没人知道哪里错了，所以这里直接报错。混在文字里的（正文当例子讲的
+                // {{#each items}}）仍按原文保留。
+                if (FULL_PLACEHOLDER.matcher(text).matches()) {
+                    throw new IllegalArgumentException(residueMessage(matcher.group()));
+                }
+                // {{#each}} / {{/each}} / {{#columns}} 是结构标记，不是占位符。走到这里说明它是
+                // 模板正文里当说明文字写的（该被消费的早被行展开清掉了），原样留着，别抹成空串
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group()));
+                continue;
+            }
             Object value = resolve(token, params);
             matcher.appendReplacement(sb, Matcher.quoteReplacement(stringify(value)));
         }
         matcher.appendTail(sb);
         return sb.toString();
+    }
+
+    /** 「只有标记却没被识别」的报错文案：按标记种类给对应的写法提示。 */
+    private static String residueMessage(String marker) {
+        String lower = marker.toLowerCase(Locale.ROOT);
+        String hint;
+        if (lower.contains("#each")) {
+            hint = "#each 后面要写数组名（如 {{#each items}}），并且要和 {{/each}} 成对；"
+                    + "只写 {{#each}} 不会被当成循环";
+        } else if (lower.contains("#columns")) {
+            hint = "要写成 {{#columns 块编码 角色}}，角色是 header（表头）/ data（数据行）/ span（横向盖住列区），"
+                    + "且必须独占一格";
+        } else if (lower.contains("/each")) {
+            hint = "多写了一个 {{/each}}，或者它的 {{#each}} 没写对（要写数组名）";
+        } else {
+            hint = "明细行循环写 {{#each 数组名}}…{{/each}}，表格动态列写 {{#columns 块编码 header/data/span}}";
+        }
+        return "这一格（或这一段）只有标记 " + marker + "，但它没有被识别成标记：" + hint;
+    }
+
+    /** 结构标记（{@code #each} / {@code /each} / {@code #columns}）不是占位符，取不到值也不该被替换。 */
+    private static boolean isStructuralMarker(String token) {
+        if (token == null) return false;
+        String raw = token.trim();
+        return raw.startsWith("#") || raw.startsWith("/");
     }
 
     /**
@@ -1632,9 +2661,12 @@ public class DocTemplateRenderer {
         if (token == null) return;
         String raw = token.trim();
         if (!raw.startsWith("#")) return;
-        if (raw.toLowerCase(Locale.ROOT).startsWith("#each")) return;
+        String lower = raw.toLowerCase(Locale.ROOT);
+        // #each / #columns 是行级标记，不是占位符：它们由行展开逻辑消费掉，不该在这里报错
+        if (lower.startsWith("#each") || lower.startsWith("#columns")) return;
         throw new IllegalArgumentException("不认识的标记 " + raw + "，明细行循环要写成 {{#each 数组名}}"
-                + "（例如 {{#each user}}），不要漏掉 each");
+                + "（例如 {{#each user}}），不要漏掉 each；表格动态列要写成 {{#columns 块编码 header}}"
+                + " / {{#columns 块编码 data}} / {{#columns 块编码 span}}");
     }
 
     private void collect(String text, Set<String> keys) {
@@ -1694,8 +2726,13 @@ public class DocTemplateRenderer {
     }
 
     /**
-     * 按 {@code a.b.c} 取值，键名大小写不敏感（数据库列名可能是大写，模板里通常小写）。
-     * 返回 {@link Found#present()} 区分「键不存在」与「键存在但值为 null」。
+     * 按 {@code a.b.c} 取值，键名<b>严格区分大小写</b>：模板里的写法要和数据里的字段名完全一致。
+     *
+     * <p>以前会「精确找不到就忽略大小写再找一遍」，看着容错，实际是把拼写错误藏起来了 ——
+     * 数据库列名是大写、模板写小写也能跑通，换库或换 Provider 才炸。现在取不到就是取不到：
+     * 普通占位符按默认值/空串处理，循环变量和 {@code where} 关联键会直接报错并列出可用的键。</p>
+     *
+     * <p>返回 {@link Found#present()} 区分「键不存在」与「键存在但值为 null」。</p>
      */
     private Found lookupLenient(String key, Map<String, Object> params) {
         if (key == null || params == null) return Found.MISSING;
@@ -1704,23 +2741,10 @@ public class DocTemplateRenderer {
         Object current = params;
         for (String part : trimmed.split("\\.")) {
             if (!(current instanceof Map<?, ?> map)) return Found.MISSING;
-            String actual = matchKey(map, part);
-            if (actual == null) return Found.MISSING;
-            current = map.get(actual);
+            if (!map.containsKey(part)) return Found.MISSING;
+            current = map.get(part);
         }
         return new Found(true, current);
-    }
-
-    /** 先精确匹配，再忽略大小写匹配，返回 Map 里真实的键名。 */
-    private String matchKey(Map<?, ?> map, String key) {
-        if (map.containsKey(key)) return key;
-        String lower = key.toLowerCase(Locale.ROOT);
-        for (Object candidate : map.keySet()) {
-            if (candidate != null && String.valueOf(candidate).toLowerCase(Locale.ROOT).equals(lower)) {
-                return String.valueOf(candidate);
-            }
-        }
-        return null;
     }
 
     private String stringify(Object value) {
