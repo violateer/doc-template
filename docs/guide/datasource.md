@@ -58,12 +58,12 @@ doc-template:
 
 - 启动时检测六张表，任意一张缺失就执行对应建表脚本；
 - 建表脚本可以重复执行（表已存在就跳过），**不会删除已有数据**；
-- 支持 MySQL、MariaDB、PostgreSQL、SQL Server 2016+；
+- 支持 MySQL、MariaDB、PostgreSQL、SQL Server 2016+、Oracle 12c+；
 - `doc-template.initialize-schema: false` 可关闭，改由宿主的迁移流程管理。
 
 ## 驱动说明
 
-**Starter 不内置任何数据库驱动**，宿主在自己的依赖里声明即可，`scope` 用 `runtime`，版本交给 Spring Boot BOM 管：
+**Starter 不内置任何数据库驱动**，宿主在自己的依赖里声明即可，`scope` 用 `runtime`，版本交给 Spring Boot BOM 管（Oracle 驱动不在 BOM 里，要自己写）：
 
 ```xml
 <!-- MySQL / MariaDB -->
@@ -84,6 +84,14 @@ doc-template:
 <dependency>
   <groupId>com.microsoft.sqlserver</groupId>
   <artifactId>mssql-jdbc</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+<!-- Oracle -->
+<dependency>
+  <groupId>com.oracle.database.jdbc</groupId>
+  <artifactId>ojdbc11</artifactId>
+  <version>23.26.2.0.0</version>
   <scope>runtime</scope>
 </dependency>
 ```

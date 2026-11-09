@@ -1,8 +1,10 @@
 package io.github.violateer.doctemplate.starter.repository;
 
 import io.github.violateer.doctemplate.starter.db.DocTemplateDialect;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 import javax.sql.DataSource;
 import java.util.ArrayList;
@@ -27,6 +29,9 @@ import java.util.Optional;
  * DOC_TEST_SQLSERVER_URL=jdbc:sqlserver://127.0.0.1:1433;databaseName=doc_template_test;encrypt=false
  * DOC_TEST_SQLSERVER_USERNAME=sa      # 可省略，默认 sa
  * DOC_TEST_SQLSERVER_PASSWORD=        # 可省略，默认空
+ * DOC_TEST_ORACLE_URL=jdbc:oracle:thin:@127.0.0.1:1521/FREEPDB1
+ * DOC_TEST_ORACLE_USERNAME=doc_template   # Oracle 的用户名就是 schema，没有默认值，必须显式配置
+ * DOC_TEST_ORACLE_PASSWORD=
  * </pre>
  */
 final class TestDatabases {
@@ -48,10 +53,12 @@ final class TestDatabases {
 
     /** 当前配置了连接串的测试库；没配的跳过。 */
     static List<Target> configured() {
-        List<Target> targets = new ArrayList<>(3);
+        List<Target> targets = new ArrayList<>(4);
         target(DocTemplateDialect.MYSQL, "DOC_TEST_MYSQL", "root").ifPresent(targets::add);
         target(DocTemplateDialect.POSTGRESQL, "DOC_TEST_PG", "postgres").ifPresent(targets::add);
         target(DocTemplateDialect.SQLSERVER, "DOC_TEST_SQLSERVER", "sa").ifPresent(targets::add);
+        // Oracle 的用户名同时是建表所在的 schema，填错就会建到别人的 schema 里，所以不给默认值
+        target(DocTemplateDialect.ORACLE, "DOC_TEST_ORACLE", null).ifPresent(targets::add);
         return targets;
     }
 
@@ -61,15 +68,37 @@ final class TestDatabases {
     }
 
     /**
+     * 按方言准备好的建表脚本执行器：Oracle 的脚本是 PL/SQL 块，分隔符要用斜杠，其余用分号。
+     */
+    static ResourceDatabasePopulator populator(Target target) {
+        ResourceDatabasePopulator populator =
+                new ResourceDatabasePopulator(new ClassPathResource(target.dialect().schemaScript()));
+        populator.setSeparator(target.dialect().scriptSeparator());
+        return populator;
+    }
+
+    /**
      * 删掉六张表；测试开始与结束各调一次，保证可重复执行。
      *
-     * <p>用 {@code DROP TABLE IF EXISTS}：MySQL / MariaDB、PostgreSQL、SQL Server 2016+ 都认这个写法。</p>
+     * <p>MySQL / MariaDB、PostgreSQL、SQL Server 2016+ 都认 {@code DROP TABLE IF EXISTS}；
+     * Oracle 没有这个写法，先查 {@code user_tables} 再删。</p>
      */
-    static void dropTables(DataSource dataSource) {
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+    static void dropTables(Target target) {
+        JdbcTemplate jdbc = new JdbcTemplate(target.dataSource());
+        boolean oracle = target.dialect() == DocTemplateDialect.ORACLE;
         for (String table : TABLES) {
-            jdbc.execute("DROP TABLE IF EXISTS " + table);
+            if (!oracle) {
+                jdbc.execute("DROP TABLE IF EXISTS " + table);
+            } else if (oracleTableExists(jdbc, table)) {
+                jdbc.execute("DROP TABLE " + table);
+            }
         }
+    }
+
+    private static boolean oracleTableExists(JdbcTemplate jdbc, String table) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM user_tables WHERE table_name = ?",
+                Integer.class, table.toUpperCase(Locale.ROOT));
+        return count != null && count > 0;
     }
 
     private static Optional<Target> target(DocTemplateDialect dialect, String prefix, String defaultUsername) {

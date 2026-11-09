@@ -158,6 +158,6 @@ public class SkuNameConverter implements DocTemplateValueConverter {
 上一个转换器填过的参数不会留在配置里，点到当前已选中的转换器不会清空已填好的值。
 :::
 
-::: tip MySQL / MariaDB / PostgreSQL / SQL Server 之外的宿主
-字典两张表 `doc_template_dict` / `doc_template_dict_item` 跟着 Starter 自动建表；其他数据库需要自己执行建表脚本（`db/schema.sql`、`db/schema-postgresql.sql`、`db/schema-sqlserver.sql` 的写法可作参考）。
+::: tip MySQL / MariaDB / PostgreSQL / SQL Server / Oracle 之外的宿主
+字典两张表 `doc_template_dict` / `doc_template_dict_item` 跟着 Starter 自动建表；其他数据库需要自己执行建表脚本（`db` 目录下那几份的写法可作参考）。
 :::

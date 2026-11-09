@@ -102,8 +102,8 @@
             <scope>test</scope>
         </dependency>
         <!--
-          PostgreSQL / SQL Server 驱动只用于测试（DOC_TEST_PG_URL、DOC_TEST_SQLSERVER_URL）。发布物不带它们：
-          宿主用哪个库就自己加哪个驱动，和 MySQL 之外的其他库同一个规则。
+          PostgreSQL / SQL Server / Oracle 驱动只用于测试（DOC_TEST_PG_URL、DOC_TEST_SQLSERVER_URL、
+          DOC_TEST_ORACLE_URL）。发布物不带它们：宿主用哪个库就自己加哪个驱动，和 MySQL 之外的其他库同一个规则。
         -->
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -113,6 +113,13 @@
         <dependency>
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Oracle 驱动不在 Spring Boot BOM 里，版本只能自己写 -->
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc11</artifactId>
+            <version>23.26.2.0.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

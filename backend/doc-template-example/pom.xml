@@ -60,7 +60,7 @@
         </dependency>
         <!--
           示例宿主的数据库驱动。Starter 不内置任何驱动（驱动是宿主的职责），
-          这个工程把 MySQL、PostgreSQL、SQL Server 都带上，dev / local 两个 profile 换库不用改 pom。
+          这个工程把 MySQL、PostgreSQL、SQL Server、Oracle 都带上，dev / local 两个 profile 换库不用改 pom。
         -->
         <dependency>
             <groupId>com.mysql</groupId>
@@ -75,6 +75,13 @@
         <dependency>
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Oracle 驱动不在 Spring Boot BOM 里，版本只能自己写 -->
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc11</artifactId>
+            <version>23.26.2.0.0</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>

@@ -23,11 +23,12 @@
 spring:
   datasource:
     # 驱动按 URL 自动推断，不用写 driver-class-name：同一个 profile 换库只改 DOC_DB_URL。
-    # 四种库的连接串（把 DOC_DB_URL 设成其中一条即可）：
+    # 五种库的连接串（把 DOC_DB_URL 设成其中一条即可）：
     #   MySQL 8      jdbc:mysql://127.0.0.1:3306/doc_template?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
     #   MariaDB      jdbc:mariadb://127.0.0.1:3306/doc_template?useUnicode=true&characterEncoding=utf8
     #   PostgreSQL   jdbc:postgresql://127.0.0.1:5432/doc_template
     #   SQL Server   jdbc:sqlserver://127.0.0.1:1433;databaseName=doc_template;encrypt=false
+    #   Oracle       jdbc:oracle:thin:@127.0.0.1:1521/FREEPDB1
     #
     # 不想用环境变量、想直接写死，就把下面三行替换成对应库的这一段（只留一段，其余注释掉）：
     #
@@ -46,7 +47,12 @@ spring:
     #   username: sa
     #   password: "YourStrong!Passw0rd"
     #
-    # 四种库的元数据表都由 Starter 自动创建（每种库一份建表脚本），前提是库已建好、
+    #   Oracle 12c+（用户名就是建表所在的 schema）
+    #   url: jdbc:oracle:thin:@127.0.0.1:1521/FREEPDB1
+    #   username: doc_template
+    #   password: doc_template
+    #
+    # 五种库的元数据表都由 Starter 自动创建（每种库一份建表脚本），前提是库已建好、
     # 账号有建表权限；换其他数据库时把 doc-template.initialize-schema 设成 false，自己执行 DDL。
     url: ${DOC_DB_URL}
     username: ${DOC_DB_USERNAME}

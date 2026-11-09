@@ -13,7 +13,7 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 | JDK 17+ | 编译目标 `release=17` |
 | Spring Boot 3.x 或 4.x | Servlet Web 应用；自动装配同时兼容两代 Boot 的包路径，WebFlux 不支持 |
 | 一个 `DataSource` Bean | 任何连接池都行；不配 `doc-template.datasource` 时复用宿主的 |
-| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+ 可自动建表；其他库需自行执行建表 DDL |
+| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+ / Oracle 12c+ 可自动建表；其他库需自行执行建表 DDL |
 
 不需要的东西：不需要任何 ORM（MyBatis / MyBatis-Plus / JPA 用不用、什么版本都不影响）、不需要任何认证框架、不需要权限码或菜单表、不需要前端构建环境、不需要 Office / LibreOffice / WPS。
 
@@ -125,7 +125,7 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 - `GET /api/doc-template/system/converters`：可用的字段值转换器编码（内置 + 宿主注册）
 - `GET /api/doc-template/system/version`：当前运行的 Starter 版本号（`{"version":"0.2.1"}`，读不到时为空）
 
-认证接入见 `integration/README.md`。默认启动时会检测文档模板所需的六张表；若存在缺失，则自动执行对应数据库建表脚本（MySQL / MariaDB / PostgreSQL / SQL Server），不会删除已有数据。
+认证接入见 `integration/README.md`。默认启动时会检测文档模板所需的六张表；若存在缺失，则自动执行对应数据库建表脚本（MySQL / MariaDB / PostgreSQL / SQL Server / Oracle），不会删除已有数据。
 
 ## 模拟生成与文件预览
 
@@ -928,7 +928,7 @@ example **不自带内存库**，必须带 `dev` 或 `local` 启动（不带 pro
 
 | 启动方式 | 数据源 | 文件存储 | 认证 | 用途 |
 | --- | --- | --- | --- | --- |
-| `--spring.profiles.active=dev` | 环境变量 `DOC_DB_*` 指向的库（MySQL / MariaDB、PostgreSQL、SQL Server 都能连） | 环境变量 `DOC_S3_*` 指向的对象存储 | `custom` | 团队/CI 共用，地址与凭据全部走参数 |
+| `--spring.profiles.active=dev` | 环境变量 `DOC_DB_*` 指向的库（MySQL / MariaDB、PostgreSQL、SQL Server、Oracle 都能连） | 环境变量 `DOC_S3_*` 指向的对象存储 | `custom` | 团队/CI 共用，地址与凭据全部走参数 |
 | `--spring.profiles.active=local` | `application-local.yml` 里的真实库 | 同文件的 MinIO | `custom` | 作者本地，地址写死在个人文件里（不进 git） |
 
 两个档位都不需要改 Starter 的代码或配置——差异全部落在 example（宿主）这一侧；想关掉认证加 `--doc-template.auth.mode=none` 即可。
@@ -981,9 +981,17 @@ export DOC_S3_SECRET_KEY=your_secret_key
   <artifactId>mssql-jdbc</artifactId>
   <scope>runtime</scope>
 </dependency>
+
+<!-- Oracle -->
+<dependency>
+  <groupId>com.oracle.database.jdbc</groupId>
+  <artifactId>ojdbc11</artifactId>
+  <version>23.26.2.0.0</version>
+  <scope>runtime</scope>
+</dependency>
 ```
 
-版本交给 Spring Boot BOM 管，不用写。宿主的 `spring.datasource` 里 `driver-class-name` 也可以不写，按 JDBC URL 自动识别；只有模块单独连另一个库（配了 `doc-template.datasource.url`）时才需要在该段里显式写驱动类名。自动建表目前支持 MySQL、MariaDB、PostgreSQL 和 SQL Server 2016+。
+版本交给 Spring Boot BOM 管，不用写（Oracle 驱动不在 BOM 里，要自己写版本）。宿主的 `spring.datasource` 里 `driver-class-name` 也可以不写，按 JDBC URL 自动识别；只有模块单独连另一个库（配了 `doc-template.datasource.url`）时才需要在该段里显式写驱动类名。自动建表目前支持 MySQL、MariaDB、PostgreSQL、SQL Server 2016+ 和 Oracle 12c+。
 
 ## 对外坐标
 

@@ -1,8 +1,6 @@
 package io.github.violateer.doctemplate.starter.repository;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -10,6 +8,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -32,7 +31,7 @@ class DocTemplateSchemaDriftTest {
     void columnSetsAreIdenticalAcrossScripts() throws Exception {
         List<TestDatabases.Target> targets = TestDatabases.configured();
         assumeTrue(targets.size() >= 2,
-                "至少配置两个测试库（DOC_TEST_MYSQL_URL 与 DOC_TEST_PG_URL）才能比对建表脚本");
+                "至少配置两个测试库（见 TestDatabases 里的 DOC_TEST_* 环境变量）才能比对建表脚本");
 
         Map<String, Map<String, Set<String>>> byDialect = new LinkedHashMap<>();
         for (TestDatabases.Target target : targets) {
@@ -61,10 +60,9 @@ class DocTemplateSchemaDriftTest {
 
     /** 在测试库里按脚本建表，读出六张表的列名，再把表删掉。 */
     private static Map<String, Set<String>> readColumns(TestDatabases.Target target) throws SQLException {
-        TestDatabases.dropTables(target.dataSource());
+        TestDatabases.dropTables(target);
         try {
-            new ResourceDatabasePopulator(new ClassPathResource(target.dialect().schemaScript()))
-                    .execute(target.dataSource());
+            TestDatabases.populator(target).execute(target.dataSource());
             Map<String, Set<String>> columns = new LinkedHashMap<>();
             try (Connection connection = target.dataSource().getConnection()) {
                 for (String table : TestDatabases.tables()) {
@@ -76,21 +74,28 @@ class DocTemplateSchemaDriftTest {
             }
             return columns;
         } finally {
-            TestDatabases.dropTables(target.dataSource());
+            TestDatabases.dropTables(target);
         }
     }
 
-    /** 列名统一转小写：MySQL 与 PostgreSQL 对未加引号的标识符大小写处理不同。 */
+    /**
+     * 列名统一转小写：MySQL 与 PostgreSQL 对未加引号的标识符大小写处理不同。
+     *
+     * <p>表名要按原样和全大写各试一次：Oracle 把未加引号的标识符折成大写，
+     * 拿小写表名去问 {@code getColumns} 是查不到的。</p>
+     */
     private static Set<String> columnsOf(Connection connection, String table) throws SQLException {
-        String[][] scopes = {{connection.getCatalog(), connection.getSchema()}, {null, null}};
-        for (String[] scope : scopes) {
-            Set<String> columns = new TreeSet<>();
-            try (ResultSet rs = connection.getMetaData().getColumns(scope[0], scope[1], table, null)) {
-                while (rs.next()) {
-                    columns.add(TestDatabases.normalize(rs.getString("COLUMN_NAME")));
+        for (String candidate : List.of(table, table.toUpperCase(Locale.ROOT))) {
+            String[][] scopes = {{connection.getCatalog(), connection.getSchema()}, {null, null}};
+            for (String[] scope : scopes) {
+                Set<String> columns = new TreeSet<>();
+                try (ResultSet rs = connection.getMetaData().getColumns(scope[0], scope[1], candidate, null)) {
+                    while (rs.next()) {
+                        columns.add(TestDatabases.normalize(rs.getString("COLUMN_NAME")));
+                    }
                 }
+                if (!columns.isEmpty()) return columns;
             }
-            if (!columns.isEmpty()) return columns;
         }
         return Set.of();
     }

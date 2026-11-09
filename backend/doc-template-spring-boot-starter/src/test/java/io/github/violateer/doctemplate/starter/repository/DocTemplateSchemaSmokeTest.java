@@ -10,9 +10,7 @@ import io.github.violateer.doctemplate.starter.entity.DocTemplateGenerateRecordE
 import io.github.violateer.doctemplate.starter.entity.DocTemplateVersionEntity;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 import javax.sql.DataSource;
 import java.time.LocalDateTime;
@@ -42,12 +40,12 @@ class DocTemplateSchemaSmokeTest {
 
     private void roundTrip(TestDatabases.Target target) throws Exception {
         DataSource dataSource = target.dataSource();
-        TestDatabases.dropTables(dataSource);
+        TestDatabases.dropTables(target);
         try {
-            new ResourceDatabasePopulator(new ClassPathResource(target.dialect().schemaScript())).execute(dataSource);
+            TestDatabases.populator(target).execute(dataSource);
             exerciseTemplates(target, dataSource);
         } finally {
-            TestDatabases.dropTables(dataSource);
+            TestDatabases.dropTables(target);
         }
     }
 

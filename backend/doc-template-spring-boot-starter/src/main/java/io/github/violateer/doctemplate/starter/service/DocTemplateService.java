@@ -31,6 +31,11 @@ import java.util.stream.Collectors;
 public class DocTemplateService {
     private static final Logger log = LoggerFactory.getLogger(DocTemplateService.class);
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    /**
+     * 失败说明入库前的长度上限。{@code error_message} 在 Oracle 上是 {@code VARCHAR2(2000 CHAR)}
+     * —— 这一列要参与关键字过滤，CLOB 不能 LIKE，所以只能限长；完整堆栈本来就打在日志里。
+     */
+    private static final int MAX_ERROR_MESSAGE = 2000;
     private final DocTemplateRepository templateRepository;
     private final DocTemplateVersionRepository versionRepository;
     private final DocTemplateDataBlockRepository blockRepository;
@@ -81,6 +86,12 @@ public class DocTemplateService {
             }
         }
         return StrUtil.blankToDefault(ExceptionUtil.getRootCauseMessage(error), error.getClass().getSimpleName());
+    }
+
+    /** 截断到 {@link #MAX_ERROR_MESSAGE}，避免超长说明在 Oracle 上撑爆列宽。 */
+    private static String storableMessage(String message) {
+        if (message == null || message.length() <= MAX_ERROR_MESSAGE) return message;
+        return message.substring(0, MAX_ERROR_MESSAGE);
     }
 
     /** SQL 数据源被宿主关闭后，保存与执行都要拒绝。 */
@@ -546,7 +557,7 @@ public class DocTemplateService {
             e.setErrorMessage(null);
         } catch (Exception ex) {
             e.setStatus("FAILED");
-            e.setErrorMessage(rootMessage(ex));
+            e.setErrorMessage(storableMessage(rootMessage(ex)));
             // 生成失败在页面上只有一行脱敏文字，这里必须留完整堆栈：模板占位符写错、数据块取数失败
             // 都发生在服务端，没有这条日志就只能靠猜（SQL 原文也只在堆栈的 cause 里）
             log.error("生成文档失败：templateId={}（{}），versionId={}，exportType={}，fileType={}",

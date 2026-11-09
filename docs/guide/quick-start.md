@@ -12,7 +12,7 @@
 | Maven | 3.8+ |
 | Spring Boot | 3.x 或 4.x（Servlet Web，WebFlux 不支持） |
 | 一个 `DataSource` Bean | 任何连接池都行，Starter 不建自己的池 |
-| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+（自动建表支持这四种） |
+| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+ / Oracle 12c+（自动建表支持这五种） |
 
 前端源码构建额外需要 Node.js 20+、pnpm 9+，但**使用 Starter 不需要前端环境** —— 管理页的构建产物已经打进 JAR。
 
@@ -33,7 +33,7 @@ Starter 不绑定任何业务框架、认证框架、权限体系，也不要求
 ```
 
 ::: tip 数据库驱动要自己声明
-Starter 不内置任何数据库驱动，用哪个库就加哪个驱动。`scope` 写 `runtime`，版本交给 Spring Boot BOM 管，不用写 `<version>`：
+Starter 不内置任何数据库驱动，用哪个库就加哪个驱动。`scope` 写 `runtime`，版本交给 Spring Boot BOM 管，不用写 `<version>`（Oracle 驱动不在 BOM 里，要自己写）：
 
 ```xml
 <!-- MySQL / MariaDB -->
@@ -54,6 +54,14 @@ Starter 不内置任何数据库驱动，用哪个库就加哪个驱动。`scope
 <dependency>
   <groupId>com.microsoft.sqlserver</groupId>
   <artifactId>mssql-jdbc</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+<!-- Oracle -->
+<dependency>
+  <groupId>com.oracle.database.jdbc</groupId>
+  <artifactId>ojdbc11</artifactId>
+  <version>23.26.2.0.0</version>
   <scope>runtime</scope>
 </dependency>
 ```

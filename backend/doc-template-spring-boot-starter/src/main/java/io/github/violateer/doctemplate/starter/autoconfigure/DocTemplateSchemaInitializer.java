@@ -53,9 +53,12 @@ final class DocTemplateSchemaInitializer {
             boolean missing = REQUIRED_TABLES.stream().anyMatch(table -> !tableExists(metadata, connection, table));
             if (!missing) return new Status(product, version, false, false);
 
-            String script = scriptFor(product);
+            DocTemplateDialect dialect = dialectFor(product);
             log.info("文档模板元数据表缺失，正在自动创建：{}", REQUIRED_TABLES);
-            ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new ClassPathResource(script));
+            ResourceDatabasePopulator populator =
+                    new ResourceDatabasePopulator(new ClassPathResource(dialect.schemaScript()));
+            // Oracle 的脚本是 PL/SQL 块，块内部自带分号，只能按斜杠切；其余方言按分号切
+            populator.setSeparator(dialect.scriptSeparator());
             populator.setContinueOnError(false);
             populator.execute(dataSource);
             return new Status(product, version, true, false);
@@ -65,9 +68,8 @@ final class DocTemplateSchemaInitializer {
     }
 
     /** 建表脚本按数据库类型选；不支持的类型只在真的需要建表时才报错。 */
-    private static String scriptFor(String product) {
+    private static DocTemplateDialect dialectFor(String product) {
         return DocTemplateDialect.fromProductName(product)
-                .map(DocTemplateDialect::schemaScript)
                 .orElseThrow(() -> new IllegalStateException("自动建表不支持该数据库：" + product
                         + "。当前支持 " + DocTemplateDialect.supported()
                         + "。请自行执行对应建表脚本（classpath 下的 db/schema*.sql），"
