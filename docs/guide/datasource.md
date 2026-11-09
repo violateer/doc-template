@@ -57,8 +57,8 @@ doc-template:
 ## 自动建表
 
 - 启动时检测六张表，任意一张缺失就执行对应建表脚本；
-- 脚本用 `CREATE TABLE IF NOT EXISTS`，**不会删除已有数据**；
-- 支持 MySQL、MariaDB、PostgreSQL；
+- 建表脚本可以重复执行（表已存在就跳过），**不会删除已有数据**；
+- 支持 MySQL、MariaDB、PostgreSQL、SQL Server 2016+；
 - `doc-template.initialize-schema: false` 可关闭，改由宿主的迁移流程管理。
 
 ## 驱动说明
@@ -77,6 +77,13 @@ doc-template:
 <dependency>
   <groupId>org.postgresql</groupId>
   <artifactId>postgresql</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+<!-- SQL Server -->
+<dependency>
+  <groupId>com.microsoft.sqlserver</groupId>
+  <artifactId>mssql-jdbc</artifactId>
   <scope>runtime</scope>
 </dependency>
 ```

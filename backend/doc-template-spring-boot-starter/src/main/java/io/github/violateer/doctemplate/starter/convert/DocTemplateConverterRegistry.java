@@ -88,12 +88,11 @@ public class DocTemplateConverterRegistry {
             if (converter == null) continue;
             String code = StrUtil.blankToDefault(converter.code(), "").trim();
             if (code.isEmpty()) {
-                throw new IllegalStateException("DocTemplateValueConverter code must not be blank: "
-                        + converter.getClass().getName());
+                throw new IllegalStateException("转换器编码不能为空：" + converter.getClass().getName());
             }
             DocTemplateValueConverter existing = target.get(code);
             if (existing != null && !override) {
-                throw new IllegalStateException("Duplicate DocTemplateValueConverter code: " + code);
+                throw new IllegalStateException("转换器编码重复：" + code);
             }
             if (existing != null && existing != converter) {
                 log.info("转换器「{}」由 {} 覆盖（原实现 {}）", code,

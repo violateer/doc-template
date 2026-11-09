@@ -1,9 +1,9 @@
-/** Formats a backend timestamp as `yyyy-MM-dd HH:mm:ss`. */
+/** 把后端返回的时间戳格式化成 `yyyy-MM-dd HH:mm:ss`。 */
 export function formatTime(value: string | number[] | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—';
   const pad = (input: number, length = 2) => String(input).padStart(length, '0');
-  // Defensive: Jackson may serialise LocalDateTime as [2026,10,27,11,23,9] when timestamps
-  // are written as arrays. Normalise that shape as well so the table never shows raw numbers.
+  // 防御性处理：Jackson 把时间写成数组时，LocalDateTime 会是 [2026,10,27,11,23,9] 这种形状，
+  // 这里一并归一化，表格里就不会出现一串裸数字。
   if (Array.isArray(value)) {
     const [year, month, day, hour = 0, minute = 0, second = 0] = value;
     return `${pad(year, 4)}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;

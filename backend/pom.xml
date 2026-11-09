@@ -8,8 +8,8 @@
     <packaging>pom</packaging>
 
     <name>Vio Doc Template</name>
-    <description>Spring Boot Starter for document template rendering: template and version management, data
-        blocks, generation records, PDF export, pluggable authentication and a built-in admin UI.
+    <description>文档模板渲染的 Spring Boot Starter：模板与版本管理、数据块、生成记录、PDF 导出、
+        可插拔认证，以及内嵌的管理页。
     </description>
     <url>https://violateer.github.io/doc-template/</url>
 

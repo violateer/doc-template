@@ -50,7 +50,7 @@ POST /api/doc-template/templates/{id}/generate
 
 ## 数据表
 
-启动时检测六张表，缺失则执行 `CREATE TABLE IF NOT EXISTS`（MySQL / MariaDB / PostgreSQL），**不会删除已有数据**。
+启动时检测六张表，缺失则执行对应库的建表脚本（MySQL / MariaDB / PostgreSQL / SQL Server），脚本可重复执行，**不会删除已有数据**。
 
 | 表 | 关键字段 |
 | --- | --- |

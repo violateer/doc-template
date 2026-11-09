@@ -43,7 +43,7 @@
 
 ### 关于左侧栏
 
-页面默认带左侧栏（品牌、模板管理 / 生成记录 / 数据字典菜单、页脚、构建时间）。**直接嵌进宿主的内容区会出现两条导航**——宿主的菜单一条、这里的左侧栏一条，所以嵌入时应当传 `layout=bare`：
+页面默认带左侧栏（品牌、模板管理 / 生成记录 / 数据字典菜单、页脚、Starter 版本号）。**直接嵌进宿主的内容区会出现两条导航**——宿主的菜单一条、这里的左侧栏一条，所以嵌入时应当传 `layout=bare`：
 
 - `layout=bare`：**左侧栏和顶栏都不渲染**——没有导航，也没有标题，页面上只剩内容区。宿主既然已经嵌在内容区里，标题和导航都该由宿主提供。切页面由宿主的菜单负责——直接改 iframe 的 hash 地址即可：
 
@@ -79,12 +79,6 @@ pnpm --filter doc-template-frontend-ui build
 cd ../backend
 mvn clean package
 ```
-
-::: tip 排查「改完前端没变化」
-完整布局下侧边栏底部会显示「构建 yyyy-MM-dd HH:mm:ss」，这是 `vite.config.ts` 用 `define` 注入的构建时刻。没变就说明浏览器加载的还是旧包 —— 需要重新 `vite build` 并重新打包重启。注意 `mvn spring-boot:run` 用的是 `target/classes`，只重启不重新打包同样不会更新。
-
-`layout=bare` 没有侧栏和顶栏，构建时间戳输出到控制台：`[doc-template] build yyyy-MM-dd HH:mm:ss`。
-:::
 
 Starter 里只放构建产物（`index.html` + `assets/`），没有手写的静态兜底页；不跑前端构建就拿不到页面。
 

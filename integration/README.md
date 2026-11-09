@@ -9,7 +9,7 @@ Starter 与任何业务框架、认证框架、权限体系都无关。只要宿
 | JDK 17+ | 编译目标 `release=17` |
 | Spring Boot 3.x / 4.x | Servlet Web 应用；自动装配同时兼容两代 Boot 的包路径，WebFlux 不支持 |
 | 一个 `DataSource` Bean | 任何连接池都行，Starter 不建自己的池（除非配了 `doc-template.datasource.url`） |
-| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ 可自动建表；其他库需自行执行建表 DDL |
+| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+ 可自动建表；其他库需自行执行建表 DDL |
 
 不需要的东西：不需要任何 ORM、不需要任何认证框架、不需要权限码、不需要前端构建环境、不需要 Office / LibreOffice。
 

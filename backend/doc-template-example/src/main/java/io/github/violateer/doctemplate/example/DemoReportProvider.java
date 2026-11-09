@@ -8,6 +8,6 @@ import java.util.Map;
 public class DemoReportProvider implements DocumentDataProvider {
     @Override public String getCode() { return "demoReport"; }
     @Override public Object execute(Map<String, Object> params) {
-        return Map.of("reportNo", "DEMO-001", "title", "Example report", "requestedId", params.getOrDefault("id", "not-provided"));
+        return Map.of("reportNo", "DEMO-001", "title", "示例报表", "requestedId", params.getOrDefault("id", "未提供"));
     }
 }

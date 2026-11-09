@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, ref } from 'vue';
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import {
   NConfigProvider,
@@ -15,7 +15,7 @@ import {
 import type { MenuOption } from 'naive-ui';
 import { DocumentTextOutline, LibraryOutline, TimeOutline } from '@vicons/ionicons5';
 import { themeOverrides } from './theme';
-import { layoutMode } from './api';
+import { fetchStarterVersion, layoutMode } from './api';
 
 const route = useRoute();
 const router = useRouter();
@@ -36,7 +36,7 @@ const compactMenuOptions: MenuOption[] = menuOptions.map((option) => ({ label: o
 const pageTitle = computed(() => (route.meta.title as string) ?? '模板管理');
 const pageDesc = computed(() => (route.meta.desc as string) ?? '');
 const activeKey = computed(() => route.path);
-// 由 vite.config.ts 注入，页面上直接可见，避免误以为改动没生效（其实是加载了旧构建产物）
+// 由 vite.config.ts 注入，只在控制台打印，用来确认浏览器加载的是新构建产物（排查「改了没变化」）
 const buildTime = __BUILD_TIME__;
 
 /**
@@ -46,8 +46,20 @@ const buildTime = __BUILD_TIME__;
  * 直接访问 /doc-template/ 时保持 `full`，左侧栏和顶栏照旧。
  */
 const bare = layoutMode === 'bare';
-// bare 模式下顶栏整条都不渲染，构建时间戳没地方显示，改从控制台看（排查「改了没变化」用）
-if (bare) console.info(`[doc-template] build ${buildTime}`);
+// 构建时刻只在控制台打印（页面上不再显示），排查「改了没变化」时看这一行
+console.info(`[doc-template] build ${buildTime}`);
+
+/**
+ * 左下角展示的版本号取自后端（也就是当前真正对接的那个 Starter），不是前端自己的版本：
+ * 页面是打进 jar 一起发的，写死在前端没有意义。取不到（老版本没有这个接口）就只显示「Starter」。
+ */
+const starterVersion = ref('');
+const starterLabel = computed(() => (starterVersion.value ? `Starter v${starterVersion.value}` : 'Starter'));
+onMounted(async () => {
+  // bare 模式没有左侧栏，不用为看不见的地方多发一次请求
+  if (bare) return;
+  starterVersion.value = await fetchStarterVersion();
+});
 
 /**
  * 窄屏（< 860px）时 `style.css` 会把左侧栏 `display: none` 掉，如果不管，页面就成了
@@ -103,10 +115,9 @@ const showTopbarMenu = computed(() => !bare && narrow.value);
                 @update:value="(key: string) => router.push(key)"
               />
               <div class="sider-footer">
-                <NTag size="small" :bordered="false" type="info">Starter</NTag>
-                <span>Spring Boot 3 · Naive UI</span>
+                <NTag size="small" :bordered="false" type="info">{{ starterLabel }}</NTag>
               </div>
-              <div class="sider-build">构建 {{ buildTime }}</div>
+              <div class="sider-meta">Spring Boot 3 · Naive UI</div>
             </aside>
 
             <main class="main">

@@ -12,7 +12,7 @@
 | Maven | 3.8+ |
 | Spring Boot | 3.x 或 4.x（Servlet Web，WebFlux 不支持） |
 | 一个 `DataSource` Bean | 任何连接池都行，Starter 不建自己的池 |
-| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+（自动建表支持这三种） |
+| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+（自动建表支持这四种） |
 
 前端源码构建额外需要 Node.js 20+、pnpm 9+，但**使用 Starter 不需要前端环境** —— 管理页的构建产物已经打进 JAR。
 
@@ -47,6 +47,13 @@ Starter 不内置任何数据库驱动，用哪个库就加哪个驱动。`scope
 <dependency>
   <groupId>org.postgresql</groupId>
   <artifactId>postgresql</artifactId>
+  <scope>runtime</scope>
+</dependency>
+
+<!-- SQL Server -->
+<dependency>
+  <groupId>com.microsoft.sqlserver</groupId>
+  <artifactId>mssql-jdbc</artifactId>
   <scope>runtime</scope>
 </dependency>
 ```

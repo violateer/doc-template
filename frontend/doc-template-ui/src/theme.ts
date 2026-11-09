@@ -1,6 +1,6 @@
 import type { GlobalThemeOverrides } from 'naive-ui';
 
-/** Shared visual tokens so every page looks consistent. */
+/** 全站共用的视觉变量，保证每个页面看起来是一套东西。 */
 export const themeOverrides: GlobalThemeOverrides = {
   common: {
     primaryColor: '#2f6fed',
@@ -63,7 +63,7 @@ export const themeOverrides: GlobalThemeOverrides = {
   Layout: { siderColor: '#ffffff', headerColor: '#ffffff' }
 };
 
-/** Status → tag styling shared by template and record tables. */
+/** 状态 → 标签样式，模板表与生成记录表共用。 */
 export function statusMeta(status: string): { type: 'success' | 'error' | 'warning' | 'default'; label: string } {
   switch (status) {
     case 'ENABLED':

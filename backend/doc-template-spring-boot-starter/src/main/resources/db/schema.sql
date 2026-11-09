@@ -1,4 +1,4 @@
--- MySQL 8+ schema. Apply through your database migration process.
+-- MySQL 8+ 建表脚本。交给宿主的数据库迁移流程执行，或让 Starter 启动时自动建表。
 CREATE TABLE IF NOT EXISTS doc_template (
  id BIGINT AUTO_INCREMENT PRIMARY KEY, template_code VARCHAR(100) NOT NULL UNIQUE, template_name VARCHAR(200) NOT NULL,
  file_type VARCHAR(20) NOT NULL, export_type VARCHAR(20) NOT NULL DEFAULT 'ORIGINAL', current_version_id BIGINT NULL,

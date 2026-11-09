@@ -11,13 +11,12 @@ export interface RowAction {
 }
 
 /**
- * Renders a consistent row action group: text buttons in distinct colours separated by a
- * thin vertical divider, so dense tables stay readable and never fall back to black text.
+ * 渲染一组统一风格的行内操作按钮：彩色文字按钮，中间用细竖线分隔，
+ * 表格再密也不会糊成一片黑字。
  *
- * A plain flex container is used instead of `NSpace` on purpose: `NSpace` injects its own
- * wrapper element plus per-item margins, which made the group wider than the column and got
- * clipped inside fixed columns. All spacing here comes from the single `gap` value in
- * `.row-actions`, so the rendered width stays predictable.
+ * 这里刻意用普通 flex 容器而不用 `NSpace`：`NSpace` 会自带一层包裹元素和逐项外边距，
+ * 结果整组比列还宽，在固定列里被裁掉。这里的间距全部来自 `.row-actions` 里的
+ * `gap` 一个值，渲染宽度可预期。
  */
 export function rowActions(actions: RowAction[]) {
   const nodes: any[] = [];

@@ -96,7 +96,7 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
       const body = await response.json();
       detail = body.msg ?? body.message ?? detail;
     } catch {
-      /* keep the status text */
+      /* 拿不到响应体时保留状态码文案 */
     }
     if (response.status === 401) handleUnauthorized();
     throw new Error(detail);
@@ -110,10 +110,23 @@ export async function api<T = any>(path: string, init: RequestInit = {}): Promis
   return (await response.json()) as T;
 }
 
-/** Fetches a binary endpoint (preview / download) with the same auth headers as the JSON API. */
+/** 取二进制接口（预览 / 下载），鉴权头与 JSON 接口一致。 */
 export async function apiBlob(path: string): Promise<Blob> {
   const response = await request(path);
   return response.blob();
+}
+
+/**
+ * 当前运行的后端（Starter）版本号，显示在左侧栏底部。
+ * 老版本 Starter 没有这个接口，取不到时返回空串，页面只显示「Starter」。
+ */
+export async function fetchStarterVersion(): Promise<string> {
+  try {
+    const data = await api<{ version?: string | null }>('/system/version');
+    return (data?.version ?? '').trim();
+  } catch {
+    return '';
+  }
 }
 
 export function uploadTemplate(id: number | string, file: File) {

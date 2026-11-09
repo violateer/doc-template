@@ -62,8 +62,8 @@ public class DocTemplateAutoConfiguration {
     public DocumentProviderRegistry documentProviderRegistry(ApplicationContext context) {
         Map<String, DocumentDataProvider> providers = new TreeMap<>();
         context.getBeansOfType(DocumentDataProvider.class).values().forEach(p -> {
-            if (p.getCode() == null || p.getCode().isBlank()) throw new IllegalStateException("DocumentDataProvider code must not be blank");
-            if (providers.putIfAbsent(p.getCode(), p) != null) throw new IllegalStateException("Duplicate DocumentDataProvider code: " + p.getCode());
+            if (p.getCode() == null || p.getCode().isBlank()) throw new IllegalStateException("DocumentDataProvider 的编码不能为空");
+            if (providers.putIfAbsent(p.getCode(), p) != null) throw new IllegalStateException("DocumentDataProvider 编码重复：" + p.getCode());
         });
         return new DocumentProviderRegistry(providers);
     }
@@ -128,7 +128,7 @@ public class DocTemplateAutoConfiguration {
     }
 
     /**
-     * 数据库方言（MySQL / MariaDB、PostgreSQL）。
+     * 数据库方言（MySQL / MariaDB、PostgreSQL、SQL Server）。
      *
      * <p>第一次拼 SQL 时才连库读一次产品名并缓存，所以关掉自动建表、自己执行过 DDL 的宿主
      * 不会因为启动阶段识别数据库而失败。</p>
@@ -198,7 +198,7 @@ public class DocTemplateAutoConfiguration {
     public record DocumentProviderRegistry(Map<String, DocumentDataProvider> providers) {
         public Object execute(String code, Map<String, Object> params) {
             DocumentDataProvider provider = providers.get(code);
-            if (provider == null) throw new IllegalArgumentException("Unknown document data provider: " + code);
+            if (provider == null) throw new IllegalArgumentException("未知的数据源提供者：" + code);
             // 不能用 Map.copyOf：参数映射里 $request.xxx 取不到时值是 null，copyOf 会直接 NPE
             return provider.execute(params == null ? Map.of() : new LinkedHashMap<>(params));
         }

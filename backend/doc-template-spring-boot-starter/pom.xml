@@ -9,8 +9,8 @@
     <artifactId>doc-template-spring-boot-starter</artifactId>
 
     <name>Vio Doc Template :: Spring Boot Starter</name>
-    <description>Template and version management, data blocks, generation records, PDF export, pluggable
-        authentication and a built-in admin UI, auto-configured for Spring Boot 3 and 4.
+    <description>模板与版本管理、数据块、生成记录、PDF 导出、可插拔认证与内嵌管理页，
+        同时兼容 Spring Boot 3 与 4 的自动装配。
     </description>
 
     <dependencies>
@@ -102,12 +102,17 @@
             <scope>test</scope>
         </dependency>
         <!--
-          PostgreSQL 驱动只用于测试（DOC_TEST_PG_URL）。发布物不带它：
-          宿主用 PostgreSQL 时自己加驱动，和 MySQL 之外的其他库同一个规则。
+          PostgreSQL / SQL Server 驱动只用于测试（DOC_TEST_PG_URL、DOC_TEST_SQLSERVER_URL）。发布物不带它们：
+          宿主用哪个库就自己加哪个驱动，和 MySQL 之外的其他库同一个规则。
         -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.microsoft.sqlserver</groupId>
+            <artifactId>mssql-jdbc</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

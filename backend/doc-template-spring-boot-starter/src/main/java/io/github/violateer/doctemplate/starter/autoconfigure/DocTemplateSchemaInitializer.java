@@ -15,7 +15,7 @@ import java.util.Locale;
 /**
  * 元数据表初始化：启动时检测 doc_template 系列表，缺失就按数据库类型执行建表脚本。
  *
- * <p>{@code CREATE TABLE IF NOT EXISTS} 让这段逻辑可以每次启动重复执行，也能修复只建了一半的库。
+ * <p>建表脚本本身是幂等的（表已存在就跳过），所以这段逻辑可以每次启动重复执行，也能修复只建了一半的库。
  * 关闭 {@code doc-template.initialize-schema} 时整段跳过，连数据库连接都不会碰。</p>
  */
 final class DocTemplateSchemaInitializer {
@@ -45,7 +45,7 @@ final class DocTemplateSchemaInitializer {
     Status initialize() {
         if (!properties.isInitializeSchema()) return Status.notRequested();
         DataSource dataSource = dataSourceResolver.moduleDataSource();
-        if (dataSource == null) throw new IllegalStateException("Doc Template datasource is not configured");
+        if (dataSource == null) throw new IllegalStateException("文档模板的数据源尚未配置");
         try (Connection connection = dataSource.getConnection()) {
             DatabaseMetaData metadata = connection.getMetaData();
             String product = metadata.getDatabaseProductName();
@@ -60,7 +60,7 @@ final class DocTemplateSchemaInitializer {
             populator.execute(dataSource);
             return new Status(product, version, true, false);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to initialize Doc Template database schema", e);
+            throw new IllegalStateException("文档模板元数据表初始化失败", e);
         }
     }
 
@@ -68,10 +68,9 @@ final class DocTemplateSchemaInitializer {
     private static String scriptFor(String product) {
         return DocTemplateDialect.fromProductName(product)
                 .map(DocTemplateDialect::schemaScript)
-                .orElseThrow(() -> new IllegalStateException("Automatic Doc Template schema initialization"
-                        + " does not support database: " + product + ". Supported databases: "
-                        + DocTemplateDialect.supported()
-                        + ". 请自行执行对应建表脚本（见 db/schema.sql、db/schema-postgresql.sql），"
+                .orElseThrow(() -> new IllegalStateException("自动建表不支持该数据库：" + product
+                        + "。当前支持 " + DocTemplateDialect.supported()
+                        + "。请自行执行对应建表脚本（classpath 下的 db/schema*.sql），"
                         + "或把 doc-template.initialize-schema 设为 false。"));
     }
 

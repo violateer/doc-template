@@ -3,17 +3,16 @@ package io.github.violateer.doctemplate.starter.autoconfigure;
 import io.github.violateer.doctemplate.starter.auth.AuthMode;
 import io.github.violateer.doctemplate.starter.auth.DocTemplateGuard;
 import io.github.violateer.doctemplate.starter.service.DocTemplateFileStorage;
+import io.github.violateer.doctemplate.starter.support.DocTemplateVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.ApplicationContext;
 
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Properties;
 
 /**
  * 启动横幅与配置摘要。
@@ -154,21 +153,9 @@ final class DocTemplateStartupReport implements SmartInitializingSingleton {
     }
 
     /**
-     * <p>版本号取自构建期填充的 {@code META-INF/doc-template.properties}，取不到就省略版本。</p>
-     *
-     * <p>不读 {@code META-INF/maven/<groupId>/<artifactId>/pom.properties}：那条路径把 groupId 写死了，
-     * 换一次发布坐标横幅就会静默丢掉版本。</p>
+     * <p>版本号与「管理页左下角显示的版本」同一个来源，见 {@link DocTemplateVersion}。</p>
      */
     private static String version() {
-        try (InputStream in = DocTemplateStartupReport.class.getResourceAsStream(
-                "/META-INF/doc-template.properties")) {
-            if (in == null) return null;
-            Properties pom = new Properties();
-            pom.load(in);
-            String value = pom.getProperty("version");
-            return value == null || value.isBlank() ? null : value.trim();
-        } catch (Exception ignored) {
-            return null;
-        }
+        return DocTemplateVersion.current();
     }
 }

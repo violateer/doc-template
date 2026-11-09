@@ -24,6 +24,9 @@ import java.util.Optional;
  * DOC_TEST_PG_URL=jdbc:postgresql://127.0.0.1:5432/doc_template_test
  * DOC_TEST_PG_USERNAME=postgres       # 可省略，默认 postgres
  * DOC_TEST_PG_PASSWORD=               # 可省略，默认空
+ * DOC_TEST_SQLSERVER_URL=jdbc:sqlserver://127.0.0.1:1433;databaseName=doc_template_test;encrypt=false
+ * DOC_TEST_SQLSERVER_USERNAME=sa      # 可省略，默认 sa
+ * DOC_TEST_SQLSERVER_PASSWORD=        # 可省略，默认空
  * </pre>
  */
 final class TestDatabases {
@@ -45,9 +48,10 @@ final class TestDatabases {
 
     /** 当前配置了连接串的测试库；没配的跳过。 */
     static List<Target> configured() {
-        List<Target> targets = new ArrayList<>(2);
+        List<Target> targets = new ArrayList<>(3);
         target(DocTemplateDialect.MYSQL, "DOC_TEST_MYSQL", "root").ifPresent(targets::add);
         target(DocTemplateDialect.POSTGRESQL, "DOC_TEST_PG", "postgres").ifPresent(targets::add);
+        target(DocTemplateDialect.SQLSERVER, "DOC_TEST_SQLSERVER", "sa").ifPresent(targets::add);
         return targets;
     }
 
@@ -56,7 +60,11 @@ final class TestDatabases {
         return TABLES;
     }
 
-    /** 删掉六张表；测试开始与结束各调一次，保证可重复执行。 */
+    /**
+     * 删掉六张表；测试开始与结束各调一次，保证可重复执行。
+     *
+     * <p>用 {@code DROP TABLE IF EXISTS}：MySQL / MariaDB、PostgreSQL、SQL Server 2016+ 都认这个写法。</p>
+     */
     static void dropTables(DataSource dataSource) {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         for (String table : TABLES) {

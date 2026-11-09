@@ -368,7 +368,7 @@ function parseDemoSql(filePath) {
   return { sqlFile: name, template, blocks, dicts: [...dicts.values()], file };
 }
 
-// --------------------------------------------------------------------------- HTTP
+// --------------------------------------------------------------------------- HTTP 请求
 
 /** fetch 失败时原始错误只有一句「fetch failed」，把底层原因（拒绝连接 / DNS）带出来。 */
 function describeFetchError(error, target) {

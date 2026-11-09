@@ -19,7 +19,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Serves the embedded management UI from the starter jar.
+ * 从 Starter 的 jar 里提供内嵌管理页。
  *
  * <p>配了 {@code doc-template.auth.login-page} 且当前未登录时，页面请求会被 302 到该地址；
  * 静态资源（js / css / 图片）不跳转，否则登录页自己的脚本都加载不出来。同时在返回的

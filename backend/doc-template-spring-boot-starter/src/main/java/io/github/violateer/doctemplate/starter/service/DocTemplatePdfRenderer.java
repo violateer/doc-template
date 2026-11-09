@@ -27,13 +27,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Converts rendered DOCX/XLSX files to PDF with <a href="https://github.com/mini-software/MiniPdf">MiniPdf</a>.
+ * 用 <a href="https://github.com/mini-software/MiniPdf">MiniPdf</a> 把渲染好的 DOCX / XLSX 转成 PDF。
  *
- * <p>MiniPdf is a pure-Java, Apache-2.0 licensed converter: it renders the OOXML model itself and
- * writes the PDF through PDFBox, so no Microsoft Office, LibreOffice or WPS installation is needed
- * at runtime. A CJK capable font is registered once per process (auto-detected from the host, or
- * supplied through {@code doc-template.pdf-font}) because the PDF standard fonts cannot render
- * Chinese characters.</p>
+ * <p>MiniPdf 是纯 Java、Apache-2.0 协议的转换器：它自己解析 OOXML 模型，再通过 PDFBox 写 PDF，
+ * 所以运行期不需要装 Microsoft Office、LibreOffice 或 WPS。PDF 标准字体渲染不了中文，
+ * 因此每个进程启动时注册一次中文字体（从操作系统自动探测，或用 {@code doc-template.pdf-font} 指定）。</p>
  */
 public class DocTemplatePdfRenderer {
 
@@ -43,7 +41,7 @@ public class DocTemplatePdfRenderer {
     private static final Pattern UNIVERSAL_MEASURE =
             Pattern.compile("(-?\\d+(?:\\.\\d+)?)\\s*(mm|cm|in|pt|pc|pi)");
 
-    /** Fonts that cover Chinese text; the first readable candidate is registered with MiniPdf. */
+    /** 能覆盖中文的字体；按顺序取第一个读得到的注册给 MiniPdf。 */
     private static final String[] FONT_CANDIDATES = {
             "C:/Windows/Fonts/simhei.ttf",
             "C:/Windows/Fonts/Deng.ttf",
@@ -69,16 +67,16 @@ public class DocTemplatePdfRenderer {
     }
 
     /**
-     * Renders the given DOCX/XLSX bytes into PDF bytes. The real format is detected from the
-     * content (MiniPdf does the same); {@code fileType} is only a fallback when detection fails.
+     * 把 DOCX / XLSX 字节转成 PDF 字节。真实格式按文件内容识别（MiniPdf 也是这么做的），
+     * {@code fileType} 只在识别不出来时兜底。
      */
     public byte[] render(byte[] source, String fileType) {
         if (ArrayUtil.isEmpty(source)) {
             throw new IllegalArgumentException("PDF 转换失败：源文件内容为空");
         }
         registerFontIfNeeded();
-        // MiniPdf keeps process-wide font state, so conversions are serialised to stay safe
-        // under concurrent requests. PDF export is a small fraction of the overall workload.
+        // MiniPdf 的字体状态是进程级的，这里串行转换，避免并发请求互相踩。
+        // PDF 导出只占整体工作量的一小部分，串行的代价可以接受。
         synchronized (lock) {
             try {
                 OfficeFormat format = detectFormat(source, fileType);
@@ -111,18 +109,14 @@ public class DocTemplatePdfRenderer {
     }
 
     /**
-     * Renders a DOCX through MiniPdf's structured renderer, bypassing a hidden shortcut in
-     * {@code MiniPdf.convertBytesToPdf}.
+     * 直接调 MiniPdf 的结构化渲染器，绕过 {@code MiniPdf.convertBytesToPdf} 里的一个隐藏捷径。
      *
-     * <p>MiniPdf 0.4.1 decides between two very different DOCX pipelines: the structured one
-     * (POI + PDFBox, keeps font size / bold / alignment / colours / tables) and a plain-text
-     * fallback that prints every paragraph at a fixed 11pt, left aligned, without any formatting.
-     * The switch is a table count — a document without a single table always takes the plain
-     * fallback, so a heading-only template comes out of the PDF as unstyled text. Calling the
-     * structured renderer directly keeps the styling for such documents.</p>
+     * <p>MiniPdf 0.4.1 对 DOCX 有两套差别很大的管线：结构化的一套（POI + PDFBox，保留字号、
+     * 加粗、对齐、颜色、表格），以及纯文本兜底的一套（所有段落固定 11 磅、左对齐、不带任何格式）。
+     * 两者之间的切换条件只是「表格数量」—— 一个表格都没有的文档一定走纯文本兜底，于是只有标题的
+     * 模板导出后成了没有样式的文字。对这类文档直接调结构化渲染器，样式就能保住。</p>
      *
-     * @return the PDF bytes, or {@code null} when the internal entry point is unavailable and the
-     *         caller should fall back to the public API
+     * @return PDF 字节；内部入口不可用时返回 {@code null}，由调用方退回公开 API
      */
     private byte[] renderStructuredDocx(byte[] source) {
         Method renderer = StructuredDocxRenderer.METHOD;
@@ -155,11 +149,11 @@ public class DocTemplatePdfRenderer {
     }
 
     /**
-     * Converts one {@code pgSz} attribute into points.
+     * 把一个 {@code pgSz} 属性换算成磅。
      *
-     * <p>{@code w}/{@code h} are typed as {@code ST_TwipsMeasure}, a union of a plain twips count
-     * and a universal measure such as {@code 21cm}; the POI schema therefore exposes them as
-     * {@link Object}, not as a number. Integers are twips (1/20 pt), strings carry a unit.</p>
+     * <p>{@code w} / {@code h} 的类型是 {@code ST_TwipsMeasure}：既可以是一个纯 twips 数值，
+     * 也可以是带单位的通用度量（例如 {@code 21cm}），所以 POI 的 schema 里它们是
+     * {@link Object} 而不是数字。整数按 twips 处理（1/20 磅），字符串自带单位。</p>
      */
     private static float pointsOf(Object measure) {
         if (measure instanceof Number number) {
@@ -196,12 +190,11 @@ public class DocTemplatePdfRenderer {
     }
 
     /**
-     * Removes worksheets that carry no content, so they do not turn into blank PDF pages.
+     * 去掉完全没有内容的 sheet，免得它们在 PDF 里变成空白页。
      *
-     * <p>A sheet counts as blank when it has no cell value, no merged region and no drawing.
-     * At least one sheet is always kept; the rest of the workbook is handed to MiniPdf unchanged.
-     * Any failure here falls back to the original bytes — dropping blank pages is cosmetic and
-     * must never break the export.</p>
+     * <p>没有单元格值、没有合并区域、也没有图形的 sheet 才算空。至少保留一个 sheet，
+     * 其余内容原样交给 MiniPdf。这里出任何问题都退回原始字节 —— 去空白页只是排版优化，
+     * 不能因此让导出失败。</p>
      */
     private static byte[] dropBlankSheets(byte[] source) {
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(source))) {
@@ -235,7 +228,7 @@ public class DocTemplatePdfRenderer {
         return true;
     }
 
-    /** Name of the font registered with MiniPdf, {@code null} when none was found. */
+    /** 注册给 MiniPdf 的字体名；一个都没找到时为 {@code null}。 */
     public String registeredFont() {
         return registeredFont;
     }
@@ -252,7 +245,7 @@ public class DocTemplatePdfRenderer {
                     registeredFont = name;
                 }
             } catch (Exception ignored) {
-                // Conversion still runs with the PDF standard fonts; Latin text remains readable.
+                // 注册失败也照常转换，只是退回 PDF 标准字体：中文会缺字，英文仍能看。
             } finally {
                 fontRegistered = true;
             }

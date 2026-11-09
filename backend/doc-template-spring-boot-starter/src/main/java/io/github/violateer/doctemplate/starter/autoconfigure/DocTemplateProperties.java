@@ -11,9 +11,9 @@ public class DocTemplateProperties {
     private boolean enabled = true;
     private String basePath = "./data/doc-template";
     private boolean initializeSchema = true;
-    /** Optional TrueType font used for PDF export; auto-detected from the OS when blank. */
+    /** PDF 导出用的 TrueType 字体文件；留空则从操作系统自动探测。 */
     private String pdfFont;
-    /** Family name reported to the PDF engine; defaults to the font file name. */
+    /** 注册给 PDF 引擎的字体族名；留空则用字体文件名。 */
     private String pdfFontName;
     private final Auth auth = new Auth();
     private final Datasource datasource = new Datasource();

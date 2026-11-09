@@ -22,8 +22,8 @@ import java.util.regex.Pattern;
 /**
  * 数据字典：字典主表（编码 + 名称）+ 字典项子表（值 → 显示名），供 {@code dict} 转换器使用。
  *
- * <p>两张表跟着 Starter 自动建表，宿主不需要额外配置；其他数据库的宿主按
- * {@code db/schema.sql}（MySQL / MariaDB）或 {@code db/schema-postgresql.sql} 自行执行 DDL。</p>
+ * <p>两张表跟着 Starter 自动建表，宿主不需要额外配置；其他数据库的宿主按 {@code db/} 下对应库的
+ * 建表脚本（{@code schema.sql} / {@code schema-postgresql.sql} / {@code schema-sqlserver.sql}）自行执行 DDL。</p>
  *
  * <h2>为什么要做线程内缓存</h2>
  * <p>一张明细表几百行、每行都要转同一个状态字段，逐行查库就是几百次 {@code SELECT}。

@@ -16,8 +16,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 /**
- * Returns readable JSON errors for the doc-template API so the embedded UI can show the real
- * cause instead of a generic 500 page. Only controllers under this package are affected.
+ * 把文档模板接口的异常转成能读的 JSON，内嵌管理页才能显示真实原因，而不是一个笼统的 500 页面。
+ * 只对本包下的 controller 生效。
  */
 @RestControllerAdvice(basePackages = "io.github.violateer.doctemplate.starter.controller")
 public class DocTemplateExceptionHandler {
@@ -50,13 +50,13 @@ public class DocTemplateExceptionHandler {
      */
     @ExceptionHandler(DocTemplateSqlException.class)
     public ResponseEntity<Map<String, Object>> handleSqlFailure(DocTemplateSqlException error) {
-        log.warn("Doc template SQL failure", error);
+        log.warn("文档模板 SQL 执行失败", error);
         return body(HttpStatus.BAD_REQUEST, StrUtil.blankToDefault(error.getMessage(), "SQL 执行失败"));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleOther(Exception error) {
-        log.error("Doc template API failure", error);
+        log.error("文档模板接口执行失败", error);
         // 兜底分支不回传异常内部信息（文件路径、SQL、堆栈片段），只让使用者去看服务端日志
         return body(HttpStatus.INTERNAL_SERVER_ERROR, "服务内部错误，请查看服务端日志");
     }
@@ -68,8 +68,8 @@ public class DocTemplateExceptionHandler {
      */
     private ResponseEntity<Map<String, Object>> clientError(HttpStatus status, Exception error) {
         String msg = message(error);
-        log.warn("Doc template API {}：{}", status.value(), msg);
-        if (log.isDebugEnabled()) log.debug("Doc template API {} 详细堆栈", status.value(), error);
+        log.warn("文档模板接口 {}：{}", status.value(), msg);
+        if (log.isDebugEnabled()) log.debug("文档模板接口 {} 详细堆栈", status.value(), error);
         return body(status, msg);
     }
 

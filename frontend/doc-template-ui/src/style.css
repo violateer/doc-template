@@ -95,11 +95,10 @@ body,
   border-top: 1px solid var(--border);
 }
 
-.sider-build {
+.sider-meta {
   padding: 6px 10px 0;
   font-size: 11px;
   color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------- main */

@@ -186,7 +186,7 @@ public class DocTemplateService {
     }
 
     /**
-     * Removes the template together with every stored object (template files and generated files).
+     * 删除模板，连同它所有的存储对象（模板文件与生成结果文件）一起清掉。
      */
     public void deleteTemplate(long id) {
         List<DocTemplateVersionEntity> versions = versionRepository.findByTemplateId(id);
@@ -200,13 +200,13 @@ public class DocTemplateService {
     }
 
     /**
-     * Deletes a single template version and its stored file, keeping other versions intact.
+     * 删除单个历史版本及其存储文件，其他版本不受影响。
      */
     public void deleteVersion(long id, long versionId) {
         DocTemplateEntity t = requireTemplate(id);
         DocTemplateVersionEntity v = requireVersion(versionId);
         if (!Objects.equals(v.getTemplateId(), id))
-            throw new IllegalArgumentException("Version does not belong to template: " + versionId);
+            throw new IllegalArgumentException("版本 " + versionId + " 不属于该模板");
         deleteStoredQuietly(v.getFileUrl());
         versionRepository.deleteById(versionId);
         if (Objects.equals(t.getCurrentVersionId(), versionId)) {
@@ -227,7 +227,7 @@ public class DocTemplateService {
         DocTemplateEntity t = requireTemplate(id);
         DocTemplateVersionEntity v = requireVersion(versionId);
         if (!Objects.equals(v.getTemplateId(), id))
-            throw new IllegalArgumentException("Version does not belong to template: " + versionId);
+            throw new IllegalArgumentException("版本 " + versionId + " 不属于该模板");
         String ext = FileUtil.extName(v.getFileName());
         if (StrUtil.equalsIgnoreCase("docx", ext)) t.setFileType("DOCX");
         else if (StrUtil.equalsIgnoreCase("xlsx", ext)) t.setFileType("XLSX");
@@ -239,12 +239,12 @@ public class DocTemplateService {
 
     public Map<String, Object> upload(long id, MultipartFile file) throws Exception {
         DocTemplateEntity t = requireTemplate(id);
-        if (file == null || file.isEmpty()) throw new IllegalArgumentException("Please select a file");
+        if (file == null || file.isEmpty()) throw new IllegalArgumentException("请选择要上传的文件");
         String name = StrUtil.blankToDefault(file.getOriginalFilename(), "template");
         String suffix = FileUtil.extName(name);
         String ext = StrUtil.equalsIgnoreCase("docx", suffix) ? "DOCX" : StrUtil.equalsIgnoreCase("xlsx", suffix) ? "XLSX" : "";
         if (ext.isEmpty())
-            throw new IllegalArgumentException("Unsupported file extension. Only .docx and .xlsx are supported");
+            throw new IllegalArgumentException("不支持该文件类型，只支持 .docx 和 .xlsx");
         byte[] bytes = file.getBytes();
         String storedLocation = fileStorage.store(id, name, bytes);
         String sha = sha256(bytes);
@@ -285,7 +285,7 @@ public class DocTemplateService {
     }
 
     /**
-     * Placeholders found in the current template file, used to pre-fill the simulation form.
+     * 当前模板文件里出现的占位符，用来预填模拟生成的表单。
      */
     public Map<String, Object> placeholders(long templateId) throws Exception {
         DocTemplateEntity t = requireTemplate(templateId);
@@ -320,7 +320,7 @@ public class DocTemplateService {
         requireTemplate(templateId);
         String code = req(b, "blockCode"), name = req(b, "blockName"), type = upper(b.getOrDefault("dataSourceType", "JAVA"));
         if (!Set.of("JAVA", "SQL", "API").contains(type))
-            throw new IllegalArgumentException("Unsupported dataSourceType");
+            throw new IllegalArgumentException("不支持的数据源类型：" + type);
         requireSqlEnabled(type);
         requireBlockCodeFree(templateId, code, null);
         DocTemplateDataBlockEntity e = new DocTemplateDataBlockEntity();
@@ -344,7 +344,7 @@ public class DocTemplateService {
      */
     public Map<String, Object> updateBlock(long id, Map<String, Object> b) {
         DocTemplateDataBlockEntity e = blockRepository.findById(id);
-        if (e == null) throw new NoSuchElementException("Record not found");
+        if (e == null) throw new NoSuchElementException("数据块不存在：" + id);
         if (b.get("blockCode") != null) {
             String code = str(b.get("blockCode")).trim();
             if (code.isEmpty()) throw new IllegalArgumentException("数据块编码不能为空");
@@ -385,7 +385,7 @@ public class DocTemplateService {
     public Map<String, Object> previewBlock(Map<String, Object> b) {
         String type = upper(b.getOrDefault("dataSourceType", "JAVA"));
         if (!Set.of("JAVA", "SQL", "API").contains(type))
-            throw new IllegalArgumentException("Unsupported dataSourceType");
+            throw new IllegalArgumentException("不支持的数据源类型：" + type);
         requireSqlEnabled(type);
         DocTemplateDataBlockEntity e = new DocTemplateDataBlockEntity();
         // 预览不落库，块编码只是占位；执行器不会拿它做命名空间
@@ -499,9 +499,8 @@ public class DocTemplateService {
     }
 
     /**
-     * Simulates document generation: renders the current (or given) template version with the
-     * supplied parameters and stores the produced file. Failures are persisted as records so the
-     * history shows what went wrong instead of silently disappearing.
+     * 模拟生成文档：用传入的参数渲染当前（或指定）的模板版本，并保存产出的文件。
+     * 失败也会落一条记录，这样历史里能看到失败原因，而不是悄无声息地消失。
      */
     public Map<String, Object> generate(long templateId, Map<String, Object> body, String user) {
         DocTemplateEntity t = requireTemplate(templateId);
@@ -785,30 +784,30 @@ public class DocTemplateService {
                 throw new IllegalArgumentException("参数必须是合法的 JSON 对象：" + rootMessage(ex));
             }
         }
-        throw new IllegalArgumentException("requestParams must be a JSON object");
+        throw new IllegalArgumentException("requestParams 必须是 JSON 对象");
     }
 
     private void deleteStoredQuietly(String location) {
         try {
             fileStorage.delete(location);
-        } catch (Exception ignored) { /* keep DB consistent even if storage cleanup fails */ }
+        } catch (Exception ignored) { /* 存储清理失败也不影响数据库这一侧的一致性 */ }
     }
 
     private DocTemplateEntity requireTemplate(long id) {
         DocTemplateEntity e = templateRepository.findById(id);
-        if (e == null) throw new NoSuchElementException("Template not found: " + id);
+        if (e == null) throw new NoSuchElementException("模板不存在：" + id);
         return e;
     }
 
     private DocTemplateVersionEntity requireVersion(long id) {
         DocTemplateVersionEntity e = versionRepository.findById(id);
-        if (e == null) throw new NoSuchElementException("Version not found: " + id);
+        if (e == null) throw new NoSuchElementException("版本不存在：" + id);
         return e;
     }
 
     private DocTemplateGenerateRecordEntity requireRecord(long id) {
         DocTemplateGenerateRecordEntity e = recordRepository.findById(id);
-        if (e == null) throw new NoSuchElementException("Record not found: " + id);
+        if (e == null) throw new NoSuchElementException("生成记录不存在：" + id);
         return e;
     }
 

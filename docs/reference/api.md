@@ -85,6 +85,7 @@
 | `GET` | `/system/providers` | 已注册的 `DocumentDataProvider` 列表，数据块 `JAVA` 类型下拉项来源 |
 | `GET` | `/system/data-sources` | SQL 数据块可用的数据源（`dataSource` 字段下拉项） |
 | `GET` | `/system/converters` | 可用的字段值转换器编码（内置 + 宿主注册），字符串数组；编码按注册时声明的写法原样返回，使用时代码也按原样匹配（区分大小写） |
+| `GET` | `/system/version` | 当前运行的 Starter 版本号，`{"version":"0.2.1"}`；读不到版本时 `version` 为 `null` |
 
 ## 错误响应
 

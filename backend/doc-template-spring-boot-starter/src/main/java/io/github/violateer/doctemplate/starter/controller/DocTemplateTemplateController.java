@@ -125,7 +125,7 @@ public class DocTemplateTemplateController {
     }
 
     /**
-     * Streams the stored template file inline so the management page can render a preview.
+     * 以 inline 方式返回存储的模板文件，供管理页直接预览。
      */
     @GetMapping("/versions/{versionId}/preview")
     public ResponseEntity<byte[]> preview(@PathVariable("versionId") long versionId) throws Exception {
@@ -133,7 +133,7 @@ public class DocTemplateTemplateController {
     }
 
     /**
-     * Lists the ${placeholder} keys found in the current template file.
+     * 列出当前模板文件里出现的 ${placeholder} 键。
      */
     @GetMapping("/{id}/placeholders")
     public Map<String, Object> placeholders(@PathVariable("id") long id) throws Exception {
@@ -141,7 +141,7 @@ public class DocTemplateTemplateController {
     }
 
     /**
-     * Simulates generation with hand-written parameters and stores the rendered document.
+     * 用前端手填的参数模拟生成，并保存渲染结果。
      */
     @PostMapping("/{id}/generate")
     public Map<String, Object> generate(@PathVariable("id") long id, @RequestBody Map<String, Object> body) {

@@ -3,6 +3,7 @@ package io.github.violateer.doctemplate.starter.controller;
 import io.github.violateer.doctemplate.starter.autoconfigure.DocTemplateAutoConfiguration.DocumentProviderRegistry;
 import io.github.violateer.doctemplate.starter.autoconfigure.DocTemplateDataSourceResolver;
 import io.github.violateer.doctemplate.starter.convert.DocTemplateConverterRegistry;
+import io.github.violateer.doctemplate.starter.support.DocTemplateVersion;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,9 +49,21 @@ public class DocTemplateSystemController {
         return converters.codes();
     }
 
+    /**
+     * 当前运行的 Starter 版本号，管理页左下角用它显示「对接的是哪个版本」。
+     * 读不到版本时 {@code version} 为 {@code null}，前端只显示「Starter」。
+     */
+    @GetMapping("/version")
+    public VersionItem version() {
+        return new VersionItem(DocTemplateVersion.current());
+    }
+
     public record ProviderItem(String code, String implementation) {
     }
 
     public record DataSourceItem(String code, String description, boolean bean) {
+    }
+
+    public record VersionItem(String version) {
     }
 }

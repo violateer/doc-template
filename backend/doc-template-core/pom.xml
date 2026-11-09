@@ -9,5 +9,5 @@
     <artifactId>doc-template-core</artifactId>
 
     <name>Vio Doc Template :: Core</name>
-    <description>Host-facing SPI contracts of the document template engine. Zero dependencies.</description>
+    <description>文档模板引擎面向宿主的 SPI 契约，零依赖。</description>
 </project>

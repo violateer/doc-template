@@ -21,7 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-/** Stores uploaded template files locally or in an S3-compatible object store. */
+/** 模板文件存储：写到本地磁盘，或写进 S3 兼容的对象存储。 */
 public class DocTemplateFileStorage implements AutoCloseable {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DocTemplateFileStorage.class);
@@ -49,7 +49,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
             this.s3 = null;
             log.debug("文档模板文件存储：本地磁盘 {}（未配置 doc-template.storage 时的默认方式）", localRoot());
         } else {
-            throw new IllegalStateException("Unsupported doc-template.storage.type: " + cfg.getType());
+            throw new IllegalStateException("不支持 doc-template.storage.type：" + cfg.getType());
         }
     }
 
@@ -71,13 +71,13 @@ public class DocTemplateFileStorage implements AutoCloseable {
         return writeObject(prefix() + "/templates/" + templateId + "/" + IdUtil.fastSimpleUUID() + ext, bytes);
     }
 
-    /** Stores a rendered/generated document and returns its storage location. */
+    /** 保存一份生成好的文档，返回它的存储位置。 */
     public String storeGenerated(long templateId, String extension, byte[] bytes) throws Exception {
         String ext = StrUtil.isBlank(extension) ? ".docx" : StrUtil.addPrefixIfNot(extension, ".");
         return writeObject(prefix() + "/generated/" + templateId + "/" + IdUtil.fastSimpleUUID() + ext, bytes);
     }
 
-    /** Writes an object to the configured storage backend, returning the persisted location. */
+    /** 把对象写进配置好的存储，返回持久化后的位置。 */
     public String writeObject(String key, byte[] bytes) throws Exception {
         if (s3 != null) {
             s3.putObject(PutObjectRequest.builder().bucket(properties.getStorage().getBucket()).key(key).build(), RequestBody.fromBytes(bytes));
@@ -85,7 +85,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
         }
         Path root = Path.of(properties.getBasePath()).toAbsolutePath().normalize();
         Path target = root.resolve(key).normalize();
-        if (!target.startsWith(root)) throw new IllegalArgumentException("Invalid file path");
+        if (!target.startsWith(root)) throw new IllegalArgumentException("文件路径不合法");
         Files.createDirectories(target.getParent());
         Files.copy(new java.io.ByteArrayInputStream(bytes), target, StandardCopyOption.REPLACE_EXISTING);
         return root.relativize(target).toString().replace("\\", "/");
@@ -101,7 +101,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
         Path root = Path.of(properties.getBasePath()).toAbsolutePath().normalize();
         Path stored = Path.of(location);
         Path path = (stored.isAbsolute() ? stored : root.resolve(stored)).toAbsolutePath().normalize();
-        if (!path.startsWith(root)) throw new IllegalArgumentException("Invalid file path");
+        if (!path.startsWith(root)) throw new IllegalArgumentException("文件路径不合法");
         if (!Files.exists(path)) {
             // 本地找不到文件时给出可操作的说明：常见原因是这条记录当初写在别的存储上（或换了实例/工作目录）
             throw new IllegalStateException("模板文件在本地存储中不存在：" + location
@@ -125,13 +125,13 @@ public class DocTemplateFileStorage implements AutoCloseable {
         }
         String value = location.substring(5);
         int slash = value.indexOf('/');
-        if (slash < 1) throw new IllegalArgumentException("Invalid S3 object location: " + location);
+        if (slash < 1) throw new IllegalArgumentException("S3 对象位置不合法：" + location);
         return new String[]{value.substring(0, slash), value.substring(slash + 1)};
     }
 
     /**
-     * Removes the object backing a stored location. Deleting an already missing object is not an error,
-     * so removing a template never fails just because the bucket entry was cleaned up manually.
+     * 删除某个存储位置对应的对象。对象本来就不存在不算错误，
+     * 这样「有人手工清过 bucket」也不会让删模板失败。
      */
     public void delete(String location) throws Exception {
         if (StrUtil.isBlank(location)) return;
@@ -149,9 +149,9 @@ public class DocTemplateFileStorage implements AutoCloseable {
         Path root = Path.of(properties.getBasePath()).toAbsolutePath().normalize();
         Path stored = Path.of(location);
         Path path = (stored.isAbsolute() ? stored : root.resolve(stored)).toAbsolutePath().normalize();
-        if (!path.startsWith(root)) throw new IllegalArgumentException("Invalid file path");
+        if (!path.startsWith(root)) throw new IllegalArgumentException("文件路径不合法");
         Files.deleteIfExists(path);
-        // Clean up the now-empty per-template directory when possible; ignore failures.
+        // 顺手删掉已经空了的「按模板分目录」，删不掉就算了。
         try {
             Path parent = path.getParent();
             if (parent != null && parent.startsWith(root) && !parent.equals(root)) {
@@ -160,7 +160,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
                 }
             }
         } catch (Exception ignored) {
-            // Directory cleanup is best effort.
+            // 清目录只是顺手做的事，失败不影响删除结果。
         }
     }
 
@@ -168,7 +168,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
         return StrUtil.blankToDefault(FileUtil.getName(location), "template");
     }
 
-    /** Normalises the configured object prefix (no leading or trailing slashes). */
+    /** 把配置里的对象前缀规整成前后都不带斜杠的形式。 */
     private String prefix() {
         String value = StrUtil.strip(StrUtil.blankToDefault(properties.getStorage().getPrefix(), "").trim(), "/", "/");
         return StrUtil.blankToDefault(value, "doc-template");

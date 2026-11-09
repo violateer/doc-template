@@ -47,11 +47,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Renders DOCX/XLSX templates by replacing placeholders with supplied parameters.
+ * 用传入的参数替换占位符，渲染 DOCX / XLSX 模板。
  *
- * <p>Supported placeholder syntax: {@code ${key}} and {@code {{key}}}. A default value can be
- * provided with {@code ${key:default}}. Nested values are addressable with dots,
- * for example {@code ${customer.name}}.</p>
+ * <p>占位符写法：{@code ${key}} 和 {@code {{key}}}；默认值写成 {@code ${key:默认值}}；
+ * 嵌套值用点号取，例如 {@code ${customer.name}}。</p>
  *
  * <p>字段值转换：{@code ${key|type:arg}} 或 {@code ${key|type(k=v)}}，多个转换器用 {@code |} 串联，
  * 例如 {@code ${amount|number:2}}、{@code ${status|dict(order_status)}}。转换链写在默认值之后
@@ -59,8 +58,8 @@ import java.util.regex.Pattern;
  *
  * <p>明细行循环：{@code {{#each items}}} / {@code ${#each items}}} 标记所在的行（DOCX 表格行、
  * XLSX 行）或段落块会按数组重复，循环体内用 {@code ${字段名}} 或 {@code ${item.字段名}} 取当前项。
- * 行内标记是「单标记隐式闭合」；{@code {{#each}}} 与 {@code {{/each}}} 各独占一行时是「区域循环」，
- * 两者之间的所有行整体重复。</p>
+ * 行内循环要把 {@code {{#each}}} 与 {@code {{/each}}} 写在同一行（行首开始、行尾结束）；
+ * 两个标记各独占一行时是「区域循环」，两者之间的所有行整体重复。两种写法的标记都必须成对。</p>
  *
  * <p>递归渲染：区域循环可以嵌套，内层数组既可以是外层项自带的字段（{@code {{#each items}}}，
  * 由 Provider 返回嵌套结构），也可以用关联条件从扁平数组里过滤（{@code {{#each items where
@@ -78,9 +77,8 @@ import java.util.regex.Pattern;
  * （值可以是 http(s) 地址、data URI 或裸 Base64，也可以是 SQL 返回的 byte[]）。DOCX 走
  * {@code XWPFRun#addPicture}，XLSX 走 {@code XSSFDrawing} 锚定到单元格。</p>
  *
- * <p>This is deliberately a lightweight, dependency-free renderer: it does not run formulas,
- * and a loop only repeats table rows / paragraph blocks — no conditionals, no expression
- * evaluation beyond {@code 数组名 where 字段 = 取值}.</p>
+ * <p>这是一个刻意做轻的渲染器：不跑公式，循环只重复表格行 / 段落块，除了
+ * {@code 数组名 where 字段 = 取值} 之外没有条件判断，也不做表达式求值。</p>
  */
 public class DocTemplateRenderer {
 
@@ -321,7 +319,7 @@ public class DocTemplateRenderer {
     }
 
     /**
-     * Convenience for building a parameter map from a dotted key path.
+     * 去重并保持原有顺序，返回可按下标访问的列表。
      */
     public static List<String> sorted(Set<String> keys) {
         return new ArrayList<>(new LinkedHashSet<>(keys));
@@ -496,7 +494,7 @@ public class DocTemplateRenderer {
         }
     }
 
-    // ------------------------------------------------------------------ loops
+    // ------------------------------------------------------------------ 循环
 
     private void collectTable(XWPFTable table, Set<String> keys) {
         for (XWPFTableRow row : table.getRows()) {
@@ -680,7 +678,7 @@ public class DocTemplateRenderer {
         return run < formats.size() ? formats.get(run) : null;
     }
 
-    // ------------------------------------------------------------------ images
+    // ------------------------------------------------------------------ 图片
 
     private static boolean imageOnly(List<ParagraphSegment> segments) {
         for (ParagraphSegment segment : segments) {
@@ -2726,7 +2724,7 @@ public class DocTemplateRenderer {
         return keys;
     }
 
-    // ------------------------------------------------------------------ shared
+    // ------------------------------------------------------------------ 公共
 
     private String replaceText(String text, Map<String, Object> params) {
         if (text == null || text.indexOf('{') < 0) return text;
@@ -2809,7 +2807,7 @@ public class DocTemplateRenderer {
     }
 
     /**
-     * Splits {@code key:default} / {@code key:default|conv} into its key part.
+     * 从 {@code 键:默认值} / {@code 键:默认值|转换器} 里取出「键」那一段。
      *
      * <p>转换链（{@code |number:2}）只影响输出，不影响占位符名，所以取键前先按 {@code |} 截断。</p>
      */

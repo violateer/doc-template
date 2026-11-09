@@ -13,11 +13,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Jackson based JSON helper used across the starter.
+ * 全模块共用的 JSON 工具，基于 Jackson。
  *
- * <p>Serialization is deliberately kept on Jackson (Spring's default) and no Fastjson dependency is
- * used anywhere in this starter. Entities are converted to snake_case maps for the API responses,
- * and {@link LocalDateTime} is written as {@code yyyy-MM-dd HH:mm:ss} instead of an int array.</p>
+ * <p>序列化刻意只用 Jackson（Spring 的默认选择），整个模块不引 Fastjson。实体在 API 响应里
+ * 转成下划线命名的 Map，{@link LocalDateTime} 写成 {@code yyyy-MM-dd HH:mm:ss} 而不是整数数组。</p>
  */
 public final class DocTemplateJson {
 
@@ -40,7 +39,7 @@ public final class DocTemplateJson {
                 .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
-    /** Converts any object (entity, record, POJO) into a snake_case map. */
+    /** 把任意对象（实体、record、POJO）转成下划线命名的 Map。 */
     public static Map<String, Object> toMap(Object value) {
         if (value == null) return new LinkedHashMap<>();
         return MAPPER.convertValue(value, new TypeReference<LinkedHashMap<String, Object>>() {
@@ -65,7 +64,7 @@ public final class DocTemplateJson {
         }
     }
 
-    /** Parses any JSON document (object, array or scalar). Returns null for blank input. */
+    /** 解析任意 JSON（对象、数组或标量）；入参为空串时返回 {@code null}。 */
     public static Object read(String text) {
         if (text == null || text.isBlank()) return null;
         try {
