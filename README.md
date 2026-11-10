@@ -1,19 +1,50 @@
-# Vio Doc Template
+<p align="center">
+  <img src="./docs/public/logo.svg" width="96" height="96" alt="Vio Doc Template">
+</p>
 
-面向 Spring Boot 3 / 4、Java 17 与 Vue 3 + Naive UI 的可复用文档模板引擎工程。Starter 的静态管理界面随 JAR 发布，宿主前端可以通过 iframe 打开；REST API 的认证是可插拔的（无认证 / 宿主已有认证体系桥接进来），模块不另建登录系统，也不做权限码校验。
+<h1 align="center">Vio Doc Template</h1>
 
-**文档站**：<https://violateer.github.io/doc-template/> · **在线演示**：<http://www.violateer.top:9150/doc-template>
+<p align="center">让 <code>.docx</code> / <code>.xlsx</code> 变成会自己填数的模板</p>
 
-## 使用前提
+<p align="center">
+  <a href="https://violateer.github.io/doc-template/"><b>📖 阅读文档站</b></a>
+  &nbsp;·&nbsp;
+  <a href="http://www.violateer.top:9150/doc-template"><b>🚀 打开在线演示</b></a>
+</p>
+
+<p align="center">
+  <code>JDK 17+</code> &nbsp;·&nbsp; <code>Spring Boot 3.x / 4.x</code> &nbsp;·&nbsp; <code>Apache-2.0</code> &nbsp;·&nbsp; <code>v0.2.1</code>
+</p>
+
+---
+
+面向 Spring Boot 3 / 4、Java 17 与 Vue 3 + Naive UI 的可复用文档模板引擎工程。
+
+Starter 的静态管理界面随 JAR 发布，宿主前端可以通过 iframe 打开；REST API 的认证是可插拔的（无认证 / 宿主已有认证体系桥接进来），模块不另建登录系统，也不做权限码校验。
+
+## ✨ 能做什么
+
+- 🧾 **模板管理**：上传 `.docx` / `.xlsx`，多版本、预览、下载、删除时同步清理云存储
+- 🔤 **占位符渲染**：`${key}` / `{{key}}`、默认值、点号取嵌套值、转换链
+- 🔁 **明细行循环**：表格行、表格区域、段落块，支持区域嵌套与 `where` 过滤
+- 🧱 **动态列**：列数由数据决定，模板里只留位置，样式照搬标记格
+- 🗃 **三种数据源**：Java Provider / HTTP API / SQL（不推荐），表单化配置
+- 🖼 **图片与二维码字段**：取到的 URL、Base64 直接渲染成图
+- 🔄 **字段值转换与字典**：日期、千分位、脱敏、`0/1` → 是/否，不用改 SQL
+- 📄 **内置 PDF 导出**：不依赖 Office / LibreOffice / WPS
+- 🔐 **可插拔认证**：`none` / `custom` 两档，只识别「你是谁」，不碰权限码
+- 🖥 **内嵌管理页**：Vue 3 + Naive UI，产物随 Starter JAR 发布，iframe 即可打开
+
+## 📦 使用前提
 
 Starter 与任何业务框架、认证框架、权限体系都无关，也不要求宿主使用特定 ORM。只要满足下面四条就能直接用：
 
 | 条件 | 说明 |
 | --- | --- |
-| JDK 17+ | 编译目标 `release=17` |
-| Spring Boot 3.x 或 4.x | Servlet Web 应用；自动装配同时兼容两代 Boot 的包路径，WebFlux 不支持 |
-| 一个 `DataSource` Bean | 任何连接池都行；不配 `doc-template.datasource` 时复用宿主的 |
-| 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+ / Oracle 12c+ 可自动建表；其他库需自行执行建表 DDL |
+| ☕ JDK 17+ | 编译目标 `release=17` |
+| 🍃 Spring Boot 3.x 或 4.x | Servlet Web 应用；自动装配同时兼容两代 Boot 的包路径，WebFlux 不支持 |
+| 🗄 一个 `DataSource` Bean | 任何连接池都行；不配 `doc-template.datasource` 时复用宿主的 |
+| 💾 数据库 | MySQL 8 / MariaDB / PostgreSQL 12+ / SQL Server 2016+ / Oracle 12c+ 可自动建表；其他库需自行执行建表 DDL |
 
 不需要的东西：不需要任何 ORM（MyBatis / MyBatis-Plus / JPA 用不用、什么版本都不影响）、不需要任何认证框架、不需要权限码或菜单表、不需要前端构建环境、不需要 Office / LibreOffice / WPS。
 
@@ -27,9 +58,9 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 </dependency>
 ```
 
-> Starter 的 classpath 需求只有 Spring Web、Spring JDBC、一个 `DataSource`，以及宿主自己声明的数据库驱动：不传递任何 ORM 依赖，不传递任何数据库驱动，也不传递 JSqlParser（SQL 校验用的那份被重定位进自己的包内）。所以宿主用不用 MyBatis-Plus、用哪个版本，都不会和这个模块互相影响。
+> 💡 Starter 的 classpath 需求只有 Spring Web、Spring JDBC、一个 `DataSource`，以及宿主自己声明的数据库驱动：不传递任何 ORM 依赖，不传递任何数据库驱动，也不传递 JSqlParser（SQL 校验用的那份被重定位进自己的包内）。所以宿主用不用 MyBatis-Plus、用哪个版本，都不会和这个模块互相影响。
 
-## 工程结构
+## 🗂 工程结构
 
 - `backend/doc-template-core`：业务 Provider SPI（`DocumentDataProvider`），零依赖。
 - `backend/doc-template-spring-boot-starter`：模板、版本、数据块、生成记录 API，文件上传/下载，可插拔认证，Starter 静态页面与建表脚本。
@@ -39,13 +70,13 @@ Starter 与任何业务框架、认证框架、权限体系都无关，也不要
 
 发布物只有 `doc-template-core` 与 `doc-template-spring-boot-starter`：`backend/doc-template-example` 是作者自用的示例宿主，**不在包范围内**；`frontend/doc-template-ui` 是内嵌管理页的源码，**产物随 Starter JAR 发布**，源码本身不单独发包。各版本的能力变化见 [CHANGELOG.md](./CHANGELOG.md)。
 
-## 数据持久层
+## 🗄 数据持久层
 
 六张元数据表的读写全部走 Spring JDBC（`JdbcTemplate` + 手写 SQL），不引入任何 ORM：SQL 与行映射都在 `io.github.violateer.doctemplate.starter.repository` 下，分页用 `COUNT` + `LIMIT/OFFSET` 自己算，不依赖任何分页插件。建表、缺表检测同样走 Spring JDBC。
 
 这样做的好处是宿主零要求：只要容器里有一个 `DataSource`，宿主用不用 MyBatis-Plus、版本是 3.5.x 还是别的，都不会和这个模块互相干扰。Starter 始终绑定自己解析出的数据源（宿主主库，或 `doc-template.datasource.url` 指定的独立库），不会碰宿主的数据访问层。
 
-## 序列化与工具库
+## 🧰 序列化与工具库
 
 JSON 序列化统一使用 Jackson（Spring 官方内置），**不引入 Fastjson**。实体转 Map、参数解析都走 `support/DocTemplateJson`：
 
@@ -64,7 +95,7 @@ JSON 序列化统一使用 Jackson（Spring 官方内置），**不引入 Fastjs
 | 类型转换 | `Convert.toStr`、`Convert.toInt` |
 | 异常信息提取 | `ExceptionUtil.getRootCauseMessage` |
 
-## 后端构建
+## 🛠 后端构建
 
 需要 JDK 17+、Maven 3.8+。
 
@@ -83,7 +114,7 @@ mvn -pl doc-template-example -am spring-boot:run -Dspring-boot.run.profiles=loca
 
 检查 Provider：`GET /api/doc-template/system/providers`。
 
-## 前端构建并嵌入 Starter
+## 🎨 前端构建并嵌入 Starter
 
 内嵌管理页的源码在 `frontend/doc-template-ui`，构建产物直接写进 Starter。需要 Node.js 20+、pnpm 9+。在仓库根目录 `frontend` 执行：
 
@@ -94,7 +125,7 @@ pnpm --filter doc-template-frontend-ui build
 
 Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resources/doc-template/`。随后重新执行 `mvn clean package`，静态前端就会打进 Starter JAR。Starter 里只有这一份构建产物，没有手写的静态兜底页。
 
-## API
+## 🔌 API
 
 - `GET/POST /api/doc-template/templates`
   - `GET` 不带 `page` 时返回完整数组；带 `page` 时返回 `{records,total,page,size,pages}`，支持 `size`（默认 20，上限 200）、`keyword`（模板名称 / 编码）、`status`
@@ -127,22 +158,22 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 
 认证接入见 `integration/README.md`。默认启动时会检测文档模板所需的六张表；若存在缺失，则自动执行对应数据库建表脚本（MySQL / MariaDB / PostgreSQL / SQL Server / Oracle），不会删除已有数据。
 
-## 模拟生成与文件预览
+## 🧪 模拟生成与文件预览
 
-模板文件里能写哪些标记、怎么写，见 [模板标记写法](#模板标记写法)；这一节只说明生成流程。
+模板文件里能写哪些标记、怎么写，见下文「模板标记写法」一节；这一节只说明生成流程。
 
-- 管理界面「模拟生成」的定位是「**按配置跑一遍**」：右侧按 `sort_order` 列出该模板的数据块（编码、类型、SQL/URL/Provider 摘要、需要哪些参数、是否启用），点「开始生成」时后端就按这个顺序真正执行它们，结果直接填进模板占位符。
-- 左侧的「数据源参数（JSON）」只用来**给数据源传参**：键名对应参数映射里 `$request.xxx` 的 `xxx`（例如 SQL 里的 `:reportNo`）。模板占位符由数据块结果自动填充，不需要写在这里。
-- 数据块需要的参数没填时，弹窗会提前用黄色提示列出缺哪些键，避免 SQL 拿 null 查出 0 条却看不出原因。
-- 模板里不由数据块提供的占位符（普通 `${key}`），仍然可以在同一个 JSON 里直接给值，`补齐参数` 按钮会把这两类键一次性补上。
-- 弹窗底部的「接口调用」区块给出这次等价的 HTTP 调用：完整请求地址（`POST {origin}/api/doc-template/templates/{id}/generate`）、请求头、请求体，点「开始生成」后还会显示真实响应；下面还有 curl、JavaScript、Java、Python 四种语言的调用示例，可整段拿去用，直接搬到不内嵌管理页的其他项目里。宿主启用了认证时，调用方需要带上自己的身份凭证。
-- 生成结果写入存储（`templates/...` 同级 `generated/...` 前缀），并在 `doc_template_generate_record` 中留下 `SUCCESS`/`FAILED` 记录与失败原因。
-- 文件预览走 `/preview` 接口（`Content-Disposition: inline`），管理界面用 docx-preview / SheetJS 在浏览器内渲染 DOCX、XLSX，PDF 直接内嵌。
-- 删除模板、删除版本、删除生成记录都会同步删除对象存储中的文件，不会遗留孤儿对象。
-- 列表页（模板管理、生成记录）都是**服务端分页**：模板默认每页 10 条、生成记录默认每页 20 条，可选 10/20/50/100，关键字与状态过滤都在后端完成，切换过滤条件回到第 1 页，删空当前页会自动退回上一页。
-- 页面整体不滚动：`html/body` 与侧边栏、顶栏都是固定高度，列表卡片用 flex 撑满剩余空间，表格通过 `flex-height` 在卡片内部滚动（表头和分页器保持可见）。
+- 🎯 管理界面「模拟生成」的定位是「**按配置跑一遍**」：右侧按 `sort_order` 列出该模板的数据块（编码、类型、SQL/URL/Provider 摘要、需要哪些参数、是否启用），点「开始生成」时后端就按这个顺序真正执行它们，结果直接填进模板占位符。
+- 📥 左侧的「数据源参数（JSON）」只用来**给数据源传参**：键名对应参数映射里 `$request.xxx` 的 `xxx`（例如 SQL 里的 `:reportNo`）。模板占位符由数据块结果自动填充，不需要写在这里。
+- ⚠️ 数据块需要的参数没填时，弹窗会提前用黄色提示列出缺哪些键，避免 SQL 拿 null 查出 0 条却看不出原因。
+- 🧩 模板里不由数据块提供的占位符（普通 `${key}`），仍然可以在同一个 JSON 里直接给值，`补齐参数` 按钮会把这两类键一次性补上。
+- 🧾 弹窗底部的「接口调用」区块给出这次等价的 HTTP 调用：完整请求地址（`POST {origin}/api/doc-template/templates/{id}/generate`）、请求头、请求体，点「开始生成」后还会显示真实响应；下面还有 curl、JavaScript、Java、Python 四种语言的调用示例，可整段拿去用，直接搬到不内嵌管理页的其他项目里。宿主启用了认证时，调用方需要带上自己的身份凭证。
+- 💾 生成结果写入存储（`templates/...` 同级 `generated/...` 前缀），并在 `doc_template_generate_record` 中留下 `SUCCESS`/`FAILED` 记录与失败原因。
+- 👀 文件预览走 `/preview` 接口（`Content-Disposition: inline`），管理界面用 docx-preview / SheetJS 在浏览器内渲染 DOCX、XLSX，PDF 直接内嵌。
+- 🧹 删除模板、删除版本、删除生成记录都会同步删除对象存储中的文件，不会遗留孤儿对象。
+- 📑 列表页（模板管理、生成记录）都是**服务端分页**：模板默认每页 10 条、生成记录默认每页 20 条，可选 10/20/50/100，关键字与状态过滤都在后端完成，切换过滤条件回到第 1 页，删空当前页会自动退回上一页。
+- 📐 页面整体不滚动：`html/body` 与侧边栏、顶栏都是固定高度，列表卡片用 flex 撑满剩余空间，表格通过 `flex-height` 在卡片内部滚动（表头和分页器保持可见）。
 
-### PDF 导出
+### 📄 PDF 导出
 
 PDF 由内置引擎直接生成，**不需要安装 Office、LibreOffice 或 WPS**，也没有额外的命令行依赖。转换使用开源组件 [MiniPdf](https://github.com/mini-software/MiniPdf)（Apache-2.0，纯 Java，Maven 坐标 `io.github.mini-software:minipdf`），它基于 POI + PDFBox 自行排版，支持 DOCX / XLSX / PPTX。
 
@@ -154,20 +185,20 @@ doc-template:
   pdf-font-name: SimHei                   # 可选，字体族名，默认取文件名
 ```
 
-> 容器化部署时请确保镜像内存在上述任一字体文件（例如把 `simhei.ttf` 一起打进镜像），否则中文会缺字。
+> 🐳 容器化部署时请确保镜像内存在上述任一字体文件（例如把 `simhei.ttf` 一起打进镜像），否则中文会缺字。
 >
-> MiniPdf 面向实用文档转换，并非完整的 Office 版式兼容实现：常规段落、表格、图片能较好还原，极复杂的版式（文本框叠放、艺术字等）可能与 Word 略有差异。
+> 📌 MiniPdf 面向实用文档转换，并非完整的 Office 版式兼容实现：常规段落、表格、图片能较好还原，极复杂的版式（文本框叠放、艺术字等）可能与 Word 略有差异。
 
 导出前还会做两处处理，让 PDF 尽量和原文件一致：
 
 - **DOCX 保留样式**：字号、加粗、对齐、颜色、图片、页眉页脚都按原文件保留，与文档里有没有表格无关；纸张尺寸按 DOCX 里的 `sectPr` 还原（A4 / A3 / 自定义 / 横向）。
 - **XLSX 跳过空 sheet**：工作簿里留着但完全没有内容的 sheet（无单元格值、无合并区域、无图片）不会出现在 PDF 里，不会多出空白页；至少保留一个 sheet，处理失败时按原文件转换，不影响导出。
 
-## 模板标记写法
+## 🏷 模板标记写法
 
 模板文件就是普通的 `.docx` / `.xlsx`，标记直接写在文档里，生成时由内置渲染器替换。两种模板共用一套标记语法，区别只在「能写在哪里」。
 
-### 通用占位符
+### 🔤 通用占位符
 
 | 写法 | 含义 | 示例 |
 | --- | --- | --- |
@@ -184,7 +215,7 @@ doc-template:
 - 值的渲染规则：`null` → 默认值或空串；数字去掉多余的 0（`1.50` → `1.5`、`2.0` → `2`）；对象 / 数组输出成 JSON 字符串。
 - 转换链写在默认值之后、用 `|` 分隔，可串联：`${amount:0|number:2}`、`${status|dict(order_status)}`。
 
-### 明细行循环
+### 🔁 明细行循环
 
 数组通常来自 `single: false` 的数据块，用 `{{#each 数组}}` 标记重复（也接受 `${#each 数组}`，推荐前者）：
 
@@ -212,12 +243,12 @@ doc-template:
 
 限制：段落块循环只处理段落，跨表格的块循环不支持；Excel 行循环不复制合并单元格。
 
-循环体里的字段也可以声明成图片字段或二维码字段（见[图片字段](#图片字段)），明细行里的图片会逐行渲染。
+循环体里的字段也可以声明成图片字段或二维码字段（见下文「图片字段」一节），明细行里的图片会逐行渲染。
 
-#### 动态列：列由数据决定
+#### 🧱 动态列：列由数据决定
 
 有些表格的列数本身就不固定（检验项几条、规格几档由数据决定）。这种表格用 `{{#columns 块编码 角色}}`，
-列定义由数据源给（见[动态列数据源](#动态列数据源)），模板里只留位置：
+列定义由数据源给（见下文「动态列数据源」一节），模板里只留位置：
 
 ```
 表头行： | 序号 | {{#columns items header}} | 备注 |
@@ -251,7 +282,7 @@ doc-template:
 - `${_index}` 是当前行号（1 起始），循环和列区里都能用。
 - 一表两个列区、编码对不上、列源没配都会直接报错；列定义是空数组时删行 / 删格。**嵌套循环里的列区暂不支持**。
 
-#### 递归渲染：循环行下面再挂一个列表
+#### 🪆 递归渲染：循环行下面再挂一个列表
 
 区域循环可以**嵌套**，层级不限：
 
@@ -275,7 +306,7 @@ ${order_no} | ${customer}
 
 标记必须**独占一行 / 一段**才是区域；`{{#each}}` 独占一行又没配对的 `{{/each}}` 时直接报错，不会退回成行内循环。
 
-### DOCX 模板
+### 📝 DOCX 模板
 
 支持的位置：**正文段落、表格（含嵌套表格）、页眉、页脚**。
 
@@ -292,7 +323,7 @@ ${order_no} | ${customer}
 - 图片：占位符独占段落时（`${logo}` 单独一段）按图片字段的 `align` / `padding` 排版；和文字混排时（`签名：${sign} 完毕`）按行内图片插入，位置交给模板自身的排版。
 - 不支持：条件判断、目录 / 域更新、公式。
 
-### XLSX 模板
+### 📊 XLSX 模板
 
 支持的位置：**任意工作表的单元格**。
 
@@ -311,7 +342,7 @@ ${order_no} | ${customer}
 - 每个工作表都会渲染；完全空白的工作表在导出 PDF 时会被跳过，不会产生空白页。
 - 不支持：公式重算（模板里的公式不重新计算）、条件判断。
 
-### 两种模板对照
+### ⚖️ 两种模板对照
 
 | 能力 | DOCX | XLSX |
 | --- | --- | --- |
@@ -326,7 +357,7 @@ ${order_no} | ${customer}
 | 数字 / 布尔 | 一律按文本渲染 | 整格占位符会写成数字 / 布尔单元格 |
 | 页眉页脚 | 支持 | 无此概念 |
 
-### 常见坑
+### 🕳 常见坑
 
 1. **循环漏写 `each`**：`{{#user}}` 会被当成名为 `#user` 的占位符。渲染器直接拦截并提示正确写法。
 2. **循环变量名对不上**：`{{#each report}}` 对应的是块编码 `report` 的数据块结果，不是数据库表名；块编码改了记得同步改模板。
@@ -335,7 +366,7 @@ ${order_no} | ${customer}
 5. **图片字段的值不是图片**：空值按文本处理；URL 下载失败或格式不支持（svg / webp）会直接报错，错误信息里带字段名。
 6. **不要指望条件判断**：目前没有 `{{#if}}`，需要按条件显示的内容，用数据块返回不同的数据，或拆成两份模板。
 
-## 示例模板
+## 🧩 示例模板
 
 `docs/public/demo/` 下放了四套可以直接导入的示例模板，配套的数据块 SQL 一起给了。两份「综合示例」把各种写法集中在一份文档里（Word / Excel 各一份），另外两套是交付级的长报告，见 [示例模板](./docs/guide/examples.md)。
 
@@ -348,7 +379,7 @@ ${order_no} | ${customer}
 
 数据块脚本：[`word-showcase.sql`](./docs/public/demo/word-showcase.sql)、[`excel-showcase.sql`](./docs/public/demo/excel-showcase.sql)、[`word-acceptance-report.sql`](./docs/public/demo/word-acceptance-report.sql)、[`excel-acceptance-report.sql`](./docs/public/demo/excel-acceptance-report.sql)。脚本按 `template_code` 关联模板，可重复执行。
 
-### 一键刷入（推荐）
+### ⚡ 一键刷入（推荐）
 
 不用手工建模板、传文件、跑 SQL：两个脚本会把 `docs/public/demo` 下的 4 套示例一次性刷进**正在运行的系统**，模板元数据、模板文件、数据块、数据字典全带上。
 
@@ -377,9 +408,9 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 
 几个行为值得知道：
 
-- **`*.sql` 是唯一数据源**：脚本直接解析 SQL 里的 `doc_template` / `doc_template_data_block` / `doc_template_dict` 三张表的 INSERT，改 SQL 脚本就跟着变，不用维护第二份清单。模板文件取同名的 `.docx` / `.xlsx`。
-- **可重复执行**：模板按 `template_code` 复用（已存在就不动元数据，与 SQL 的 `ON DUPLICATE KEY UPDATE` 语义一致），数据块按 `block_code` 增改，字典按 `dict_code` 增改且字典项「先清后插」，模板文件比对 sha256 后相同就跳过——重跑不会堆版本。
-- **SQL 数据源被禁用时会报错**：`doc-template.data-block.sql-enabled=false` 时新增 SQL 块会返回 400，脚本会把这条错误单独标出来，其他模板照常刷。
+- 📌 **`*.sql` 是唯一数据源**：脚本直接解析 SQL 里的 `doc_template` / `doc_template_data_block` / `doc_template_dict` 三张表的 INSERT，改 SQL 脚本就跟着变，不用维护第二份清单。模板文件取同名的 `.docx` / `.xlsx`。
+- 🔁 **可重复执行**：模板按 `template_code` 复用（已存在就不动元数据，与 SQL 的 `ON DUPLICATE KEY UPDATE` 语义一致），数据块按 `block_code` 增改，字典按 `dict_code` 增改且字典项「先清后插」，模板文件比对 sha256 后相同就跳过——重跑不会堆版本。
+- 🚫 **SQL 数据源被禁用时会报错**：`doc-template.data-block.sql-enabled=false` 时新增 SQL 块会返回 400，脚本会把这条错误单独标出来，其他模板照常刷。
 
 手工导入仍然可用，顺序：新增模板（编码 / 名称 / 文件类型 / 导出类型按下表填）→ 上传对应文件 → 执行 SQL → 「模拟生成」验证。
 
@@ -392,14 +423,14 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 
 几点需要知道的：
 
-- **所有数据块都是 `select` 假数据**（`union all` 拼几行常量），不依赖任何业务表，执行完就能生成；换成自己的表时改 `sql` 即可。
-- **综合示例（Word）的 `demoProvider` / `demoApi` 依赖 example 模块**（`DemoOrderProvider` 与 `POST /demo/api/orders/{orderNo}`），只有 `doc-template-example` 启动着才有数据；换宿主时删掉或改成自己的 Provider / 接口即可。`demoApi` 回调 `127.0.0.1:9150`，接口挂在别的地址时改 `url`。
-- **模拟生成要填 `inspector` / `orderNo` / `channel`**：`inspector` 是模板里手填的审核人（不填显示「未填写」），`orderNo` 给 `demoProvider`、`channel` 给 `demoApi`。补齐参数只列出参数映射里以 `$request.` 开头的键，写死的常量（如 `demoApi` 的 `orderNo`）不会列出来。
-- **图片与二维码会真的去取图**（5 秒超时、单张 5MB），离线环境请换成可访问的地址或先去掉 `imageFields` / `qrCodes`，否则整次生成 `FAILED`（二维码中间的小图取不到只打 warn，不影响出码）。
+- 🧪 **所有数据块都是 `select` 假数据**（`union all` 拼几行常量），不依赖任何业务表，执行完就能生成；换成自己的表时改 `sql` 即可。
+- 🔗 **综合示例（Word）的 `demoProvider` / `demoApi` 依赖 example 模块**（`DemoOrderProvider` 与 `POST /demo/api/orders/{orderNo}`），只有 `doc-template-example` 启动着才有数据；换宿主时删掉或改成自己的 Provider / 接口即可。`demoApi` 回调 `127.0.0.1:9150`，接口挂在别的地址时改 `url`。
+- ⌨️ **模拟生成要填 `inspector` / `orderNo` / `channel`**：`inspector` 是模板里手填的审核人（不填显示「未填写」），`orderNo` 给 `demoProvider`、`channel` 给 `demoApi`。补齐参数只列出参数映射里以 `$request.` 开头的键，写死的常量（如 `demoApi` 的 `orderNo`）不会列出来。
+- 🌐 **图片与二维码会真的去取图**（5 秒超时、单张 5MB），离线环境请换成可访问的地址或先去掉 `imageFields` / `qrCodes`，否则整次生成 `FAILED`（二维码中间的小图取不到只打 warn，不影响出码）。
 
 完整说明（模板结构、数据块逐项解释、常见坑）见 [`docs/guide/examples.md`](./docs/guide/examples.md)。
 
-## 数据块数据源配置
+## 🗃 数据块数据源配置
 
 数据块由「数据源配置」+「参数映射」两部分组成，三种类型共用这两个字段：
 
@@ -409,10 +440,10 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 | `SQL` | `sql` / `single` / `maxRows` / `dataSource`（**不推荐**，见下文「SQL 数据源」） | 填充 SQL 里的 `:name` 占位 |
 | `API` | `url` / `method` / `resultPath` / `timeoutMs` / `headers` / `query` / `body` | 替换 `{name}`、`${name}` 占位 |
 
-> **取数方式的推荐顺序：`JAVA` > `API` > `SQL`。** `JAVA` 由宿主业务代码决定查什么，配置者只能在
+> ⚠️ **取数方式的推荐顺序：`JAVA` > `API` > `SQL`。** `JAVA` 由宿主业务代码决定查什么，配置者只能在
 > 下拉里选 Provider；`SQL` 等于把一条 SQL 的执行权交给配置者，风险最大，详见下文「SQL 数据源」。
 
-### 在管理界面里配置
+### 🎛 在管理界面里配置
 
 数据源配置和参数映射都是**按字段填表**，每个字段一个输入框；字段说明集中在弹窗右侧的「说明」侧栏里（默认收起），不占表单的位置：
 
@@ -429,9 +460,9 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 
 字段定义集中在 `frontend/doc-template-ui/src/dataBlockFields.ts`，新增配置项只改这一个文件，界面自动跟着变。
 
-### SQL 数据源（不推荐）
+### 🧮 SQL 数据源（不推荐）
 
-> **不建议使用，优先选 `JAVA` 数据源。**
+> 🚫 **不建议使用，优先选 `JAVA` 数据源。**
 >
 > 配置一条 SQL 数据块，等于把「这个数据源账号能查到的所有表」交给模板配置者：只要能打开数据块编辑页
 > （`auth.mode: none` 时就是任何能访问到端口的人），就能写一条 `select * from biz_order`，再生成一份
@@ -455,7 +486,7 @@ scripts/seed-demo.bat -b http://localhost:9000 --token <token>
 - `maxRows`：最多返回行数，默认取 `doc-template.data-block.default-max-rows`（500）。
 - `dataSource`：可选，宿主应用里 `DataSource` 的 Bean 名称，默认用主数据源 `dataSource`。
 
-#### 只读是怎么保证的
+#### 🛡 只读是怎么保证的
 
 三层，由内到外：
 
@@ -471,7 +502,7 @@ MySQL 的 `/*! ... */` 可执行注释按**代码**参与检查（服务器会�
 
 **这三层不是安全边界。** 解析器不认识的方言写法会直接报错（宁可拒也不放过），也有驱动只把 `setReadOnly` 当提示、并不真的生效。真正可靠的隔离是**给模块配只读数据库账号**——这是宿主侧唯一能兜住所有情况的措施。
 
-#### 错误信息不回传数据库原文
+#### 🙈 错误信息不回传数据库原文
 
 SQL 执行失败时，接口和生成记录里只会看到：
 
@@ -481,7 +512,7 @@ SQL 执行失败（dataSource=primary），请检查 SQL 与数据源配置；�
 
 数据库原始报错（含表名、列名、SQL 片段）只写服务端日志，避免把盲注变成「显错注」。其他接口的兜底 500 同样只返回「服务内部错误，请查看服务端日志」，不回传异常内部信息。
 
-#### 关掉 SQL 数据源
+#### 🔒 关掉 SQL 数据源
 
 ```yaml
 doc-template:
@@ -491,7 +522,7 @@ doc-template:
 
 关闭后保存 SQL 数据块直接报错、执行已有 SQL 数据块也报错，`JAVA` / `API` 数据块不受影响。
 
-### API 数据源
+### 🌐 API 数据源
 
 ```json
 {
@@ -513,7 +544,7 @@ doc-template:
 - `timeoutMs`：请求超时，默认取 `default-timeout-ms`（5000），上限由 `max-timeout-ms`（15000）兜住。
 - 非 2xx 直接判定生成失败，错误信息里带状态码和响应体前 300 字符。
 
-### 参数映射
+### 🔗 参数映射
 
 管理界面里按「参数名 / 值」成对添加，效果就是一组键值对：
 
@@ -528,7 +559,7 @@ doc-template:
 - 其他值按字面量常量处理；`1`、`true`、`{...}`、`[...]` 这类写法会按对应类型解析，不会被当成字符串。
 - 数据源不需要入参时整个参数映射留空即可。
 
-### 图片字段
+### 🖼 图片字段
 
 数据块取到的值如果是一张图片，可以在数据块配置里声明它是图片字段，渲染时这个占位符会被替换成图片（而不是一串 URL/Base64 文本）：
 
@@ -556,7 +587,7 @@ doc-template:
 
 图片渲染默认就开启，**不需要任何配置**：远程图片 5 秒超时、单张上限 5MB、未声明尺寸时最大 480px 宽，超过即等比缩小。
 
-### 二维码字段
+### 🔳 二维码字段
 
 数据块取到的是一个链接或编号、希望文档上直接出一张能扫的二维码时，在数据块配置里声明 `qrCodes`：
 
@@ -580,7 +611,7 @@ doc-template:
 - 二维码内容为空 → 按文本规则渲染（走默认值或空串），不中断生成；中间小图取不到或格式不支持 → 二维码照常输出，只是不叠加小图。
 - 管理页数据块配置里的「二维码字段」区块可以直接维护字段、尺寸、对齐和中间小图，不需要手写 JSON。
 
-### 动态列数据源
+### 📐 动态列数据源
 
 表格的列由数据决定时，在数据块配置里加一个 `columns` 对象，它本身就是一个数据源（三种取数方式都能用）：
 
@@ -611,7 +642,7 @@ doc-template:
 - 不配 `columns` 时行为完全不变，只有模板里写了 `{{#columns}}` 才会提示「没有配置列源」。
 - 管理页的「动态列」分组里打开开关就能配，不用手写 JSON。
 
-### 字段值转换与数据字典
+### 🔄 字段值转换与数据字典
 
 数据库里存的是 `0/1`、时间戳、`PAID`，文档上要显示「是」「2026-10-30」「已支付」——不用改 SQL，声明一下就行：
 
@@ -633,7 +664,7 @@ doc-template:
 - 数据字典是全局资源，**主子表结构**：`doc_template_dict`（主表，`dict_code` + `dict_name`）配字段编码，`doc_template_dict_item`（子表，`item_value` → `item_label`）配值到显示名的映射；管理页「数据字典」左侧选字典、右侧维护映射（按页加载）。`dict` 转换器按 `dict_code` 换显示名，查不到时由 `args.fallback` 决定原样输出 / 空串 / 字面量。
 - **同一次生成里每本字典只查一次库**（明细几百行也只发一条 `SELECT`），生成结束即清理缓存，改完字典立即生效。
 
-### 执行规则
+### ⚙️ 执行规则
 
 - 生成时按 `sort_order`、`id` 依次执行状态为 `ENABLED` 的数据块（管理界面不提供排序输入，执行顺序即列表顺序），结果以**块编码**为命名空间放进渲染参数：块编码 `report` + `single: true` 时，模板里写 `${report.report_no}`。
 - 任一数据块执行失败，整次生成记为 `FAILED`，错误信息形如「数据块「检验报告主信息」执行失败：…」，可在「生成记录」里直接看到。
@@ -653,19 +684,17 @@ doc-template:
 
 管理界面里新增/编辑数据块时，切换「数据源类型」会自动带出该类型的默认配置；每一项都能单独点「填入示例」，已填的其他项不会被覆盖。
 
-## 当前边界
+## 🚧 当前边界
 
-已实现：模板元数据 CRUD、文件上传/版本/下载/预览、删除时同步清理云存储、数据块 CRUD（**表单化配置**）与**执行器（Java Provider / SQL / API 三种数据源）**、DOCX/XLSX 占位符渲染（含明细行循环、**动态列**、**图片字段与二维码字段**）、**字段值转换与数据字典**、模拟生成、内置 PDF 导出、生成记录与结果文件、Provider 列表、可插拔认证（none / custom）、嵌入式管理页面（模板信息与数据块合并为双 Tab 弹窗）、示例 iframe/代理/认证配置。
+**已实现**：模板元数据 CRUD、文件上传/版本/下载/预览、删除时同步清理云存储、数据块 CRUD（**表单化配置**）与**执行器（Java Provider / SQL / API 三种数据源）**、DOCX/XLSX 占位符渲染（含明细行循环、**动态列**、**图片字段与二维码字段**）、**字段值转换与数据字典**、模拟生成、内置 PDF 导出、生成记录与结果文件、Provider 列表、可插拔认证（none / custom）、嵌入式管理页面（模板信息与数据块合并为双 Tab 弹窗）、示例 iframe/代理/认证配置。
 
-尚未实现：复杂模板语法（条件判断、图表）、循环区的合并单元格、异步生成任务队列、细粒度业务数据权限适配器。
+**尚未实现**：复杂模板语法（条件判断、图表）、循环区的合并单元格、异步生成任务队列、细粒度业务数据权限适配器。
 
-
-
-## 直接访问页面与认证
+## 🔐 直接访问页面与认证
 
 后端启动后访问 `http://localhost:9150/doc-template/`。页面路由：`/doc-template/#/templates`（模板管理，数据块在模板编辑弹窗的第二个 Tab 中维护）、`/doc-template/#/generate-records`（生成记录）。如果端口不是 9150，请替换为实际端口。
 
-### 认证方式
+### 🧩 认证方式
 
 模块只识别「当前调用方是谁」（用于生成记录的操作人），**不做权限码校验，也不创建用户/角色/登录表**。
 
@@ -688,7 +717,7 @@ doc-template:
 
 启动时会打印生效模式与身份来源；`none` 模式额外打一条 WARN，提醒接口对外开放。
 
-### 接入宿主已有的身份来源
+### 🔌 接入宿主已有的身份来源
 
 只有一个方法要写：返回当前调用方标识，取不到返回 `null`。身份从哪来由宿主决定，Starter 不关心。
 
@@ -738,11 +767,11 @@ doc-template:
 
 写实现时注意三点：
 
-- **不要抛异常**，未登录就返回 `null`。抛出去会被兜底成 500，而不是 401。
-- **实现要轻**：每个 `/api/doc-template/**` 请求都会调一次，不要在里查库。
-- **必须在请求线程内取得到身份**。宿主如果用异步线程池处理请求，要自己在实现里把上下文带过去（`RequestContextHolder` 或自建 `ThreadLocal` 透传）。
+- ⚠️ **不要抛异常**，未登录就返回 `null`。抛出去会被兜底成 500，而不是 401。
+- ⚡ **实现要轻**：每个 `/api/doc-template/**` 请求都会调一次，不要在里查库。
+- 🧵 **必须在请求线程内取得到身份**。宿主如果用异步线程池处理请求，要自己在实现里把上下文带过去（`RequestContextHolder` 或自建 `ThreadLocal` 透传）。
 
-### `none` 模式：网关已经鉴权的情况
+### 🚪 `none` 模式：网关已经鉴权的情况
 
 如果网关层做了统一鉴权、模块只想在生成记录里留下真实操作人，不用写 Bean，配一个透传请求头即可（模块只读这个头，不校验）：
 
@@ -753,9 +782,9 @@ doc-template:
     user-header: X-User-Id   # 值由网关写入，模块直接拿来当操作人
 ```
 
-> 风险提示：这个模式下 `/api/doc-template/**` 对所有能访问到端口的调用方开放，生产环境不要用。
+> 🚨 风险提示：这个模式下 `/api/doc-template/**` 对所有能访问到端口的调用方开放，生产环境不要用。
 
-### 示例：`doc-template-example` 的登录模块与模式切换
+### 🧪 示例：`doc-template-example` 的登录模块与模式切换
 
 > 该模块是作者自用的示例宿主，**不在发布包范围内**，只用来把两种模式都跑通。下面的账号、登录页、Cookie 配置都只服务于演示，生产宿主应当接自己的身份来源。
 
@@ -791,11 +820,11 @@ IDEA 里把同样的参数写进 Program arguments 即可。
 
 **为什么不用改前端**：内嵌管理页默认就从 `localStorage.token` 读 token，并按 `Authorization: Bearer <token>` 发送；登录页和管理页同源，`localStorage` 共享，登录完直接就能用。示例的会话同时写 Cookie，是为了让页面导航和 iframe 预览这类**无法自定义 header** 的请求也能带上会话。
 
-> **登录接口不在根路径时，必须显式配 Cookie 的 `path: /`。** 不配的话浏览器会把 Cookie 默认限定在登录接口所在目录（例如 `/demo`），`/doc-template/` 和 `/api/doc-template/**` 全都收不到会话——症状是「登录成功但页面又被弹回登录页」。这是通用结论，与具体认证方案无关。
+> 🍪 **登录接口不在根路径时，必须显式配 Cookie 的 `path: /`。** 不配的话浏览器会把 Cookie 默认限定在登录接口所在目录（例如 `/demo`），`/doc-template/` 和 `/api/doc-template/**` 全都收不到会话——症状是「登录成功但页面又被弹回登录页」。这是通用结论，与具体认证方案无关。
 
-> 注意：`mode` 是启动期配置，切模式需要重启。这是有意的——认证开关不应该在运行时被动态改掉。
+> 🔁 注意：`mode` 是启动期配置，切模式需要重启。这是有意的——认证开关不应该在运行时被动态改掉。
 
-### 注意事项
+### 📌 注意事项
 
 - 模块**只做认证（你是谁），不做授权（你能干什么）**，所以不需要给宿主菜单/角色配任何权限码，也不需要任何菜单表记录。
 - 模块的拦截器只作用于 `/api/doc-template/**`，静态页面 `/doc-template/**` 永远放行——页面本身不含数据，数据都在接口后面。宿主自己的全局拦截器仍需放行这两个前缀。
@@ -813,14 +842,13 @@ IDEA 里把同样的参数写进 Program arguments 即可。
   <iframe src="/doc-template/?tokenStorageKey=Admin-Token&tokenHeader=Authorization&tokenPrefix=Bearer&layout=bare"></iframe>
   ```
 
-- **嵌进内容区时加 `layout=bare`**：页面默认带左侧栏（品牌 + 菜单 + 页脚）和顶栏标题，直接嵌进宿主的内容区会和宿主的菜单叠成两条导航。`layout=bare` 把左侧栏和顶栏都去掉，页面上只剩内容区，切页面靠宿主的菜单改 iframe 的 hash 地址（`#/templates`、`#/generate-records`）；不加这个参数（或直接访问 `/doc-template/`）仍是完整布局。
+- 🖼 **嵌进内容区时加 `layout=bare`**：页面默认带左侧栏（品牌 + 菜单 + 页脚）和顶栏标题，直接嵌进宿主的内容区会和宿主的菜单叠成两条导航。`layout=bare` 把左侧栏和顶栏都去掉，页面上只剩内容区，切页面靠宿主的菜单改 iframe 的 hash 地址（`#/templates`、`#/generate-records`）；不加这个参数（或直接访问 `/doc-template/`）仍是完整布局。
 
-- **预览/下载要留意请求方式**：`/templates/versions/{id}/preview`、`/generate-records/{id}/preview` 这类地址会被浏览器/iframe 直接打开，**不会携带 `Authorization` 头**。宿主只认 header 时这些地址会 401；解决办法是让会话同时写 Cookie，或把前端改成 `fetch` + Blob 拉取后再预览。
+- 🔑 **预览/下载要留意请求方式**：`/templates/versions/{id}/preview`、`/generate-records/{id}/preview` 这类地址会被浏览器/iframe 直接打开，**不会携带 `Authorization` 头**。宿主只认 header 时这些地址会 401；解决办法是让会话同时写 Cookie，或把前端改成 `fetch` + Blob 拉取后再预览。
 
+## 💾 数据源与存储接入
 
-## 数据源与存储接入
-
-### 设计原则：Starter 不自带数据库连接，也不预设存储
+### 🧭 设计原则：Starter 不自带数据库连接，也不预设存储
 
 `doc-template-spring-boot-starter` 的 `resources` 目录里**没有任何 `application.yml`**，启动时也不会创建连接池。它只做两件事：
 
@@ -829,7 +857,7 @@ IDEA 里把同样的参数写进 Program arguments 即可。
 
 所以打包发布出去的 jar 天然是「零外部依赖配置」的，宿主配什么它就用什么。
 
-### 三种接法
+### 🛣 三种接法
 
 | 场景 | 配置 | 说明 |
 | --- | --- | --- |
@@ -870,7 +898,7 @@ doc-template:
   数据源     宿主数据源(dataSource) · MySQL 8.0.36
 ```
 
-### 存储接入
+### 📦 存储接入
 
 存储和数据库一样，**模块不预设任何外部服务**：
 
@@ -920,7 +948,7 @@ doc-template:
 
 三种情况都不返回 500。删除不受影响：对象不可达时只记 warn 日志并跳过对象删除，数据库记录照常删除。
 
-### 本地调试：example 就是「示例宿主」
+### 🖥 本地调试：example 就是「示例宿主」
 
 `backend/doc-template-example` 本身就是一个完整的宿主项目：它用 `spring.datasource` 提供数据源、用 `doc-template.storage` 提供存储，Starter 只是被它依赖引入。所以本地调试不需要给 Starter 单独配库或配存储，只改 example 的配置即可。
 
@@ -956,7 +984,7 @@ export DOC_S3_SECRET_KEY=your_secret_key
 
 `application-dev.yml` 进 git（不含任何真实地址和凭据），`application-local.yml` 已被 `.gitignore` 忽略、只留在本机。两个文件都只属于 example 模块（示例宿主），不会进入 Starter 的 jar；Starter 发布给宿主使用时，宿主的 `spring.datasource` 是什么就连什么。
 
-### 数据库驱动
+### 🔌 数据库驱动
 
 **Starter 不内置任何数据库驱动**——驱动由宿主在自己的依赖里声明：
 
@@ -993,7 +1021,7 @@ export DOC_S3_SECRET_KEY=your_secret_key
 
 版本交给 Spring Boot BOM 管，不用写（Oracle 驱动不在 BOM 里，要自己写版本）。宿主的 `spring.datasource` 里 `driver-class-name` 也可以不写，按 JDBC URL 自动识别；只有模块单独连另一个库（配了 `doc-template.datasource.url`）时才需要在该段里显式写驱动类名。自动建表目前支持 MySQL、MariaDB、PostgreSQL、SQL Server 2016+ 和 Oracle 12c+。
 
-## 对外坐标
+## 📤 对外坐标
 
 发布到 Maven Central，命名空间 `io.github.violateer`（GitHub 账号验证）：
 
@@ -1004,6 +1032,6 @@ export DOC_S3_SECRET_KEY=your_secret_key
 
 `doc-template-parent` 也会一并发布（子模块靠它解析父 POM），不需要宿主直接引用。示例宿主 `doc-template-example` **不在发布范围**。
 
-## 开源协议
+## 📜 开源协议
 
 [Apache License 2.0](./LICENSE)。
