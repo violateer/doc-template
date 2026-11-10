@@ -16,6 +16,8 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-10
+
 ### 新增
 
 - **SQL Server 支持**：宿主用 SQL Server 2016 及以上版本时，六张元数据表同样能自动创建，模板、版本、数据块、生成记录、字典的读写与分页全部可用；文本列按 Unicode 存取，中文不会因为库的默认排序规则变成问号。驱动仍要宿主自己引入——在宿主自己的 pom 里加一行 `com.microsoft.sqlserver:mssql-jdbc` 即可。
@@ -87,7 +89,8 @@
 - **运行接入**：复用宿主 `DataSource` 或配置独立库；MySQL 8 / MariaDB 自动建表；文件存储支持本地磁盘与 S3 兼容对象存储；同时兼容 Spring Boot 3.x / 4.x 的 Servlet Web 应用。
 - **内嵌管理界面**：模板、数据块、字典、生成记录的管理页随 JAR 发布，可 iframe 嵌入或同源部署。
 
-[Unreleased]: https://github.com/violateer/doc-template/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/violateer/doc-template/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/violateer/doc-template/releases/tag/v0.2.1
 [0.2.0]: https://github.com/violateer/doc-template/releases/tag/v0.2.0
 [0.1.2]: https://github.com/violateer/doc-template/releases/tag/v0.1.2
 [0.1.1]: https://github.com/violateer/doc-template/releases/tag/v0.1.1
