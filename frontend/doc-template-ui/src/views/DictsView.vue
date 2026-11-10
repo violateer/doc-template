@@ -390,23 +390,54 @@ const itemColumns = [
   }
 ];
 
-/** 点字典行 = 选中它（勾选框和操作列按钮自己处理，不接管） */
+function isDictChecked(row: DictRow): boolean {
+  return checkedDicts.value.includes(row.id);
+}
+
+function isItemChecked(row: DictItemRow): boolean {
+  return checkedItems.value.includes(row.id);
+}
+
+/** 点字典行 = 勾选 / 取消勾选，同时右侧跟着切到这本字典；勾选框和操作列按钮自己处理，不接管 */
 const dictRowProps = (row: DictRow) => ({
   style: 'cursor: pointer;',
   onClick: (event: MouseEvent) => {
     if (isInteractiveClick(event)) return;
-    selectDict(row);
+    checkedDicts.value = isDictChecked(row)
+      ? checkedDicts.value.filter((key) => key !== row.id)
+      : [...checkedDicts.value, row.id];
+    // 勾选是为了批量删，点开是为了看字典项：两个意图都满足，右侧跟着点的那一行走
+    if (selectedId.value !== row.id) selectDict(row);
   }
 });
 
-const dictRowClassName = (row: DictRow) => (row.id === selectedId.value ? 'is-checked' : '');
+/** 勾选的行用蓝底，右侧正在展示的那本用左侧竖条，两种状态能同时看出来 */
+const dictRowClassName = (row: DictRow) => {
+  const classes: string[] = [];
+  if (row.id === selectedId.value) classes.push('is-active');
+  if (isDictChecked(row)) classes.push('is-checked');
+  return classes.join(' ');
+};
+
+/** 点字典项行 = 勾选 / 取消勾选；勾选框和操作列按钮自己处理，不接管 */
+const itemRowProps = (row: DictItemRow) => ({
+  style: 'cursor: pointer;',
+  onClick: (event: MouseEvent) => {
+    if (isInteractiveClick(event)) return;
+    checkedItems.value = isItemChecked(row)
+      ? checkedItems.value.filter((key) => key !== row.id)
+      : [...checkedItems.value, row.id];
+  }
+});
+
+const itemRowClassName = (row: DictItemRow) => (isItemChecked(row) ? 'is-checked' : '');
 
 onMounted(loadDicts);
 </script>
 
 <template>
   <div class="view dict-view">
-    <!-- 左：字典列表（窄栏，点一行切换右侧的字典项） -->
+    <!-- 左：字典列表（窄栏，点一行 = 勾选该行 + 右侧切到这本字典的字典项） -->
     <NCard
       :bordered="false"
       class="table-card dict-card"
@@ -510,6 +541,8 @@ onMounted(loadDicts);
         :loading="itemsLoading"
         :row-key="(row: DictItemRow) => row.id"
         :checked-row-keys="checkedItems"
+        :row-props="itemRowProps"
+        :row-class-name="itemRowClassName"
         :pagination="itemPagination"
         :bordered="false"
         size="small"
@@ -614,13 +647,15 @@ onMounted(loadDicts);
   min-width: 0;
 }
 
+/* 这一行平时只有「共 N 本」，勾选后换成批量操作条（小尺寸按钮 28px 高）。
+   高度按操作条留够，勾选 / 取消时下面的表格不会跟着上下跳 */
 .side-meta {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 24px;
+  min-height: 30px;
   margin-bottom: 8px;
 }
 

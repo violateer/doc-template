@@ -18,7 +18,7 @@ public final class DocTemplateVersion {
 
     private static final String RESOURCE = "/META-INF/doc-template.properties";
 
-    /** {@code null} 表示读不到（跑在 IDE 里、资源被裁掉等）。 */
+    /** {@code null} 表示读不到（资源过滤没跑到、资源被裁掉等）。 */
     private static volatile String cached;
     private static volatile boolean loaded;
 
@@ -44,7 +44,13 @@ public final class DocTemplateVersion {
             Properties properties = new Properties();
             properties.load(in);
             String value = properties.getProperty("version");
-            return value == null || value.isBlank() ? null : value.trim();
+            if (value == null) return null;
+            value = value.trim();
+            // 资源过滤没跑到时（例如直接跑 IDE 拷出来的 target/classes），这里读到的是原样的
+            // ${project.version}。占位符不是版本号，按「读不到」处理：启动横幅和管理页宁可少显示
+            // 一个版本，也不能把 ${...} 印出来。
+            if (value.isEmpty() || value.contains("${")) return null;
+            return value;
         } catch (Exception ignored) {
             return null;
         }

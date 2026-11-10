@@ -265,7 +265,16 @@ body,
   margin: 0 1px;
 }
 
-/* 勾选行的高亮：点行即选中的视觉反馈，和左侧方框对应 */
+/* 「当前打开」的行（如左侧字典列表里右侧正在展示的那本）：勾选用蓝底，打开用左侧竖条 */
+.n-data-table-tr.is-active .n-data-table-td {
+  background-color: #f7fafe;
+}
+
+.n-data-table-tr.is-active .n-data-table-td:first-child {
+  box-shadow: inset 3px 0 0 #2f6fed;
+}
+
+/* 勾选行的高亮：点行即选中的视觉反馈，和左侧方框对应。放在 is-active 之后，勾选的蓝底优先 */
 .n-data-table-tr.is-checked .n-data-table-td {
   background-color: #eff5ff;
 }
