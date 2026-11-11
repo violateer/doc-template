@@ -1,3 +1,5 @@
+import type { AiStatus } from './types';
+
 declare global {
   interface Window {
     DOC_TEMPLATE_CONFIG?: {
@@ -12,7 +14,6 @@ declare global {
 }
 
 type DocTemplateConfig = NonNullable<Window['DOC_TEMPLATE_CONFIG']>;
-
 /**
  * iframe 嵌入时，宿主没法在页面里改 `window.DOC_TEMPLATE_CONFIG`，只能把这几项挂在地址上：
  *
@@ -44,7 +45,7 @@ function readIframeConfig(): DocTemplateConfig {
     // tokenPrefix 允许空串（表示不加前缀），另外几个空值视为没传
     if (key !== 'tokenPrefix' && !value) continue;
     if (key === 'tokenHeader' && !HEADER_NAME.test(value)) continue;
-    // layout 只认两个值，写错了按默认（full）处理，不要因为一个拼写错误把界面搞成半残
+    // layout 只认两个值，写错了按默认（full）处理，避免因单个拼写错误导致界面异常
     if (key === 'layout' && value !== 'full' && value !== 'bare') continue;
     result[key] = value;
   }
@@ -56,7 +57,7 @@ const config: DocTemplateConfig = { ...(window.DOC_TEMPLATE_CONFIG ?? {}), ...re
 export const apiBase = (config.apiBaseUrl ?? '/api/doc-template').replace(/\/$/, '');
 
 /**
- * 布局模式：`full` 带左侧栏（直接访问 `/doc-template/` 时的样子），`bare` 只留顶栏 + 内容区。
+ * 布局模式：`full` 带左侧栏（直接访问 `/doc-template/` 时的形态），`bare` 只留顶栏 + 内容区。
  * 被宿主 iframe 嵌进内容区时用 `?layout=bare`，否则宿主的菜单和这里的左侧栏会叠成两条导航。
  */
 export const layoutMode: 'full' | 'bare' = config.layout === 'bare' ? 'bare' : 'full';
@@ -117,6 +118,16 @@ export async function apiBlob(path: string): Promise<Blob> {
 }
 
 /**
+ * 带 JSON body 的二进制接口。
+ *
+ * <p>标注预览是 POST（计划在 body 里），没法用地址拼出来，所以单独开一个。</p>
+ */
+export async function apiPostBlob(path: string, body: unknown): Promise<Blob> {
+  const response = await request(path, { method: 'POST', body: JSON.stringify(body) });
+  return response.blob();
+}
+
+/**
  * 当前运行的后端（Starter）版本号，显示在左侧栏底部。
  * 老版本 Starter 没有这个接口，取不到时返回空串，页面只显示「Starter」。
  */
@@ -151,3 +162,12 @@ export const previewUrl = (versionId: number | string) => `/templates/versions/$
 export const downloadUrl = (versionId: number | string) => `/templates/versions/${versionId}/download`;
 export const recordPreviewUrl = (id: number | string) => `/generate-records/${id}/preview`;
 export const recordDownloadUrl = (id: number | string) => `/generate-records/${id}/file`;
+
+/** AI 标注是否可用。老版本 Starter 没有这个接口，取不到时按「未启用」处理。 */
+export async function fetchAiStatus(): Promise<AiStatus> {
+  try {
+    return await api<AiStatus>('/ai/status');
+  } catch {
+    return { enabled: false, model: null, max_attempts: 0, max_input_chars: 0 };
+  }
+}

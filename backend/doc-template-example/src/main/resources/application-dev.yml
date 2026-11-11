@@ -14,6 +14,7 @@
 #        DOC_S3_ACCESS_KEY    对象存储访问密钥
 #        DOC_S3_SECRET_KEY    对象存储私有密钥
 #      可选：DOC_S3_REGION（默认 us-east-1）、DOC_S3_BUCKET（默认 doc-template）
+#      可选：DOC_AI_ENABLED / DOC_AI_API_KEY / DOC_AI_BASE_URL / DOC_AI_MODEL，见下面 doc-template.ai
 #   3. 想连自己的库又不想设环境变量，用 local profile（application-local.yml，
 #      个人本地文件，不进 git）：--spring.profiles.active=local
 #   4. 这里只配 spring.datasource（宿主数据源），doc-template.datasource 依然不配，
@@ -83,6 +84,31 @@ doc-template:
     secret-key: ${DOC_S3_SECRET_KEY}
     path-style-access: true
     prefix: doc-template
+
+  # AI 标注：让模型读文档结构快照、出标记计划，管理页「AI 导入」用它。
+  # 开启意味着文档正文会被发到 base-url 指向的服务，对外系统请确认这条链路可接受。
+  #   打开：DOC_AI_ENABLED=true + DOC_AI_API_KEY=<你的密钥>，两个都要给
+  #   只给 key 不给 enabled 不生效；给了 enabled 却没给 key 会启动失败并指出缺哪一项
+  #   base-url / model 有默认值（DeepSeek），换服务商只改这两个
+  ai:
+    enabled: ${DOC_AI_ENABLED:false}
+    # 换成其他服务商只改 base-url 和 model 两行：任何 OpenAI Chat Completions 兼容接口都能用
+    base-url: ${DOC_AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${DOC_AI_API_KEY:}
+    model: ${DOC_AI_MODEL:deepseek-chat}
+    # 生成结构化产物建议保持 0：同样的输入要得到同样的计划
+    temperature: 0
+    # 输出上限一次给足：推理模型的思考也计入这里，给小了正文还没开始就被截断。
+    # 它只决定「模型能说多久」，不按用量计费 —— 想完会自己停，不会真的花满。
+    # 服务商自己的上限更小时，会按它的报错自动降下来，不用手改。
+    max-tokens: 32768
+    # 推理模型的思考时间不可控，超时给足
+    timeout-ms: 180000
+    # 自检没过就把错误原文回灌给模型重来，含首次在内的总次数
+    max-attempts: 3
+    # 各服务商自己的开关，原样并入请求体。默认留空即可 —— 模块按协议通用处理，
+    # 换模型不用改这里；只有需要厂商专有能力时才填，键名和取值以服务商文档为准，各家互不通用。
+    extra-body: {}
 
 # 演示站：dev 就是对外部署的那一套，内置示例模板只读（编码清单见 application.yml）
 demo:

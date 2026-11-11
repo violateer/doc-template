@@ -32,6 +32,7 @@ import TemplateEditModal from '../components/TemplateEditModal.vue';
 import GenerateModal from '../components/GenerateModal.vue';
 import FilePreviewModal from '../components/FilePreviewModal.vue';
 import BatchBar from '../components/BatchBar.vue';
+import AiImportModal from '../components/AiImportModal.vue';
 
 const message = useMessage();
 const dialog = useDialog();
@@ -48,6 +49,7 @@ const editShow = ref(false);
 const editing = ref<TemplateRow | null>(null);
 const generateShow = ref(false);
 const generatingTemplate = ref<TemplateRow | null>(null);
+const importShow = ref(false);
 
 const previewShow = ref(false);
 const previewSrc = ref('');
@@ -394,6 +396,12 @@ onMounted(() => {
             </template>
             刷新
           </NTooltip>
+          <NButton type="primary" ghost @click="importShow = true">
+            <template #icon>
+              <NIcon><FlashOutline /></NIcon>
+            </template>
+            AI 导入
+          </NButton>
           <NButton type="primary" @click="openCreate">
             <template #icon>
               <NIcon><AddOutline /></NIcon>
@@ -422,7 +430,7 @@ onMounted(() => {
         @update:checked-row-keys="(keys: Array<string | number>) => (checkedKeys = keys as number[])"
       >
         <template #empty>
-          <NEmpty description="还没有模板，先创建一个吧">
+          <NEmpty description="暂无模板，请先创建">
             <template #extra>
               <NButton size="small" type="primary" @click="openCreate">新增模板</NButton>
             </template>
@@ -433,6 +441,7 @@ onMounted(() => {
 
     <TemplateEditModal v-model:show="editShow" :template="editing" @saved="onSaved" />
     <GenerateModal v-model:show="generateShow" :template="generatingTemplate" @generated="onSaved" />
+    <AiImportModal v-model:show="importShow" @saved="onSaved" />
     <FilePreviewModal
       v-model:show="previewShow"
       :src="previewSrc"

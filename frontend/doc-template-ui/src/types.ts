@@ -103,3 +103,96 @@ export interface PageResult<T> {
   size: number;
   pages: number;
 }
+
+/** AI 标注的可用状态（`GET /ai/status`）。默认关闭时不返回模型名。 */
+export interface AiStatus {
+  enabled: boolean;
+  model: string | null;
+  max_attempts: number;
+  max_input_chars: number;
+}
+
+/** 标记计划里的一块：`shape` 是 `object`（单条）或 `array`（多条）。 */
+export interface PlanBlock {
+  code: string;
+  name: string;
+  shape: 'object' | 'array';
+  fields: PlanField[];
+}
+
+export interface PlanField {
+  field: string;
+  label: string;
+  type: 'string' | 'number' | 'date' | 'boolean';
+  samples: string[];
+}
+
+/**
+ * 标记计划。字段名固定驼峰（`rowTo` 不是 `row_to`），原样回传给后端即可。
+ */
+export interface MarkPlan {
+  blocks: PlanBlock[];
+  marks: PlanMark[];
+  ignore?: { at: Record<string, number>; reason: string }[];
+}
+
+export interface PlanMark {
+  kind: 'value' | 'loop' | 'region';
+  at: {
+    paragraph?: number;
+    sheet?: number;
+    table?: number;
+    row?: number;
+    rowTo?: number;
+    cell?: number;
+    p?: number;
+  };
+  block: string;
+  field?: string;
+  replace?: string;
+  merge?: number[];
+  by?: string;
+}
+
+/** 自检返回的一块：带生成的模拟 SQL 和行数。 */
+export interface CheckBlock {
+  code: string;
+  name: string | null;
+  shape: string;
+  rows: number;
+  fields: PlanField[];
+  sql: string;
+}
+
+export interface CheckResult {
+  ok: boolean;
+  error?: string;
+  template_id?: number;
+  version_id?: number;
+  file_type?: FileType;
+  blocks?: CheckBlock[];
+  placeholders?: string[];
+  unbound?: string[];
+  suggestions?: ConverterSuggestion[];
+  warnings?: string[];
+  ignored?: { at: Record<string, number>; reason: string }[];
+  output_bytes?: number;
+}
+
+/** 值转换建议：只提一句，不会自动写进数据块。 */
+export interface ConverterSuggestion {
+  block: string;
+  field: string;
+  converter: string;
+  reason: string;
+}
+
+/** AI 出计划的结果：成功时把自检结果平铺进来，失败时带每次尝试的原因。 */
+export interface AiPlanResult extends CheckResult {
+  attempt?: number;
+  attempts?: number;
+  model?: string;
+  elapsed_ms?: number;
+  plan?: MarkPlan;
+  failures?: { attempt: number; stage: string; error: string; elapsed_ms: number }[];
+}

@@ -9,10 +9,16 @@ import io.github.violateer.doctemplate.starter.controller.DocTemplateDataBlockCo
 import io.github.violateer.doctemplate.starter.controller.DocTemplateGenerateRecordController;
 import io.github.violateer.doctemplate.starter.controller.DocTemplatePageController;
 import io.github.violateer.doctemplate.starter.controller.DocTemplateExceptionHandler;
+import io.github.violateer.doctemplate.starter.controller.DocTemplateAnnotateController;
+import io.github.violateer.doctemplate.starter.controller.DocTemplateAiController;
+import io.github.violateer.doctemplate.starter.ai.DocTemplateAiClient;
+import io.github.violateer.doctemplate.starter.ai.DocTemplateAiPlanner;
+import io.github.violateer.doctemplate.starter.ai.OpenAiCompatibleClient;
 import io.github.violateer.doctemplate.starter.convert.BuiltinConverters;
 import io.github.violateer.doctemplate.starter.convert.DictConverter;
 import io.github.violateer.doctemplate.starter.convert.DocTemplateConverterRegistry;
 import io.github.violateer.doctemplate.starter.db.DocTemplateDialectProvider;
+import io.github.violateer.doctemplate.starter.service.DocTemplateAnnotateService;
 import io.github.violateer.doctemplate.starter.service.DocTemplateDictService;
 import io.github.violateer.doctemplate.starter.service.DocTemplateService;
 import io.github.violateer.doctemplate.starter.service.DocTemplateFileStorage;
@@ -22,6 +28,7 @@ import io.github.violateer.doctemplate.starter.service.DocTemplatePdfRenderer;
 import io.github.violateer.doctemplate.starter.service.DocTemplateDataBlockExecutor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
@@ -54,7 +61,7 @@ import java.util.TreeMap;
         "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
         "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"})
 @EnableConfigurationProperties(DocTemplateProperties.class)
-@Import({DocTemplatePageController.class, DocTemplateSystemController.class, DocTemplateTemplateController.class, DocTemplateDataBlockController.class, DocTemplateGenerateRecordController.class, DocTemplateDictController.class, DocTemplateExceptionHandler.class})
+@Import({DocTemplatePageController.class, DocTemplateSystemController.class, DocTemplateTemplateController.class, DocTemplateDataBlockController.class, DocTemplateGenerateRecordController.class, DocTemplateDictController.class, DocTemplateAnnotateController.class, DocTemplateAiController.class, DocTemplateExceptionHandler.class})
 @ConditionalOnProperty(prefix = "doc-template", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DocTemplateAutoConfiguration {
 
@@ -178,6 +185,47 @@ public class DocTemplateAutoConfiguration {
             DocTemplateRenderer renderer, DocTemplatePdfRenderer pdfRenderer,
             DocTemplateDataBlockExecutor dataBlockExecutor, DocTemplateDictService dictService) {
         return new DocTemplateService(templateRepository, versionRepository, blockRepository, recordRepository, properties, fileStorage, renderer, pdfRenderer, dataBlockExecutor, dictService);
+    }
+
+    /**
+     * 结构化标注：快照 → 按计划落笔 → 模拟数据渲染自检 → 落库。
+     *
+     * <p>不依赖任何大模型，也不引任何新依赖（POI 本来就在），所以直接放在 Starter 里：
+     * 单独拆一个发布物会让发版脚本、版本号同步、管理页的能力探测都多一份成本，
+     * 而它带来的隔离收益在这里是零。</p>
+     */
+    @Bean
+    public DocTemplateAnnotateService docTemplateAnnotateService(DocTemplateService templates,
+                                                                DocTemplateRenderer renderer,
+                                                                DocTemplateDialectProvider dialectProvider,
+                                                                DocTemplateProperties properties) {
+        return new DocTemplateAnnotateService(templates, renderer, dialectProvider, properties);
+    }
+
+    /**
+     * 内置的模型客户端：只有显式开启 {@code doc-template.ai.enabled} 才会创建。
+     *
+     * <p>默认不建，所以没配地址密钥的宿主启动不受影响；宿主自己注册了 {@code DocTemplateAiClient}
+     * 时这里退让（{@code @ConditionalOnMissingBean}），连地址密钥都不用配。</p>
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "doc-template.ai", name = "enabled", havingValue = "true")
+    @ConditionalOnMissingBean(DocTemplateAiClient.class)
+    public DocTemplateAiClient docTemplateAiClient(DocTemplateProperties properties) {
+        return new OpenAiCompatibleClient(properties.getAi());
+    }
+
+    /**
+     * 出计划的编排：拼提示词 → 调模型 → 解析 → 落笔自检 → 失败回灌重试。
+     *
+     * <p>客户端用 {@link ObjectProvider} 取，没有就是 {@code null} —— 这样「AI 没启用」只影响
+     * {@code /ai/plan} 一个接口，快照、自检、预览、落库这些纯代码路径不跟着一起消失。</p>
+     */
+    @Bean
+    public DocTemplateAiPlanner docTemplateAiPlanner(DocTemplateAnnotateService annotateService,
+                                                     ObjectProvider<DocTemplateAiClient> client,
+                                                     DocTemplateProperties properties) {
+        return new DocTemplateAiPlanner(annotateService, client.getIfAvailable(), properties.getAi());
     }
 
     /**

@@ -11,6 +11,12 @@ const props = defineProps<{
   src: string;
   filename: string;
   downloadSrc?: string;
+  /**
+   * 直接给字节，跳过 `src` 的 GET。
+   *
+   * <p>标注预览是 POST（计划在 body 里），地址拼不出来，只能由调用方先取回 Blob。</p>
+   */
+  blob?: Blob | null;
 }>();
 
 const emit = defineEmits<{ (event: 'update:show', value: boolean): void }>();
@@ -54,10 +60,10 @@ function reset() {
 async function load() {
   const seq = ++loadSeq;
   reset();
-  if (!props.src) return;
+  if (!props.src && !props.blob) return;
   loading.value = true;
   try {
-    const blob = await apiBlob(props.src);
+    const blob = props.blob ?? (await apiBlob(props.src));
     const buffer = await blob.arrayBuffer();
     if (seq !== loadSeq) return;
     if (kind.value === 'docx') {
@@ -117,7 +123,7 @@ async function renderDocx(buffer: ArrayBuffer, seq: number) {
     if (seq !== loadSeq) return;
     // 渲染成功但一个可见节点都没有时给出提示，而不是留一片空白
     if (!host.textContent?.trim() && !host.querySelector('img, table, svg, canvas')) {
-      error.value = '未能解析出可显示的内容，请点击下方「下载原文件」查看';
+      error.value = '未能解析出可显示的内容，请点击「下载原文件」查看';
       return;
     }
     host.parentElement?.scrollTo({ top: 0 });
@@ -128,14 +134,28 @@ async function renderDocx(buffer: ArrayBuffer, seq: number) {
 
 async function download() {
   try {
-    await downloadFile(props.downloadSrc ?? props.src, props.filename);
+    const target = props.downloadSrc ?? props.src;
+    if (!target) {
+      if (!props.blob) return;
+      // 只给了字节（标注预览）时，直接把它当文件下载
+      const url = URL.createObjectURL(props.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = props.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      return;
+    }
+    await downloadFile(target, props.filename);
   } catch (e: any) {
     error.value = e?.message ?? '下载失败';
   }
 }
 
 watch(
-  () => [props.show, props.src],
+  () => [props.show, props.src, props.blob],
   ([show]) => {
     if (show) {
       void load();

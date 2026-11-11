@@ -31,6 +31,26 @@
 | --- | --- | --- |
 | `POST` | `/templates/{id}/generate` | 生成文档，body：`{templateVersionId?, exportType?, requestParams?}`；`exportType` 只认 `ORIGINAL` / `PDF`（大小写不敏感），写别的直接报错 |
 
+## 结构化标注
+
+把一份已经填好内容的文档变成「模板 + 数据块」。计划是一份 JSON，字段名固定驼峰（`rowTo`，不是 `row_to`），
+原样回传给后端即可。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/templates/{id}/snapshot` | 当前版本的结构快照：段落、表格、单元格的坐标与文字，坐标一律 0 起始 |
+| `POST` | `/templates/{id}/annotate/check` | 只校验不落库：落笔 + 生成模拟 SQL + 渲染一次，返回 `{ok, blocks, placeholders, unbound, suggestions, warnings, output_bytes}`；计划本身写错返回 400，坐标和文档对不上返回 `ok:false` + `error` |
+| `POST` | `/templates/{id}/annotate/preview` | 下载预览；`?mode=template` 看落笔后的标记，默认看模拟数据的渲染效果 |
+| `POST` | `/templates/{id}/annotate` | 自检通过后写新版本并按计划建数据块；当前版本已经标注过时直接拒绝 |
+| `GET` | `/ai/status` | `{enabled, model, max_attempts, max_input_chars}`，不含地址与密钥；未开启时 `enabled` 为 `false` |
+| `POST` | `/templates/{id}/ai/plan` | 让模型读快照出计划并自检，body `{hint?}`；成功时把自检结果平铺进来并带 `plan`，失败返回 `ok:false` + `failures`（每次尝试的原因） |
+
+::: tip 计划里的三类标记
+`value`（取值）、`loop`（行循环）、`region`（区域循环）。`loop` / `region` 可带 `merge` / `by`；
+坐标全部 0 起始，`cell` 是网格列号。标注只做单层循环：动态列和嵌套循环（循环套循环、按字段关联过滤）
+不在范围内，计划里出现会被直接拒绝——这两类仍然可以在模板里手写，只是不由这条链路生成。
+:::
+
 ## 数据块
 
 | 方法 | 路径 | 说明 |

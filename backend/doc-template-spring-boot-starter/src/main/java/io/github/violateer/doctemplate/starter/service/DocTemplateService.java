@@ -249,14 +249,25 @@ public class DocTemplateService {
     }
 
     public Map<String, Object> upload(long id, MultipartFile file) throws Exception {
-        DocTemplateEntity t = requireTemplate(id);
+        requireTemplate(id);
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("请选择要上传的文件");
-        String name = StrUtil.blankToDefault(file.getOriginalFilename(), "template");
+        return addVersion(id, StrUtil.blankToDefault(file.getOriginalFilename(), "template"), file.getBytes());
+    }
+
+    /**
+     * 直接用字节写一个新版本。
+     *
+     * <p>上传走 {@link #upload(long, MultipartFile)}，结构化标注落库走这里 —— 标注结果在内存里，
+     * 没有 MultipartFile 可以包，也不该为了复用去造一个假的上传对象。</p>
+     */
+    public Map<String, Object> addVersion(long id, String fileName, byte[] bytes) throws Exception {
+        DocTemplateEntity t = requireTemplate(id);
+        if (bytes == null || bytes.length == 0) throw new IllegalArgumentException("文件内容为空");
+        String name = StrUtil.blankToDefault(fileName, "template");
         String suffix = FileUtil.extName(name);
         String ext = StrUtil.equalsIgnoreCase("docx", suffix) ? "DOCX" : StrUtil.equalsIgnoreCase("xlsx", suffix) ? "XLSX" : "";
         if (ext.isEmpty())
             throw new IllegalArgumentException("不支持该文件类型，只支持 .docx 和 .xlsx");
-        byte[] bytes = file.getBytes();
         String storedLocation = fileStorage.store(id, name, bytes);
         String sha = sha256(bytes);
         DocTemplateVersionEntity latest = versionRepository.findLatest(id);
@@ -275,6 +286,30 @@ public class DocTemplateService {
         t.setUpdateTime(LocalDateTime.now());
         templateRepository.update(t);
         return toMap(v);
+    }
+
+    /** 当前版本的文件内容；没上传过文件时报错，而不是返回空数组。 */
+    public byte[] currentVersionBytes(long templateId) throws Exception {
+        return fileStorage.read(requireCurrentVersion(requireTemplate(templateId)).getFileUrl());
+    }
+
+    public String currentFileName(long templateId) {
+        return requireCurrentVersion(requireTemplate(templateId)).getFileName();
+    }
+
+    public Long currentVersionId(long templateId) {
+        return requireCurrentVersion(requireTemplate(templateId)).getId();
+    }
+
+    public String currentFileType(long templateId) {
+        return requireTemplate(templateId).getFileType();
+    }
+
+    private DocTemplateVersionEntity requireCurrentVersion(DocTemplateEntity template) {
+        Long versionId = template.getCurrentVersionId();
+        if (versionId == null)
+            throw new IllegalArgumentException("该模板尚未上传文件，请先上传 .docx 或 .xlsx 模板");
+        return requireVersion(versionId);
     }
 
     public List<Map<String, Object>> versions(long id) {
@@ -502,7 +537,7 @@ public class DocTemplateService {
         if (template.getCurrentVersionId() != null) return template.getCurrentVersionId();
         DocTemplateVersionEntity latest = versionRepository.findLatest(template.getId());
         if (latest == null) return null;
-        // 顺手把空字段补上，后续请求就不用再查一次
+        // 同时补齐空字段，后续请求无需重复查询
         template.setCurrentVersionId(latest.getId());
         template.setUpdateTime(LocalDateTime.now());
         templateRepository.update(template);
@@ -626,7 +661,7 @@ public class DocTemplateService {
      * 取合并单元格的对齐方式（{@code data_source_config.mergeCellAlign}）。
      *
      * <p>对齐是「整篇文档一份」的设置，不按数据块区分，所以多个块都配了时以第一个为准，
-     * 配得不一致会打一条 warn —— 否则模板作者会搞不清到底哪个生效。</p>
+     * 配得不一致会打一条 warn —— 否则无法判断哪一项生效。</p>
      */
     private DocTemplateMergeAlign mergeAlignOf(List<DocTemplateDataBlockEntity> blocks) {
         if (blocks == null || blocks.isEmpty()) return DocTemplateMergeAlign.DEFAULT;
@@ -642,7 +677,7 @@ public class DocTemplateService {
                 result = align;
                 source = block.getBlockCode();
             } else if (!result.equals(align)) {
-                log.warn("数据块「{}」声明的 mergeCellAlign={} 与「{}」的 {} 不一致，按前者生效（对齐是整篇文档一份设置）",
+                log.warn("数据块「{}」声明的 mergeCellAlign={} 与「{}」的 {} 不一致，按前者生效（对齐为整篇文档统一设置）",
                         block.getBlockCode(), align, source, result);
             }
         }
@@ -843,7 +878,7 @@ public class DocTemplateService {
     /**
      * 导出类型只认 ORIGINAL / PDF（大小写都行），写错直接报错。
      *
-     * <p>以前「不是 PDF 就按 ORIGINAL」，于是 {@code exportType=pdff} 会安静地给你一份 docx。</p>
+     * <p>旧实现把非 PDF 一律按 ORIGINAL 处理，{@code exportType=pdff} 会静默产出 docx。</p>
      */
     static String exportTypeOf(Object raw) {
         String type = StrUtil.blankToDefault(Convert.toStr(raw), "ORIGINAL").trim().toUpperCase(Locale.ROOT);

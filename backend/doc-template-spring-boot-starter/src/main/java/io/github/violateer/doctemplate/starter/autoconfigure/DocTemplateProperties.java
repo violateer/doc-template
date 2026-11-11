@@ -4,7 +4,9 @@ import io.github.violateer.doctemplate.starter.auth.AuthMode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @ConfigurationProperties(prefix = "doc-template")
 public class DocTemplateProperties {
@@ -19,6 +21,7 @@ public class DocTemplateProperties {
     private final Datasource datasource = new Datasource();
     private final Storage storage = new Storage();
     private final DataBlock dataBlock = new DataBlock();
+    private final Ai ai = new Ai();
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -34,6 +37,94 @@ public class DocTemplateProperties {
     public Datasource getDatasource() { return datasource; }
     public Storage getStorage() { return storage; }
     public DataBlock getDataBlock() { return dataBlock; }
+    public Ai getAi() { return ai; }
+
+    /**
+     * 让模型读文档结构、给出标记计划（S18 的第 ② 步）。
+     *
+     * <p><b>默认关闭</b>：开启意味着文档正文会被发到 {@code base-url} 指向的服务。
+     * 只支持 OpenAI Chat Completions 兼容协议 —— 一个协议覆盖 DeepSeek / 通义 / 文心 / Kimi / Azure，
+     * 不用为每家写适配器。宿主也可以自己注册一个 {@code DocTemplateAiClient} Bean 完全接管，
+     * 那样这些配置项都不参与。</p>
+     */
+    public static class Ai {
+        /** 关掉时 {@code /ai/plan} 直接报「AI 未启用」，其余标注能力不受影响。 */
+        private boolean enabled = false;
+        /** 接口地址，形如 {@code https://api.deepseek.com}（不带 /v1/chat/completions）。 */
+        private String baseUrl;
+        private String apiKey;
+        private String model = "deepseek-chat";
+        /**
+         * 生成结构化产物建议 0：同样的输入要得到同样的计划。
+         *
+         * <p>设为负数表示不发送该字段 —— 部分推理模型（OpenAI o 系列这类）不接受
+         * {@code temperature}，带上去会直接 400。</p>
+         */
+        private double temperature = 0;
+        /**
+         * 单次输出上限，<b>默认 32K，一次给足</b>。
+         *
+         * <p>推理模型的思考过程同样计入这个上限，给小了正文还没开始就被截断
+         * （{@code finish_reason=length}、正文为空）。它只决定「模型能说多久」，不按用量计费 ——
+         * 模型想完会自己停，不会真的花满。服务端自己的上限更小时（各家 8K / 16K / 32K / 64K 不等），
+         * 会按它的报错自动降到能接受的值，不需要手动试。</p>
+         *
+         * <p>{@code 0} 表示不发送该参数，上限完全由服务端默认值决定 —— 通常偏小，不建议。</p>
+         */
+        private int maxTokens = 32768;
+        /** 兼容接口的路径，默认 {@code /v1/chat/completions}。 */
+        private String completionsPath = "/v1/chat/completions";
+        /** 单次请求超时。推理模型的思考时间不可控，默认给到 2 分钟。 */
+        private long timeoutMs = 120000;
+        /**
+         * 是否带 {@code response_format: {"type":"json_object"}}。
+         * 个别服务商不认这个字段会直接 400，那种情况关掉即可（提示词里已经要求只输出 JSON）。
+         */
+        private boolean jsonMode = true;
+        /** 结构快照的字符上限，超了会丢掉末尾的表格/段落并告警，避免一次请求把上下文撑爆。 */
+        private int maxInputChars = 60000;
+        /** 含首次在内的最大尝试次数：校验没过就把错误回灌给模型重来。 */
+        private int maxAttempts = 3;
+        /**
+         * 原样并入请求体的额外字段，用来传各服务商自己的开关。
+         *
+         * <p>这是兜底手段，不是常规配置：模块本身按协议通用处理（不发送 {@code max_tokens}、
+         * 兼容各家推理字段、400 时自动去掉服务端不认的字段），换模型通常不用动这里。
+         * 只有在需要厂商专有能力时才填，例如关闭思考、调推理强度、指定 {@code chat_template_kwargs}，
+         * 具体键名与取值以所用服务商的接口文档为准 —— 各家写法互不通用。</p>
+         *
+         * <p>{@code messages} 和 {@code stream} 不允许覆盖（会破坏响应解析），其余键原样合并，
+         * 包括 {@code max_tokens}、{@code temperature}。</p>
+         */
+        private Map<String, Object> extraBody = new LinkedHashMap<>();
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getBaseUrl() { return baseUrl; }
+        public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+        public String getModel() { return model; }
+        public void setModel(String model) { this.model = model; }
+        public double getTemperature() { return temperature; }
+        public void setTemperature(double temperature) { this.temperature = temperature; }
+        public int getMaxTokens() { return maxTokens; }
+        public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
+        public String getCompletionsPath() { return completionsPath; }
+        public void setCompletionsPath(String completionsPath) { this.completionsPath = completionsPath; }
+        public long getTimeoutMs() { return timeoutMs; }
+        public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }
+        public boolean isJsonMode() { return jsonMode; }
+        public void setJsonMode(boolean jsonMode) { this.jsonMode = jsonMode; }
+        public int getMaxInputChars() { return maxInputChars; }
+        public void setMaxInputChars(int maxInputChars) { this.maxInputChars = maxInputChars; }
+        public int getMaxAttempts() { return maxAttempts; }
+        public Map<String, Object> getExtraBody() { return extraBody; }
+        public void setExtraBody(Map<String, Object> extraBody) {
+            this.extraBody = extraBody == null ? new LinkedHashMap<>() : extraBody;
+        }
+        public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
+    }
 
     /**
      * 认证配置。模块只识别「当前调用方是谁」，不做权限码校验，所以这里只有身份来源和兜底操作人。
