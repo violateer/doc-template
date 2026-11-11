@@ -502,7 +502,7 @@ public class DocTemplateService {
         if (template.getCurrentVersionId() != null) return template.getCurrentVersionId();
         DocTemplateVersionEntity latest = versionRepository.findLatest(template.getId());
         if (latest == null) return null;
-        // 顺手把空字段补上，后续请求就不用再查一次
+        // 同时补齐空字段，后续请求无需重复查询
         template.setCurrentVersionId(latest.getId());
         template.setUpdateTime(LocalDateTime.now());
         templateRepository.update(template);
@@ -626,7 +626,7 @@ public class DocTemplateService {
      * 取合并单元格的对齐方式（{@code data_source_config.mergeCellAlign}）。
      *
      * <p>对齐是「整篇文档一份」的设置，不按数据块区分，所以多个块都配了时以第一个为准，
-     * 配得不一致会打一条 warn —— 否则模板作者会搞不清到底哪个生效。</p>
+     * 配得不一致会打一条 warn —— 否则无法判断哪一项生效。</p>
      */
     private DocTemplateMergeAlign mergeAlignOf(List<DocTemplateDataBlockEntity> blocks) {
         if (blocks == null || blocks.isEmpty()) return DocTemplateMergeAlign.DEFAULT;
@@ -642,7 +642,7 @@ public class DocTemplateService {
                 result = align;
                 source = block.getBlockCode();
             } else if (!result.equals(align)) {
-                log.warn("数据块「{}」声明的 mergeCellAlign={} 与「{}」的 {} 不一致，按前者生效（对齐是整篇文档一份设置）",
+                log.warn("数据块「{}」声明的 mergeCellAlign={} 与「{}」的 {} 不一致，按前者生效（对齐为整篇文档统一设置）",
                         block.getBlockCode(), align, source, result);
             }
         }
@@ -843,7 +843,7 @@ public class DocTemplateService {
     /**
      * 导出类型只认 ORIGINAL / PDF（大小写都行），写错直接报错。
      *
-     * <p>以前「不是 PDF 就按 ORIGINAL」，于是 {@code exportType=pdff} 会安静地给你一份 docx。</p>
+     * <p>旧实现把非 PDF 一律按 ORIGINAL 处理，{@code exportType=pdff} 会静默产出 docx。</p>
      */
     static String exportTypeOf(Object raw) {
         String type = StrUtil.blankToDefault(Convert.toStr(raw), "ORIGINAL").trim().toUpperCase(Locale.ROOT);

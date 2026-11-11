@@ -34,7 +34,7 @@
 
 ### 变更
 
-- **管理页左下角显示当前 Starter 版本**：打开页面就能看到对接的是哪个版本（形如 `Starter v0.2.1`），宿主升级后不用再去翻 jar 包确认。版本号也可以直接调 `GET /api/doc-template/system/version` 拿，读不到时 `version` 为空。
+- **管理页左下角显示当前 Starter 版本**：打开页面即可看到对接的版本（形如 `Starter v0.2.1`），宿主升级后无需再查 jar 包。版本号也可以直接调 `GET /api/doc-template/system/version` 拿，读不到时 `version` 为空。
 
 ### 修复
 

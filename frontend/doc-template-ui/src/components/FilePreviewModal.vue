@@ -117,7 +117,7 @@ async function renderDocx(buffer: ArrayBuffer, seq: number) {
     if (seq !== loadSeq) return;
     // 渲染成功但一个可见节点都没有时给出提示，而不是留一片空白
     if (!host.textContent?.trim() && !host.querySelector('img, table, svg, canvas')) {
-      error.value = '未能解析出可显示的内容，请点击下方「下载原文件」查看';
+      error.value = '未能解析出可显示的内容，请点击「下载原文件」查看';
       return;
     }
     host.parentElement?.scrollTo({ top: 0 });

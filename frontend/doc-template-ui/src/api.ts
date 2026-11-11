@@ -44,7 +44,7 @@ function readIframeConfig(): DocTemplateConfig {
     // tokenPrefix 允许空串（表示不加前缀），另外几个空值视为没传
     if (key !== 'tokenPrefix' && !value) continue;
     if (key === 'tokenHeader' && !HEADER_NAME.test(value)) continue;
-    // layout 只认两个值，写错了按默认（full）处理，不要因为一个拼写错误把界面搞成半残
+    // layout 只认两个值，写错了按默认（full）处理，避免因单个拼写错误导致界面异常
     if (key === 'layout' && value !== 'full' && value !== 'bare') continue;
     result[key] = value;
   }
@@ -56,7 +56,7 @@ const config: DocTemplateConfig = { ...(window.DOC_TEMPLATE_CONFIG ?? {}), ...re
 export const apiBase = (config.apiBaseUrl ?? '/api/doc-template').replace(/\/$/, '');
 
 /**
- * 布局模式：`full` 带左侧栏（直接访问 `/doc-template/` 时的样子），`bare` 只留顶栏 + 内容区。
+ * 布局模式：`full` 带左侧栏（直接访问 `/doc-template/` 时的形态），`bare` 只留顶栏 + 内容区。
  * 被宿主 iframe 嵌进内容区时用 `?layout=bare`，否则宿主的菜单和这里的左侧栏会叠成两条导航。
  */
 export const layoutMode: 'full' | 'bare' = config.layout === 'bare' ? 'bare' : 'full';

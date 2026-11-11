@@ -422,7 +422,7 @@ onMounted(() => {
         @update:checked-row-keys="(keys: Array<string | number>) => (checkedKeys = keys as number[])"
       >
         <template #empty>
-          <NEmpty description="还没有模板，先创建一个吧">
+          <NEmpty description="暂无模板，请先创建">
             <template #extra>
               <NButton size="small" type="primary" @click="openCreate">新增模板</NButton>
             </template>
