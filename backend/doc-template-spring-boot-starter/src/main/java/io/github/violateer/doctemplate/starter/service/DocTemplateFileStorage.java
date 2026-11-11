@@ -35,7 +35,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
         if ("s3".equalsIgnoreCase(cfg.getType())) {
             if (StrUtil.hasBlank(cfg.getEndpoint(), cfg.getBucket(), cfg.getAccessKey(), cfg.getSecretKey())) {
                 throw new IllegalStateException("doc-template.storage.type=s3 需要同时配置 endpoint、bucket、access-key、secret-key，"
-                        + "请在宿主应用的配置里补齐，或改成 type=local 用本地磁盘");
+                        + "请在宿主配置中补齐，或将 type 设为 local 使用本地磁盘");
             }
             var builder = S3Client.builder()
                 .region(Region.of(StrUtil.blankToDefault(cfg.getRegion(), "us-east-1")))
@@ -151,7 +151,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
         Path path = (stored.isAbsolute() ? stored : root.resolve(stored)).toAbsolutePath().normalize();
         if (!path.startsWith(root)) throw new IllegalArgumentException("文件路径不合法");
         Files.deleteIfExists(path);
-        // 顺手删掉已经空了的「按模板分目录」，删不掉就算了。
+        // 同时删除已为空的「按模板分目录」，失败可忽略。
         try {
             Path parent = path.getParent();
             if (parent != null && parent.startsWith(root) && !parent.equals(root)) {
@@ -160,7 +160,7 @@ public class DocTemplateFileStorage implements AutoCloseable {
                 }
             }
         } catch (Exception ignored) {
-            // 清目录只是顺手做的事，失败不影响删除结果。
+            // 清理目录属于附带操作，失败不影响删除结果。
         }
     }
 

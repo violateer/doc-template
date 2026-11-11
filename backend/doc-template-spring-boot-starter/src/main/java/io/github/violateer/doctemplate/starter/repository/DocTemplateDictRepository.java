@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * {@code doc_template_dict}（字典主表）的读写。
  *
- * <p>列表查询顺手带出子表项数（{@code LEFT JOIN + COUNT}），管理页一列就能显示「这本字典有几项」，
+ * <p>列表查询同时带出子表项数（{@code LEFT JOIN + COUNT}），管理页可直接显示「该字典的项数」，
  * 不用逐本再查一次。</p>
  */
 public class DocTemplateDictRepository {

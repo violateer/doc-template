@@ -430,7 +430,7 @@ const versionColumns = computed(() => [
       :bordered="false"
     >
       <div class="versions-tip">
-        这里只列出当前版本之外的历史版本；点「设为当前」即可切换，之后生成文档会立即使用所选版本。
+        仅列出当前版本以外的历史版本；设为当前后，生成文档将使用所选版本。
       </div>
       <NDataTable
         :columns="versionColumns"
@@ -443,7 +443,7 @@ const versionColumns = computed(() => [
         :scroll-x="780"
       >
         <template #empty>
-          <div class="empty-hint">暂无其他版本，上传新文件后会出现在这里</div>
+          <div class="empty-hint">暂无其他版本，上传新文件后在此列出</div>
         </template>
       </NDataTable>
       <template #footer>

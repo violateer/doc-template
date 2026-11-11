@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: 模板即配置
-    details: 普通 Word / Excel 文件，直接写 ${占位符} 和 {{#each 明细}}…{{/each}}，无需学习模板 DSL，业务人员自己就能改。
+    details: 普通 Word / Excel 文件，直接写 ${占位符} 和 {{#each 明细}}…{{/each}}，无需学习模板 DSL，业务人员可直接修改。
   - title: 三种取数方式
     details: JAVA Provider（最安全）、API 接口、SQL 查询，按推荐顺序选择；执行结果按块编码注入渲染参数。
   - title: 零外部依赖导出
@@ -32,7 +32,7 @@ features:
 ---
 
 ::: tip 在线演示
-不想装环境，直接打开 **[http://www.violateer.top:9150/doc-template](http://www.violateer.top:9150/doc-template)** 就能试：模板管理、数据块配置、模拟生成、PDF 导出都在真跑，四套示例模板也已经刷好。演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。
+不想装环境，直接打开 **[http://www.violateer.top:9150/doc-template](http://www.violateer.top:9150/doc-template)** 即可试用：模板管理、数据块配置、模拟生成、PDF 导出都在真跑，四套示例模板也已经刷好。演示账号 `admin / Admin@123`（另有 `demo / Demo@123`）。
 
 内置的四套示例模板在演示站上是**只读**的，想试完整流程请自己新建一个模板。
 :::

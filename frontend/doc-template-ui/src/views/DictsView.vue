@@ -489,7 +489,7 @@ onMounted(loadDicts);
         @update:checked-row-keys="(keys: Array<string | number>) => (checkedDicts = keys as number[])"
       >
         <template #empty>
-          <NEmpty description="还没有字典，点击「新增字典」创建一本" />
+          <NEmpty description="暂无字典，点击「新增字典」创建" />
         </template>
       </NDataTable>
     </NCard>
@@ -552,7 +552,7 @@ onMounted(loadDicts);
       >
         <template #empty>
           <NEmpty
-            :description="selected ? '这本字典还没有项，点击「新增字典项」添加' : '在左侧选中一本字典后，在这里维护它的「值 → 显示名」'"
+            :description="selected ? '该字典暂无字典项，点击「新增字典项」添加' : '在左侧选择字典后，在此维护其「值 → 显示名」映射'"
           />
         </template>
       </NDataTable>

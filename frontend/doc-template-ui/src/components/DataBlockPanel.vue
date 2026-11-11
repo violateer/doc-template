@@ -763,7 +763,7 @@ function handleCustomCodeChange(row: ConverterRow, code: string | null) {
 /** 一键填一组能跑的示例值 */
 function fillConverterSample(row: ConverterRow) {
   if (row.custom) {
-    message.info('自定义转换器的参数由宿主定义，请在下面按「参数名 / 参数值」填');
+    message.info('自定义转换器的参数由宿主定义，按「参数名 / 参数值」填写');
     return;
   }
   const next: Record<string, string> = {};
@@ -1449,7 +1449,7 @@ async function refreshFields() {
   if (!editing.value) return;
   const source = editorSource();
   if (!source) {
-    message.warning('先把数据源配置填完整，才能取到字段名；也可以直接手填');
+    message.warning('数据源配置不完整，无法取到字段名；可直接手工填写');
     return;
   }
   const fingerprint = fingerprintOf(source);
@@ -1466,7 +1466,7 @@ async function refreshFields() {
     if (res?.ok) {
       applyFieldCandidates(res.fields, fingerprint);
       if (fieldCandidates.value.length) {
-        message.success(`取到 ${fieldCandidates.value.length} 个字段，可在下拉里选`);
+        message.success(`取到 ${fieldCandidates.value.length} 个字段，可从下拉选择`);
       } else {
         message.info('这次结果里没有可选的字段（结果为空或不是对象数组），直接手填即可');
       }
@@ -1731,7 +1731,7 @@ onMounted(() => {
       @update:checked-row-keys="(keys: Array<string | number>) => (checkedKeys = keys as number[])"
     >
       <template #empty>
-        <div class="empty-hint">还没有数据块，点击「新增数据块」开始配置</div>
+        <div class="empty-hint">暂无数据块，点击「新增数据块」添加</div>
       </template>
     </NDataTable>
 
@@ -1775,7 +1775,7 @@ onMounted(() => {
               <NInput v-model:value="editing.block_code" placeholder="例如 report" class="mono" />
               <template #feedback>
                 <span v-if="editing.id && editing.block_code !== originalCode" class="code-hint">
-                  <span v-pre>改编码不会动模板文件，记得同步改模板里的 ${编码.字段} / {{#each 编码}}…{{/each}}，否则生成时取不到这个块。</span>
+                  <span v-pre>修改编码不影响模板文件，需同步修改模板中的 ${编码.字段} / {{#each 编码}}…{{/each}}，否则生成时取不到这个块。</span>
                 </span>
               </template>
             </NFormItem>
@@ -1808,7 +1808,7 @@ onMounted(() => {
                 <div class="column-toggle">
                   <NSwitch v-model:value="columnsEnabled" size="small" />
                   <span class="extra-hint">
-                    打开后表格的列由数据源决定：列数、列标题、每列取哪个字段都来自列源，固定列照常写在列区两侧。
+                    打开后表格的列由数据源决定：列数、列标题、每列取哪个字段都来自列源，固定列仍写在列区两侧。
                   </span>
                 </div>
                 <div v-if="!columnsEnabled" class="extra-hint" v-pre>
@@ -1962,7 +1962,7 @@ onMounted(() => {
                   <NButton size="small" quaternary type="error" @click="removeImageField(index)">移除</NButton>
                 </div>
               </div>
-              <div v-else class="field-empty">还没有图片字段；模板里写 <span class="mono">${logo}</span>，取到的值按图片渲染</div>
+              <div v-else class="field-empty">暂无图片字段；模板中写 <span class="mono">${logo}</span>，取到的值按图片渲染</div>
               <NButton size="tiny" dashed @click="addImageField">添加图片字段</NButton>
             </div>
           </div>
@@ -2047,11 +2047,11 @@ onMounted(() => {
                 </div>
               </div>
               <div v-else class="field-empty">
-                还没有二维码字段；模板里写 <span class="mono">${verify_url}</span>，取到的值按二维码渲染
+                暂无二维码字段；模板中写 <span class="mono">${verify_url}</span>，取到的值按二维码渲染
               </div>
               <div class="extra-hint">
-                中间小图会遮住一部分码点，二维码会自动提高纠错级别；图源可以填固定地址，也可以指向本数据块里的另一个字段。
-                同一个字段同时配在图片字段里时，按二维码渲染。
+                中间小图会遮挡部分码点，二维码将自动提高纠错级别；图源可填固定地址，也可指向本数据块中的另一个字段。
+                同一字段同时配置在图片字段中时，按二维码渲染。
               </div>
               <NButton size="tiny" dashed @click="addQrCode">添加二维码字段</NButton>
             </div>
@@ -2211,14 +2211,14 @@ onMounted(() => {
                     <span class="converter-hint">
                       {{
                         row.custom
-                          ? '参数名由宿主转换器自己定义，按「参数名 / 参数值」填；转换器编码来自 /system/converters。'
-                          : '参数名由转换器固定，界面只填值；空着的项保存时不写入，交给转换器用它自己的默认值。'
+                          ? '参数名由宿主转换器实现定义，按「参数名 / 参数值」填写；转换器编码来自 /system/converters。'
+                          : '参数名由转换器固定，界面只填值；留空的项保存时不写入，由转换器使用其默认值。'
                       }}
                     </span>
                   </div>
                 </div>
               </div>
-              <div v-else class="field-empty">还没有转换规则；数据块返回什么就渲染什么</div>
+              <div v-else class="field-empty">暂无转换规则，数据块返回值原样渲染</div>
               <NButton size="tiny" dashed @click="addConverter">添加转换</NButton>
             </div>
           </div>
@@ -2236,7 +2236,7 @@ onMounted(() => {
                   <NButton size="small" quaternary type="error" @click="paramRows.splice(index, 1)">移除</NButton>
                 </div>
               </div>
-              <div v-else class="field-empty">还没有参数；数据源不需要入参时可以留空</div>
+              <div v-else class="field-empty">暂无参数；数据源不需要入参时留空</div>
               <NButton size="tiny" dashed @click="paramRows.push({ key: '', value: '' })">添加参数</NButton>
             </div>
           </div>
@@ -2295,7 +2295,7 @@ onMounted(() => {
             <div class="aside-group-title">合并单元格对齐</div>
             <div class="aside-item">
               <div class="aside-item-desc">
-                模板里用 merge= 竖向合并出来的那一格，内容垂直怎么对齐。水平方向跟随原单元格；不设置时保持模板原样（默认靠上）。
+                模板中通过 merge= 竖向合并的单元格，其内容垂直对齐方式。水平方向跟随原单元格；不设置时保持模板原样（默认靠上）。
               </div>
             </div>
           </div>
@@ -2321,9 +2321,9 @@ onMounted(() => {
             <div class="aside-group-title">字段名候选</div>
             <div class="aside-item">
               <div class="aside-item-desc">
-                字段名控件可以直接手填，也可以从下拉里选。候选来自该数据块最近一次取数结果的第一层字段名：
-                第一次点开字段名下拉会自动取一次，点「预览数据源」成功后也会填入，之后可用旁边的刷新按钮重取。
-                打开弹窗、输入内容都不会发请求；取不到（结果为空、参数没填）就退回纯手输。嵌套路径（item.name）请直接手填。
+                字段名控件支持手工输入，也可从下拉选择。候选来自该数据块最近一次取数结果的第一层字段名：
+                首次展开字段名下拉时自动取数，预览数据源成功后同样填入，之后可用刷新按钮重新取数。
+                打开弹窗与输入内容均不发起请求；取不到字段（结果为空或参数未填）时仅支持手工输入。嵌套路径（item.name）需手工填写。
               </div>
             </div>
           </div>
@@ -2364,7 +2364,7 @@ onMounted(() => {
 
       <div v-if="previewParams.length" class="preview-params">
         <div class="preview-params-title">
-          需要参数：参数映射里的 <code>$request.xxx</code> 生成时由调用方提供，这里手动填
+          需要参数：参数映射里的 <code>$request.xxx</code> 由调用方在生成时提供，此处手工填写
         </div>
         <div v-for="param in previewParams" :key="param.key" class="preview-param-row">
           <span class="preview-param-key mono">$request.{{ param.key }}</span>

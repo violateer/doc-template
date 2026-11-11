@@ -285,7 +285,7 @@ public class DocTemplateRenderer {
         }
         if (marker.role() == null) {
             throw new IllegalArgumentException(where + "的 {{#columns " + marker.block()
-                    + "}} 没写角色，分不清是表头行还是数据行；" + hint);
+                    + "}} 未写角色，无法判断是表头行还是数据行；" + hint);
         }
     }
 
@@ -305,12 +305,12 @@ public class DocTemplateRenderer {
         }
         if (loop.filtered() || loop.merging() || (loop.mergeBy() != null && !loop.mergeBy().isBlank())) {
             throw new IllegalArgumentException(where + " 的 {{#each " + loop.array()
-                    + "}} 上不要写 where= / merge= / by=，这些参数写在 {{#columns "
+                    + "}} 上不应写 where= / merge= / by=，这些参数写在 {{#columns "
                     + marker.block() + " data ...}} 里");
         }
     }
 
-    /** 整格只有 {@code {{#columns ...}}} 才算标记格；带别的文字是配置错误，不是「顺便渲染一下」。 */
+    /** 整格只有 {@code {{#columns ...}}} 才算标记格；带其他文字属于配置错误，不做容错渲染。 */
     private static boolean isColumnsOnly(String text) {
         if (text == null) return false;
         Matcher full = FULL_PLACEHOLDER.matcher(text);
@@ -1074,7 +1074,7 @@ public class DocTemplateRenderer {
         }
         int narrowest = widths.stream().mapToInt(Integer::intValue).min().orElse(0);
         if (total > 0 && narrowest < NARROW_COLUMN_TWIPS) {
-            log.warn("表格列区展开成 {} 列后最窄一列只有 {} twips（约 {} cm），可能挤在一起；"
+            log.warn("表格列区展开成 {} 列后最窄一列只有 {} twips（约 {} cm），可能显示拥挤；"
                             + "可以减少列数，或在模板里把列区起始列调宽",
                     specs.size(), narrowest, String.format(Locale.ROOT, "%.1f", narrowest / 567.0));
         }
@@ -1661,7 +1661,7 @@ public class DocTemplateRenderer {
      * 给一段循环产出的行打上「由循环复制」和合并声明的标记。
      *
      * <p>合并声明挂在<b>行</b>上而不是挂在块上，是因为内层循环的行同样落在外层循环的范围里：
-     * 外层声明了 {@code merge=1}、内层又展开成多行时，外层的合并照样要把这些行串起来。</p>
+     * 外层声明了 {@code merge=1}、内层又展开成多行时，外层的合并仍需将这些行合并起来。</p>
      */
     private List<PlannedRow> tagLoop(List<PlannedRow> rows, Loop loop) {
         if (rows.isEmpty()) return rows;
@@ -1877,7 +1877,7 @@ public class DocTemplateRenderer {
             return CellReference.convertColStringToIndex(raw.toUpperCase(Locale.ROOT));
         } catch (RuntimeException error) {
             throw new IllegalArgumentException("merge=" + raw + " 不是合法的列：XLSX 用列字母（A、C）"
-                    + "或 1 起始的列号（1、3），多个列用逗号分隔且中间不要空格");
+                    + "或 1 起始的列号（1、3），多个列以逗号分隔，不含空格");
         }
     }
 
@@ -1998,7 +1998,7 @@ public class DocTemplateRenderer {
         }
         if (arrays.size() != 1) return "";
         String candidate = arrays.get(0);
-        return "；参数里唯一的数组是「" + candidate + "」，是不是模板里写成了 " + expression + "？";
+        return "；参数里唯一的数组是「" + candidate + "」，请确认模板里是否写成了 " + expression + "？";
     }
 
     /** 循环变量是否存在于参数里（用于区分「没取到」和「取到了但为空」）。 */
@@ -2768,7 +2768,7 @@ public class DocTemplateRenderer {
         } else {
             hint = "明细行循环写 {{#each 数组名}}…{{/each}}，表格动态列写 {{#columns 块编码 header/data/span}}";
         }
-        return "这一格（或这一段）只有标记 " + marker + "，但它没有被识别成标记：" + hint;
+        return "该单元格（或段落）只包含标记 " + marker + "，但未被识别为标记：" + hint;
     }
 
     /** 结构标记（{@code #each} / {@code /each} / {@code #columns}）不是占位符，取不到值也不该被替换。 */
@@ -2790,7 +2790,7 @@ public class DocTemplateRenderer {
         // #each / #columns 是行级标记，不是占位符：它们由行展开逻辑消费掉，不该在这里报错
         if (lower.startsWith("#each") || lower.startsWith("#columns")) return;
         throw new IllegalArgumentException("不认识的标记 " + raw + "，明细行循环要写成 {{#each 数组名}}"
-                + "（例如 {{#each user}}），不要漏掉 each；表格动态列要写成 {{#columns 块编码 header}}"
+                + "（例如 {{#each user}}），不能省略 each；表格动态列要写成 {{#columns 块编码 header}}"
                 + " / {{#columns 块编码 data}} / {{#columns 块编码 span}}");
     }
 

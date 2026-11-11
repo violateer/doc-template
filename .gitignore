@@ -16,3 +16,5 @@ release.env
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs/.vitepress/*.timestamp-*
+# Office 打开文档时产生的临时锁文件
+~$*

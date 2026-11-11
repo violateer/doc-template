@@ -186,7 +186,7 @@ public class DocTemplateDictService {
         String value = require(body, "itemValue", "字典值");
         String label = require(body, "itemLabel", "显示名");
         if (itemRepository.findByDictIdAndValue(dictId, value, null) != null) {
-            throw new IllegalArgumentException("该字典里已经有值为 " + value + " 的项");
+            throw new IllegalArgumentException("该字典已存在值为 " + value + " 的项");
         }
         DocTemplateDictItemEntity e = new DocTemplateDictItemEntity();
         e.setDictId(dictId);
@@ -203,7 +203,7 @@ public class DocTemplateDictService {
         String value = require(body, "itemValue", "字典值");
         String label = require(body, "itemLabel", "显示名");
         if (itemRepository.findByDictIdAndValue(e.getDictId(), value, itemId) != null) {
-            throw new IllegalArgumentException("该字典里已经有值为 " + value + " 的项");
+            throw new IllegalArgumentException("该字典已存在值为 " + value + " 的项");
         }
         e.setItemValue(value);
         e.setItemLabel(label);

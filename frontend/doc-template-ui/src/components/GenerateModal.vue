@@ -392,7 +392,7 @@ function mergeParamKeys(options: { silent?: boolean } = {}) {
     }
   }
   paramsText.value = prettyJson(base);
-  if (!options.silent) message.success(added ? `已补齐 ${added} 个参数键，请填写具体值` : '参数键已齐全');
+  if (!options.silent) message.success(added ? `已补齐 ${added} 个参数键，请填写取值` : '参数键已齐全');
 }
 
 function formatParams() {
@@ -483,7 +483,7 @@ async function downloadResult() {
     </template>
 
     <NAlert v-if="!hasVersion" type="warning" :bordered="false" style="margin-bottom: 14px">
-      该模板还没有上传文件，请先在「基本信息」中上传 .docx / .xlsx 模板后再模拟生成。
+      该模板尚未上传文件，请先在「基本信息」中上传 .docx / .xlsx 模板。
     </NAlert>
 
     <div class="generate-grid">
@@ -518,7 +518,7 @@ async function downloadResult() {
         </NForm>
 
         <div class="params-hint">
-          生成时会按下面的顺序执行数据块，结果自动填充模板占位符；
+          生成时按下列顺序执行数据块，结果自动填充模板占位符；
           这里只需要写<span class="strong">数据源需要的参数</span>（键名对应参数映射里的
           <span class="mono">$request.xxx</span> 的 <span class="mono">xxx</span>）。
         </div>
@@ -583,13 +583,13 @@ async function downloadResult() {
       {{ errorText }}
     </NAlert>
     <div v-else class="result-panel muted">
-      点「开始生成」后，会按上面的顺序执行数据块取数，再用当前版本渲染并保存打印文件。
+      开始生成时按上述顺序执行数据块取数，再用当前版本渲染并保存文件。
     </div>
 
     <div class="panel-title" style="margin-top: 18px">
       接口调用
       <span class="muted" style="font-weight: 400; font-size: 12px">
-        在别的项目里按这条请求调用即可，不需要内嵌管理页
+        其他项目可直接按此请求调用，无需内嵌管理页
       </span>
     </div>
     <div class="call-panel">

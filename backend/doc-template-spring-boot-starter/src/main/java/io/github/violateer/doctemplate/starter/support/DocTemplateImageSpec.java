@@ -78,7 +78,7 @@ public record DocTemplateImageSpec(String field, Integer width, Integer height, 
         int dot = name.lastIndexOf('.');
         if (dot < 0) return name;
         String shortName = name.substring(dot + 1);
-        throw new IllegalArgumentException(what + "「" + name + "」不要带块编码或路径，只写字段名本身"
+        throw new IllegalArgumentException(what + "「" + name + "」不应包含块编码或路径，只写字段名"
                 + "（改成「" + shortName + "」）；模板里写 ${" + shortName + "} 或 ${item." + shortName + "} 都能命中");
     }
 

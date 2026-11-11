@@ -8,7 +8,7 @@
 | `type: local` | 同上，可自定义 `base-path` | 无 |
 | `type: s3` | S3 兼容存储（MinIO / RustFS / 阿里云 OSS 的 S3 接口） | 需要 endpoint、bucket、密钥 |
 
-也就是说，宿主不配 storage 时模块照样能用，文件落在本地目录；要接对象存储，由**宿主自己**配这一小段：
+也就是说，宿主未配置 storage 时模块仍可正常使用，文件落在本地目录；要接对象存储，由**宿主自己**配这一小段：
 
 ```yaml
 doc-template:

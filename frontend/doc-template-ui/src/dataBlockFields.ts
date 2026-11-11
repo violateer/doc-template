@@ -58,7 +58,7 @@ export const dataSourceMeta: Record<
     summary: '执行一条只读查询，把结果集作为数据块内容',
     warning:
       '不推荐使用：配置一条 SQL 等于把该数据源账号可见的所有表交给配置者（auth.mode 为 none 时就是任何能打开本页的人）。' +
-      '模块会做语句白名单校验、只读连接和错误脱敏，但那只是纵深防御，不是安全边界。' +
+      '模块会做语句白名单校验、只读连接和错误脱敏，但仅为纵深防御，不构成安全边界。' +
       '优先用 Java Provider，查什么表、带什么条件由宿主业务代码决定。'
   },
   API: {
@@ -106,7 +106,7 @@ export const configFields: Record<DataSourceType, ConfigField[]> = {
       desc:
         '只允许单条只读查询：语句必须能被解析为 SELECT（WITH 后面也只能接 SELECT），写操作、' +
         '文件函数（load_file / file_read / into outfile 等）和 for update 都会被拒绝。' +
-        '参数用 :name 命名占位（值来自「参数映射」），不要拼字符串，避免注入。',
+        '参数用 :name 命名占位（值来自「参数映射」），避免字符串拼接导致注入。',
       placeholder: 'select report_no, product_name from qc_report where report_no = :reportNo',
       sample: 'select report_no, product_name, inspect_result from qc_report where report_no = :reportNo'
     },
@@ -183,7 +183,7 @@ export const configFields: Record<DataSourceType, ConfigField[]> = {
       label: '请求头',
       type: 'kv',
       group: '请求头与查询参数',
-      desc: '键值对；值里可用 ${name} 引用参数。密钥建议走宿主配置再映射进来，不要直接写死。',
+      desc: '键值对；值里可用 ${name} 引用参数。密钥建议经宿主配置映射，不应硬编码。',
       sample: { Authorization: 'Bearer ${token}', 'Content-Type': 'application/json' }
     },
     {
