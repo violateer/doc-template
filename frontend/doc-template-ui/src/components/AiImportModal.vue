@@ -53,6 +53,8 @@ const form = ref({ name: '', code: '' });
 const hint = ref('');
 const analyzing = ref(false);
 const saving = ref(false);
+/** 放弃草稿要发一次删除请求，期间按钮显示加载状态，避免重复点击 */
+const discarding = ref(false);
 const checking = ref(false);
 /** 分析成功后建出来的模板 id；为空表示还没建，或者已经放弃 */
 const templateId = ref<number | null>(null);
@@ -239,12 +241,15 @@ async function discard() {
     visible.value = false;
     return;
   }
+  discarding.value = true;
   try {
     await api(`/templates/${templateId.value}`, { method: 'DELETE' });
     message.success('已删除这个草稿模板');
     visible.value = false;
   } catch (e: any) {
     message.error(e.message);
+  } finally {
+    discarding.value = false;
   }
 }
 
@@ -409,7 +414,7 @@ function shapeLabel(shape: string) {
       </NSpin>
 
       <NSpace justify="space-between" style="margin-top: 16px">
-        <NButton quaternary type="error" @click="discard">放弃并删除草稿</NButton>
+        <NButton quaternary type="error" :loading="discarding" :disabled="discarding" @click="discard">放弃并删除草稿</NButton>
         <NSpace>
           <NButton @click="step = 1">上一步</NButton>
           <NButton :loading="checking" @click="recheck">重新自检</NButton>
@@ -433,7 +438,7 @@ function shapeLabel(shape: string) {
       </div>
 
       <NSpace justify="space-between" style="margin-top: 20px">
-        <NButton quaternary type="error" @click="discard">放弃并删除草稿</NButton>
+        <NButton quaternary type="error" :loading="discarding" :disabled="discarding" @click="discard">放弃并删除草稿</NButton>
         <NSpace>
           <NButton @click="step = 2">上一步</NButton>
           <NButton type="primary" :loading="saving" @click="save">保存为模板</NButton>
