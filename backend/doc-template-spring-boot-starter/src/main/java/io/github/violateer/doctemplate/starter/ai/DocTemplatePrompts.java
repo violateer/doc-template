@@ -117,7 +117,8 @@ final class DocTemplatePrompts {
               这类表格只标外层或只标内层，剩下的一层写进 ignore 并说明原因。
             - 不做动态列：列数随数据变的交叉表（1 月、2 月、3 月这种）不标，整表写进 ignore。
               这类模板由人手工标注。
-            - 提示词里出现的 kind 只有 value / loop / region 三种，写别的会被直接拒绝。
+            - 提示词里出现的 kind 只有 value / loop / region 三种。写成 columns 的标记、以及带 where 的循环标记
+              会被直接忽略、不会落笔，所以不要生成这两类。
 
             ## 数据块
 

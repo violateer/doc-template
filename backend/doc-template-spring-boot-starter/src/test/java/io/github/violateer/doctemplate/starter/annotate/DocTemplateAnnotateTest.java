@@ -17,6 +17,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -208,25 +209,42 @@ class DocTemplateAnnotateTest {
     }
 
     @Test
-    @DisplayName("动态列不在 AI 导入范围内，报错要说明")
-    void rejectsColumnsMark() {
+    @DisplayName("动态列不在标注范围内，跳过而不是报错")
+    void skipsColumnsMark() {
         DocTemplateMarkPlan plan = new DocTemplateMarkPlan(plan().blocks(), List.of(
                 new DocTemplateMarkPlan.Mark("columns", new DocTemplateMarkPlan.At(null, 0, null, 0, 1, 1, null),
                         "items", null, null, List.of(), null, null)), List.of());
 
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, plan::validate);
-        assertTrue(error.getMessage().contains("不支持动态列"), error.getMessage());
+        assertDoesNotThrow(plan::validate);
     }
 
     @Test
-    @DisplayName("嵌套循环（where 关联过滤）不在 AI 导入范围内，报错要说明")
-    void rejectsNestedLoop() {
+    @DisplayName("解析计划时丢掉动态列标记，其余标记照常保留")
+    void dropsColumnsMarkOnParse() {
+        String json = """
+                {"blocks": [{"code": "items", "name": "检验明细", "shape": "array",
+                             "fields": [{"field": "no", "label": "编号", "type": "string", "samples": ["1#"]}]}],
+                 "marks": [{"kind": "columns", "at": {"sheet": 0, "row": 0, "rowTo": 1, "cell": 1},
+                            "block": "items"},
+                           {"kind": "value", "at": {"sheet": 0, "row": 1, "cell": 0},
+                            "block": "items", "field": "no", "replace": "1#"}],
+                 "ignore": []}
+                """;
+
+        DocTemplateMarkPlan plan = DocTemplateMarkPlan.parse(json);
+
+        assertEquals(1, plan.marks().size());
+        assertEquals("value", plan.marks().get(0).kind());
+    }
+
+    @Test
+    @DisplayName("嵌套循环的 where 不参与落笔，校验也不再拦")
+    void ignoresWhereOnNestedLoop() {
         DocTemplateMarkPlan plan = new DocTemplateMarkPlan(plan().blocks(), List.of(
                 new DocTemplateMarkPlan.Mark("loop", new DocTemplateMarkPlan.At(null, 0, null, 1, 2, null, null),
                         "items", null, null, List.of(), null, " kind = type ")), List.of());
 
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, plan::validate);
-        assertTrue(error.getMessage().contains("不支持嵌套循环"), error.getMessage());
+        assertDoesNotThrow(plan::validate);
     }
 
     @Test

@@ -89,12 +89,27 @@ public record DocTemplateMarkPlan(List<Block> blocks, List<Mark> marks, List<Ign
      */
     public static DocTemplateMarkPlan parse(String text) {
         String json = extractJsonObject(text);
+        DocTemplateMarkPlan plan;
         try {
-            return MAPPER.readValue(json, DocTemplateMarkPlan.class);
+            plan = MAPPER.readValue(json, DocTemplateMarkPlan.class);
         } catch (Exception error) {
             throw new IllegalArgumentException("计划 JSON 解析失败：" + error.getMessage()
                     + "；收到的内容开头是「" + head(json) + "」", error);
         }
+        return plan.withoutUnsupported();
+    }
+
+    /**
+     * 丢掉这条链路不生成的标记：动态列（{@code kind=columns}）。
+     *
+     * <p>不支持就跳过，不因此让整份计划作废 —— 模型偶尔会给出这类标记，
+     * 丢弃它比让调用方重来一次更省事。嵌套循环的 {@code where} 同理：落笔时本就不带该参数，
+     * 校验阶段也不再拦。
+     */
+    private DocTemplateMarkPlan withoutUnsupported() {
+        if (marks == null) return this;
+        List<Mark> kept = marks.stream().filter(mark -> !"columns".equals(mark.kind())).toList();
+        return kept.size() == marks.size() ? this : new DocTemplateMarkPlan(blocks, kept, ignore);
     }
 
     /** 转成驼峰命名的 Map，用于响应回显和日志；与 {@link #parse(String)} 的写法一致。 */
@@ -151,8 +166,8 @@ public record DocTemplateMarkPlan(List<Block> blocks, List<Mark> marks, List<Ign
      *       落笔时在区域前后各插入一行放 {@code {{#each}}} / {@code {{/each}}}，样例行一行都不删。</li>
      * </ul>
      *
-     * <p>标注只做<b>单层</b>循环：动态列和嵌套循环（循环套循环、{@code where} 关联过滤）不在范围内。
-     * 这两类仍然可以在模板里手写，只是不由这条链路生成。</p>
+     * <p>标注只做<b>单层</b>循环：动态列和嵌套循环（循环套循环、{@code where} 关联过滤）不在范围内，
+     * 遇到就跳过，不让整份计划作废。这两类仍然可以在模板里手写，只是不由这条链路生成。</p>
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
@@ -160,7 +175,7 @@ public record DocTemplateMarkPlan(List<Block> blocks, List<Mark> marks, List<Ign
                        // 模型经常把单列写成 merge: 1 而不是 [1]，两种都收
                        @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<Integer> merge,
                        String by,
-                       // 只为把「不支持嵌套」这件事说清楚：非空即拒绝，不参与落笔
+                       // 嵌套循环的关联条件：不参与落笔，写了也不影响结果
                        String where) {
         public Mark {
             kind = kind == null ? null : kind.trim().toLowerCase(Locale.ROOT);
@@ -243,9 +258,8 @@ public record DocTemplateMarkPlan(List<Block> blocks, List<Mark> marks, List<Ign
 
         Set<String> targets = new HashSet<>();
         for (Mark mark : marks) {
-            if ("columns".equals(mark.kind()))
-                throw new IllegalArgumentException("AI 导入不支持动态列：列数随数据变的表格请在管理页手工标注，"
-                        + "或把列固定下来再导入。标记的 kind 只能写 " + String.join(" / ", KINDS));
+            // 动态列这条链路不生成：解析时已过滤，这里兜住直接构造的计划
+            if ("columns".equals(mark.kind())) continue;
             if (mark.kind() == null || !KINDS.contains(mark.kind()))
                 throw new IllegalArgumentException("标记的 kind 只能写 " + String.join(" / ", KINDS)
                         + "，当前是「" + mark.kind() + "」");
@@ -290,9 +304,6 @@ public record DocTemplateMarkPlan(List<Block> blocks, List<Mark> marks, List<Ign
     /** 循环（行内）与区域循环共用的规则，差别只在 rowTo 是不是必填、样例行删不删。 */
     private static void requireLoop(Mark mark, Block block) {
         boolean region = "region".equals(mark.kind());
-        if (mark.where() != null && !mark.where().isBlank())
-            throw new IllegalArgumentException("AI 导入不支持嵌套循环：where 关联过滤只用于循环套循环，"
-                    + "这条链路只做单层循环。请把两层数据拆成两张表，或改用固定列");
         if (mark.at().row() == null || (mark.at().table() == null && mark.at().sheet() == null))
             throw new IllegalArgumentException((region ? "区域循环" : "循环") + "标记必须给 at.row 和 at.table（DOCX）"
                     + "或 at.sheet（XLSX），都是 0 起始");
