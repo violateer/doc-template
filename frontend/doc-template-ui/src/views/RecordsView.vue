@@ -16,7 +16,7 @@ import {
 import { RefreshOutline, SearchOutline } from '@vicons/ionicons5';
 import { api, downloadFile, recordDownloadUrl, recordPreviewUrl } from '../api';
 import type { PageResult, RecordRow } from '../types';
-import { batchDeleteSummary, formatTime, isInteractiveClick } from '../utils';
+import { batchDeleteSummary, confirmDelete, formatTime, isInteractiveClick } from '../utils';
 import type { BatchDeleteResult } from '../utils';
 import { statusMeta } from '../theme';
 import { rowActions } from '../components/rowActions';
@@ -133,12 +133,10 @@ async function remove(row: RecordRow) {
 }
 
 function confirmRemove(row: RecordRow) {
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '删除生成记录',
     content: `将删除记录 #${row.id} 及其已生成的文件，且不可恢复。`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: () => remove(row)
+    action: () => remove(row)
   });
 }
 
@@ -187,12 +185,11 @@ const rowClassName = (row: RecordRow) => (isRowSelected(row) ? 'is-checked' : ''
 function confirmBatchRemove() {
   const count = checkedKeys.value.length;
   if (!count) return;
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '批量删除生成记录',
     content: `将删除选中的 ${count} 条生成记录及其已生成的文件，且不可恢复。`,
     positiveText: `删除 ${count} 条`,
-    negativeText: '取消',
-    onPositiveClick: () => batchRemove()
+    action: () => batchRemove()
   });
 }
 

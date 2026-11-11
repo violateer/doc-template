@@ -20,7 +20,7 @@ import {
 import { RefreshOutline, SearchOutline } from '@vicons/ionicons5';
 import { api } from '../api';
 import type { DictItemRow, DictRow, PageResult } from '../types';
-import { batchDeleteSummary, isInteractiveClick } from '../utils';
+import { batchDeleteSummary, confirmDelete, isInteractiveClick } from '../utils';
 import type { BatchDeleteResult } from '../utils';
 import { rowActions } from '../components/rowActions';
 import BatchBar from '../components/BatchBar.vue';
@@ -184,12 +184,10 @@ async function removeDict(row: DictRow) {
 }
 
 function confirmRemoveDict(row: DictRow) {
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '删除字典',
     content: `将删除字典「${row.dict_code} · ${row.dict_name}」及其 ${row.item_count ?? 0} 个字典项，且不可恢复。引用它的转换器会退化为原值输出。`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: () => removeDict(row)
+    action: () => removeDict(row)
   });
 }
 
@@ -217,12 +215,11 @@ async function batchRemoveDicts() {
 function confirmBatchRemoveDicts() {
   const count = checkedDicts.value.length;
   if (!count) return;
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '批量删除字典',
     content: `将删除选中的 ${count} 本字典及其全部字典项，且不可恢复。`,
     positiveText: `删除 ${count} 本`,
-    negativeText: '取消',
-    onPositiveClick: () => batchRemoveDicts()
+    action: () => batchRemoveDicts()
   });
 }
 
@@ -287,12 +284,10 @@ async function removeItem(row: DictItemRow) {
 }
 
 function confirmRemoveItem(row: DictItemRow) {
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '删除字典项',
     content: `确认删除「${row.item_value} → ${row.item_label}」？删除后模板里该值会按 fallback 输出。`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: () => removeItem(row)
+    action: () => removeItem(row)
   });
 }
 
@@ -316,12 +311,11 @@ async function batchRemoveItems() {
 function confirmBatchRemoveItems() {
   const count = checkedItems.value.length;
   if (!count) return;
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '批量删除字典项',
     content: `将删除选中的 ${count} 个字典项，且不可恢复。`,
     positiveText: `删除 ${count} 个`,
-    negativeText: '取消',
-    onPositiveClick: () => batchRemoveItems()
+    action: () => batchRemoveItems()
   });
 }
 

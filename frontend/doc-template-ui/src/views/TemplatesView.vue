@@ -24,7 +24,7 @@ import {
 } from '@vicons/ionicons5';
 import { api, downloadFile, downloadUrl, previewUrl } from '../api';
 import type { PageResult, RecordRow, TemplateRow } from '../types';
-import { batchDeleteSummary, formatTime, isInteractiveClick } from '../utils';
+import { batchDeleteSummary, confirmDelete, formatTime, isInteractiveClick } from '../utils';
 import type { BatchDeleteResult } from '../utils';
 import { statusMeta } from '../theme';
 import { rowActions } from '../components/rowActions';
@@ -197,12 +197,10 @@ async function remove(row: TemplateRow) {
 }
 
 function confirmRemove(row: TemplateRow) {
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '删除模板',
     content: `删除模板「${row.template_name}」将同时移除其版本、数据块、生成记录及云存储文件，且不可恢复。`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: () => remove(row)
+    action: () => remove(row)
   });
 }
 
@@ -252,12 +250,11 @@ const rowClassName = (row: TemplateRow) => (isRowSelected(row) ? 'is-checked' : 
 function confirmBatchRemove() {
   const count = checkedKeys.value.length;
   if (!count) return;
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '批量删除模板',
     content: `将删除选中的 ${count} 个模板，连同它们的版本、数据块、生成记录及云存储文件，且不可恢复。`,
     positiveText: `删除 ${count} 个`,
-    negativeText: '取消',
-    onPositiveClick: () => batchRemove()
+    action: () => batchRemove()
   });
 }
 

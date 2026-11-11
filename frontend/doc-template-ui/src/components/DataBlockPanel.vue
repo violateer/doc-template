@@ -23,7 +23,7 @@ import { WarningOutline, RefreshOutline } from '@vicons/ionicons5';
 import type { DataTableColumns } from 'naive-ui';
 import { api } from '../api';
 import type { DataBlockRow, DataSourceItem, DictRow, ProviderItem } from '../types';
-import { batchDeleteSummary, isInteractiveClick, tryParseJson } from '../utils';
+import { batchDeleteSummary, confirmDelete, isInteractiveClick, tryParseJson } from '../utils';
 import type { BatchDeleteResult } from '../utils';
 import {
   COLUMN_KEY,
@@ -1222,12 +1222,10 @@ async function remove(row: DataBlockRow) {
 }
 
 function confirmRemove(row: DataBlockRow) {
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '删除数据块',
     content: `确认删除数据块「${row.block_name}」（${row.block_code}）？`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: () => remove(row)
+    action: () => remove(row)
   });
 }
 
@@ -1276,12 +1274,11 @@ const rowClassName = (row: DataBlockRow) => (isRowSelected(row) ? 'is-checked' :
 function confirmBatchRemove() {
   const count = checkedKeys.value.length;
   if (!count) return;
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '批量删除数据块',
     content: `确认删除选中的 ${count} 个数据块？删除后模板里引用它们的占位符会取不到值。`,
     positiveText: `删除 ${count} 个`,
-    negativeText: '取消',
-    onPositiveClick: () => batchRemove()
+    action: () => batchRemove()
   });
 }
 

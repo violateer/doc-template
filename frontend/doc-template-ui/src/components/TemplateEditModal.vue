@@ -24,7 +24,7 @@ import type { UploadCustomRequestOptions } from 'naive-ui';
 import { CloudUploadOutline, DocumentTextOutline, RefreshOutline } from '@vicons/ionicons5';
 import { api, downloadFile, downloadUrl, previewUrl, uploadTemplate } from '../api';
 import type { TemplateRow, VersionRow } from '../types';
-import { formatTime, shortSha } from '../utils';
+import { confirmDelete, formatTime, shortSha } from '../utils';
 import { rowActions } from './rowActions';
 import DataBlockPanel from './DataBlockPanel.vue';
 import FilePreviewModal from './FilePreviewModal.vue';
@@ -223,12 +223,10 @@ async function removeVersion(version: VersionRow) {
 }
 
 function confirmRemoveVersion(version: VersionRow) {
-  dialog.warning({
+  confirmDelete(dialog, {
     title: '删除版本',
     content: `删除 v${version.version_no}（${version.file_name}）会同时删除云存储中的文件，且不可恢复。`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: () => removeVersion(version)
+    action: () => removeVersion(version)
   });
 }
 

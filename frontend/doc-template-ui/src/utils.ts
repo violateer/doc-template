@@ -1,3 +1,5 @@
+import type { DialogApi } from 'naive-ui';
+
 /** 把后端返回的时间戳格式化成 `yyyy-MM-dd HH:mm:ss`。 */
 export function formatTime(value: string | number[] | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—';
@@ -62,6 +64,42 @@ export function isInteractiveClick(event: MouseEvent): boolean {
 export interface BatchDeleteResult {
   deleted: number;
   failed: Array<{ id: number | string; message: string }>;
+}
+
+/**
+ * 删除确认：点「确认」后按钮立即显示加载状态并禁用，弹窗保持打开直到动作结束。
+ *
+ * <p>确认弹窗自身只等回调返回的 Promise 结束才关闭，期间按钮没有任何视觉变化，
+ * 接口稍慢就表现为「点击后没有反应」。这里改写弹窗对象上的 `loading`，
+ * 与 `Dialog` 组件自身的 `loading` 属性同名，按钮随即显示加载动画且不可再次点击。</p>
+ *
+ * <p>失败原因由传入的动作自行提示；此处吞掉异常，避免回调抛出后弹窗无法关闭。</p>
+ */
+export function confirmDelete(
+  dialog: DialogApi,
+  options: {
+    title: string;
+    content: string;
+    positiveText?: string;
+    action: () => Promise<unknown>;
+  }
+): void {
+  const instance = dialog.warning({
+    title: options.title,
+    content: options.content,
+    positiveText: options.positiveText ?? '确认删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      instance.loading = true;
+      instance.closable = false;
+      instance.negativeButtonProps = { disabled: true };
+      try {
+        await options.action();
+      } catch {
+        // 失败原因由动作自身提示，这里只保证弹窗能够正常关闭
+      }
+    }
+  });
 }
 
 /**
