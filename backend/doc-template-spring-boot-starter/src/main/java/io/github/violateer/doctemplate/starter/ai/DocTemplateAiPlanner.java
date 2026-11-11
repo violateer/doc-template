@@ -120,7 +120,7 @@ public class DocTemplateAiPlanner {
             if (!Boolean.TRUE.equals(check.get("ok"))) {
                 lastError = String.valueOf(check.get("error"));
                 failures.add(failure(attempt, "check", lastError, attemptStarted));
-                feedback = "落笔或渲染没通过：" + lastError;
+                feedback = "落笔或渲染没通过：" + lastError + loopSummary(plan);
                 log.warn("第 {} 次出计划失败（自检）：templateId={}，{}", attempt, templateId, lastError);
                 continue;
             }
@@ -192,6 +192,34 @@ public class DocTemplateAiPlanner {
         item.put("error", error);
         item.put("elapsed_ms", System.currentTimeMillis() - started);
         return item;
+    }
+
+    /**
+     * 把上一次写出的循环标记摘出来，跟在失败原因后面一起回灌。
+     *
+     * <p>重试时模型看不到自己的上一版输出，只拿到一句错误，于是按同一份快照重新推一遍 ——
+     * 遇到「外层明细里套着一段子明细」这种表，它会稳定地再写一次嵌套，三次尝试一模一样。
+     * 带上它自己写的范围和一行改法，才能让它就地改而不是重写。</p>
+     */
+    private static String loopSummary(DocTemplateMarkPlan plan) {
+        List<String> loops = new ArrayList<>();
+        for (DocTemplateMarkPlan.Mark mark : plan.marks()) {
+            if (!"loop".equals(mark.kind()) && !"region".equals(mark.kind())) continue;
+            DocTemplateMarkPlan.At at = mark.at();
+            StringBuilder coords = new StringBuilder("{");
+            if (at.paragraph() != null) coords.append("paragraph:").append(at.paragraph()).append(", ");
+            if (at.sheet() != null) coords.append("sheet:").append(at.sheet()).append(", ");
+            if (at.table() != null) coords.append("table:").append(at.table()).append(", ");
+            if (at.row() != null) {
+                coords.append("row:").append(at.row());
+                if (at.rowTo() != null) coords.append(", rowTo:").append(at.rowTo());
+            }
+            coords.append('}');
+            loops.add("- " + mark.kind() + " " + mark.block() + " " + coords);
+        }
+        if (loops.isEmpty()) return "";
+        return "\n\n你上一次写的循环标记：\n" + String.join("\n", loops)
+                + "\n两个范围互相包含时只能留一层，不要重写一份结构相同的计划。";
     }
 
     private int attempts() {

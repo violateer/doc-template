@@ -560,14 +560,35 @@ public class DocTemplateAnnotator {
                 LoopRange a = ranges.get(i);
                 LoopRange b = ranges.get(j);
                 if (a.sameArea(b) && a.from() <= b.to() && b.from() <= a.to())
-                    throw new IllegalArgumentException("两个循环标记的范围重叠（块 " + a.block() + " 第 "
-                            + a.from() + "~" + a.to() + " 行，块 " + b.block() + " 第 " + b.from() + "~"
-                            + b.to() + " 行）；同一张表里两个循环不能覆盖同一行。"
-                            + "一段明细的循环只写到自己那段数据的最后一行，不要跨过中间的标题行、空行、合计行；"
-                            + "这张表里有多段明细就每段各写一个循环，范围不能重叠");
+                    throw new IllegalArgumentException(overlapMessage(a, b));
             }
         }
         return ranges;
+    }
+
+    /**
+     * 两个循环范围相交时的说明。
+     *
+     * <p>「一个范围整个落在另一个里」（块 A 第 4~12 行、块 B 第 5~7 行）和「两段各占几行但有一行重叠」
+     * 是两种错：前者说明把嵌套明细拆成了两个循环，落笔后外层会把内层整段当样例行删掉；后者才是范围写多了。
+     * 改法完全不同，所以文案分开写 —— 这段文字会原样回灌给模型重试。</p>
+     */
+    private static String overlapMessage(LoopRange a, LoopRange b) {
+        boolean aWrapsB = a.from() <= b.from() && b.to() <= a.to();
+        boolean bWrapsA = b.from() <= a.from() && a.to() <= b.to();
+        // 同一个块写了两个范围相同的循环不算嵌套，按普通重叠说明，免得提示词里出现「A 落在 A 里」
+        if (!a.block().equals(b.block()) && (aWrapsB || bWrapsA)) {
+            LoopRange outer = aWrapsB ? a : b;
+            LoopRange inner = aWrapsB ? b : a;
+            return "两个循环标记是嵌套关系（块 " + inner.block() + " 第 " + inner.from() + "~" + inner.to()
+                    + " 行整个落在块 " + outer.block() + " 第 " + outer.from() + "~" + outer.to() + " 行里）；"
+                    + "嵌套循环不支持，同一段明细只能留一个循环：只保留外层或只保留内层，另一层写进 ignore "
+                    + "并说明原因，不要用两个循环覆盖同一批行";
+        }
+        return "两个循环标记的范围重叠（块 " + a.block() + " 第 " + a.from() + "~" + a.to() + " 行，块 "
+                + b.block() + " 第 " + b.from() + "~" + b.to() + " 行）；同一张表里两个循环不能覆盖同一行。"
+                + "一段明细的循环只写到自己那段数据的最后一行，不要跨过中间的标题行、空行、合计行；"
+                + "这张表里有多段明细就每段各写一个循环，范围不能重叠";
     }
 
     private static LoopRange find(List<LoopRange> ranges, Integer sheet, Integer table, int row) {

@@ -126,6 +126,25 @@ class DocTemplateAnnotateTest {
     }
 
     @Test
+    @DisplayName("两个循环范围是包含关系时按嵌套报错，并说明只能留一层")
+    void reportsNestedLoopsAsOverlap() {
+        DocTemplateMarkPlan.Block items = plan().blocks().get(1);
+        DocTemplateMarkPlan.Block materials = new DocTemplateMarkPlan.Block("materials", "物料明细", "array",
+                List.of(new DocTemplateMarkPlan.Field("material", "物料", "string", List.of("A"))));
+        DocTemplateMarkPlan plan = new DocTemplateMarkPlan(List.of(items, materials), List.of(
+                new DocTemplateMarkPlan.Mark("loop", new DocTemplateMarkPlan.At(null, 0, null, 1, 4, null, null),
+                        "items", null, null, List.of(), null, null),
+                new DocTemplateMarkPlan.Mark("loop", new DocTemplateMarkPlan.At(null, 0, null, 2, 3, null, null),
+                        "materials", null, null, List.of(), null, null)), List.of());
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new DocTemplateAnnotator().apply(xlsx(), "XLSX", plan));
+        // 这段文字会原样回灌给模型重试，必须点明是嵌套而不是「范围多写了一行」
+        assertTrue(error.getMessage().contains("嵌套"), error.getMessage());
+        assertTrue(error.getMessage().contains("materials"), error.getMessage());
+    }
+
+    @Test
     @DisplayName("数字单元格可以直接落标记，落笔时转成文本")
     void marksNumericCell() throws Exception {
         byte[] source;
