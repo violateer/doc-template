@@ -36,8 +36,8 @@ const compactMenuOptions: MenuOption[] = menuOptions.map((option) => ({ label: o
 const pageTitle = computed(() => (route.meta.title as string) ?? '模板管理');
 const pageDesc = computed(() => (route.meta.desc as string) ?? '');
 const activeKey = computed(() => route.path);
-// 由 vite.config.ts 注入，只在控制台打印，用来确认浏览器加载的是新构建产物（排查「改了没变化」）
-const buildTime = __BUILD_TIME__;
+// 由 vite.config.ts 注入，只在控制台打印，用来确认页面加载的是哪个版本的产物（排查「改了没变化」）
+const buildVersion = __BUILD_VERSION__;
 
 /**
  * `?layout=bare`：被宿主 iframe 嵌进内容区时用，**左侧栏和顶栏都不渲染** ——
@@ -47,7 +47,7 @@ const buildTime = __BUILD_TIME__;
  */
 const bare = layoutMode === 'bare';
 // 构建时刻只在控制台打印（页面上不再显示），排查「改了没变化」时看这一行
-console.info(`[doc-template] build ${buildTime}`);
+console.info(`[doc-template] build ${buildVersion}`);
 
 /**
  * 左下角展示的版本号取自后端（也就是当前真正对接的那个 Starter），不是前端自己的版本：
