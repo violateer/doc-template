@@ -664,10 +664,10 @@ async function downloadResult() {
 }
 
 .params-hint {
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.7;
   color: var(--text-muted);
-  background: #f7f9fd;
+  background: #f8fafc;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
@@ -680,7 +680,7 @@ async function downloadResult() {
 .panel-title {
   font-size: 13px;
   font-weight: 500;
-  color: #4b5563;
+  color: #475569;
   margin-bottom: 8px;
 }
 
@@ -699,7 +699,7 @@ async function downloadResult() {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
-  background: #fbfcfe;
+  background: #f8fafc;
 }
 
 .block-card.is-off {
@@ -720,14 +720,14 @@ async function downloadResult() {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #e8effd;
+  background: #eff6ff;
   color: var(--primary);
   font-size: 11px;
   font-weight: 500;
 }
 
 .block-code {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-strong);
 }
 
@@ -740,7 +740,7 @@ async function downloadResult() {
   margin-top: 6px;
   font-size: 12px;
   line-height: 1.6;
-  color: #5b6577;
+  color: #475569;
   word-break: break-all;
 }
 
@@ -751,10 +751,10 @@ async function downloadResult() {
 }
 
 .empty-hint {
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.7;
   color: var(--text-muted);
-  border: 1px dashed #d7e0f0;
+  border: 1px dashed #dbeafe;
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -767,7 +767,7 @@ async function downloadResult() {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
-  background: #fbfcfe;
+  background: #f8fafc;
 }
 
 .call-row {
@@ -786,7 +786,7 @@ async function downloadResult() {
 .call-value {
   font-size: 12px;
   line-height: 18px;
-  color: #3b4657;
+  color: #334155;
   word-break: break-all;
 }
 
@@ -797,10 +797,10 @@ async function downloadResult() {
 .call-pre {
   margin: 0;
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
-  color: #3b4657;
-  background: #f4f7fc;
+  color: #334155;
+  background: #f1f5f9;
   border-radius: 6px;
   padding: 6px 8px;
   max-height: 180px;
@@ -812,7 +812,7 @@ async function downloadResult() {
 .code-panel {
   margin-top: 4px;
   padding-top: 10px;
-  border-top: 1px dashed #dfe6f2;
+  border-top: 1px dashed #e5e7eb;
 }
 
 .code-title {
@@ -825,10 +825,10 @@ async function downloadResult() {
 .code-body {
   margin: 0;
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.65;
-  color: #33404f;
-  background: #f4f7fc;
+  color: #1e293b;
+  background: #f1f5f9;
   border-radius: 6px;
   padding: 8px 10px;
   max-height: 260px;
@@ -842,7 +842,7 @@ async function downloadResult() {
 }
 
 .call-hint {
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.7;
 }
 

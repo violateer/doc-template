@@ -80,10 +80,10 @@ const pagination = reactive({
 });
 
 const stats = computed(() => [
-  { label: '模板总数', value: overview.value.total, icon: AlbumsOutline, color: '#2f6fed', bg: '#eaf1ff' },
-  { label: '启用中', value: overview.value.enabled, icon: CheckmarkCircleOutline, color: '#18a058', bg: '#e8f7ef' },
-  { label: '已上传文件', value: overview.value.uploaded, icon: CloudUploadOutline, color: '#7c4dff', bg: '#f1ecff' },
-  { label: '生成记录', value: overview.value.records, icon: FlashOutline, color: '#f0a020', bg: '#fff5e6' }
+  { label: '模板总数', value: overview.value.total, icon: AlbumsOutline, color: '#1e40af', bg: '#eff6ff' },
+  { label: '启用中', value: overview.value.enabled, icon: CheckmarkCircleOutline, color: '#1e40af', bg: '#eff6ff' },
+  { label: '已上传文件', value: overview.value.uploaded, icon: CloudUploadOutline, color: '#1e40af', bg: '#eff6ff' },
+  { label: '生成记录', value: overview.value.records, icon: FlashOutline, color: '#1e40af', bg: '#eff6ff' }
 ]);
 
 async function loadStats() {
@@ -362,7 +362,7 @@ onMounted(() => {
         <div class="toolbar-left">
           <NInput v-model:value="keyword" placeholder="搜索模板名称或编码" clearable style="width: 260px">
             <template #prefix>
-              <NIcon color="#a3adbd"><SearchOutline /></NIcon>
+              <NIcon color="#94a3b8"><SearchOutline /></NIcon>
             </template>
           </NInput>
           <NSelect
