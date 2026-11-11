@@ -1,6 +1,6 @@
 import type { GlobalThemeOverrides } from 'naive-ui';
 
-/** 全站共用的视觉变量，保证每个页面看起来是一套东西。 */
+/** 全站共用的视觉变量，保证各页面视觉一致。 */
 export const themeOverrides: GlobalThemeOverrides = {
   common: {
     primaryColor: '#2f6fed',

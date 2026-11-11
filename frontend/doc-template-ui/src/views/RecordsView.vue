@@ -326,7 +326,7 @@ onMounted(load);
         @update:checked-row-keys="(keys: Array<string | number>) => (checkedKeys = keys as number[])"
       >
         <template #empty>
-          <NEmpty description="暂无生成记录，去模板页试一次「模拟生成」" />
+          <NEmpty description="暂无生成记录，可在模板页使用「模拟生成」" />
         </template>
       </NDataTable>
     </NCard>

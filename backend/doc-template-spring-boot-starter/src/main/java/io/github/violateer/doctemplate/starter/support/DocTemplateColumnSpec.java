@@ -55,7 +55,7 @@ public record DocTemplateColumnSpec(String field, String label, double width) {
         int limit = maxColumns > 0 ? maxColumns : DEFAULT_MAX_COLUMNS;
         if (items.size() > limit) {
             throw new IllegalArgumentException("列定义有 " + items.size() + " 列，超过上限 " + limit
-                    + " 列。请让列源只返回真正要渲染的列，或分多张表出");
+                    + " 列。请让列源只返回需要渲染的列，或拆分为多张表");
         }
         List<DocTemplateColumnSpec> specs = new ArrayList<>(items.size());
         Set<String> seen = new LinkedHashSet<>();
@@ -63,7 +63,7 @@ public record DocTemplateColumnSpec(String field, String label, double width) {
             DocTemplateColumnSpec spec = parseOne(items.get(i), i + 1);
             if (!seen.add(spec.field().toLowerCase(Locale.ROOT))) {
                 throw new IllegalArgumentException("列定义第 " + (i + 1) + " 列的字段「" + spec.field()
-                        + "」重复了，同一张表里每列只能出现一次（按小写比较）");
+                        + "」重复，同一张表中每列只能出现一次（按小写比较）");
             }
             specs.add(spec);
         }

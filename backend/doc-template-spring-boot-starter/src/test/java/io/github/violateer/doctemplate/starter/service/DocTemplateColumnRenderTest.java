@@ -216,7 +216,7 @@ class DocTemplateColumnRenderTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> new DocTemplateRenderer().render(template, "DOCX",
                         Map.of("items", items()), List.of(), DocTemplateMergeAlign.DEFAULT, Map.of("items", SPECS)));
-        assertEquals(true, error.getMessage().contains("没写角色"), error.getMessage());
+        assertEquals(true, error.getMessage().contains("未写角色"), error.getMessage());
     }
 
     /** 数据行只能有一行，写两行直接报错。 */

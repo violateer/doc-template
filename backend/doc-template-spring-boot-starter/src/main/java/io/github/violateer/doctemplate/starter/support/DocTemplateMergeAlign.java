@@ -113,7 +113,7 @@ public record DocTemplateMergeAlign(String vertical) {
      * 解析配置值，认不出来时退回默认值。
      *
      * <p>只挑垂直方向的词，水平词（left / right / start / end）一律忽略——老配置里
-     * {@code middle-center} 这种写法照样能用，结果是 {@code center}。</p>
+     * {@code middle-center} 这种写法同样可用，结果是 {@code center}。</p>
      */
     public static DocTemplateMergeAlign parse(String raw) {
         if (StrUtil.isBlank(raw)) return DEFAULT;

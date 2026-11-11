@@ -260,7 +260,7 @@ public class DocTemplateImageLoader {
 
     private byte[] decodeBase64(String text) {
         String compact = text.replaceAll("\\s+", "");
-        // URL-safe 变体也兼容一下
+        // 同时兼容 URL-safe 变体
         compact = compact.replace('-', '+').replace('_', '/');
         int pad = compact.length() % 4;
         if (pad > 0) compact = compact + "=".repeat(4 - pad);

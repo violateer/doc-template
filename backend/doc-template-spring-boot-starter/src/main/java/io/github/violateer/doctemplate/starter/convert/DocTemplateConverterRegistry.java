@@ -186,7 +186,7 @@ public class DocTemplateConverterRegistry {
      * <p>{@code field} 可以写成 {@code "a,b"} 一次覆盖多个字段。结果里的嵌套对象和数组都会递归处理，
      * 所以 Provider 返回 {@code {report:{...}, items:[{...}]}} 时内层字段同样能转。</p>
      *
-     * <p>分两步走：先复制出结果结构、顺手登记每个待转换的标量位置；再按「转换器 + 参数」分组
+     * <p>分两步走：先复制出结果结构、同时登记每个待转换的标量位置；再按「转换器 + 参数」分组
      * 批量执行。这样明细几百行、嵌套多层，同一个转换器也只会被调用一次（除非它自己要求逐条）。</p>
      */
     public Object apply(Object result, Object spec) {

@@ -48,7 +48,7 @@ export function shortSha(sha: string | null | undefined): string {
  * 判断这次点击是不是落在「自己就有行为」的元素上。
  *
  * 表格里点行等于勾选，但勾选框、操作列按钮、下拉、输入框本来就有自己的动作，
- * 再叠一层就会双重触发（点「删除」顺手把行也勾上）。这些一律交给元素自己处理。
+ * 再叠一层就会双重触发（点击「删除」时同时勾选该行）。这些一律交给元素自己处理。
  */
 export function isInteractiveClick(event: MouseEvent): boolean {
   const target = event.target as HTMLElement | null;

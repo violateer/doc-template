@@ -129,7 +129,7 @@ class DocTemplateMarkerCaseTest {
     void reportsStartMarkerWithoutArrayName() throws Exception {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> render(HEADER, new String[]{"{{#each}}", "${sku}", ""}));
-        assertTrue(error.getMessage().contains("没有被识别"), error.getMessage());
+        assertTrue(error.getMessage().contains("未被识别"), error.getMessage());
         assertTrue(error.getMessage().contains("数组名"), error.getMessage());
     }
 
@@ -162,6 +162,6 @@ class DocTemplateMarkerCaseTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> new DocTemplateRenderer().render(template, "DOCX", params(),
                         List.of(), DocTemplateMergeAlign.DEFAULT, Map.of()));
-        assertTrue(error.getMessage().contains("没有被识别"), error.getMessage());
+        assertTrue(error.getMessage().contains("未被识别"), error.getMessage());
     }
 }

@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * 示例宿主的极简登录模块：内存用户 + Sa-Token 会话，重启即失效。
  *
- * <p>这是「宿主自己的登录」，不属于 Starter。真实项目里换成你自己的登录接口即可，
+ * <p>这是「宿主自己的登录」，不属于 Starter。真实项目可替换为宿主自身的登录接口，
  * 模块只关心 {@link DemoDocTemplateAuthorizer} 能不能拿到当前用户。</p>
  *
  * <p>登录成功后前端把 tokenValue 写进 {@code localStorage.token}，内嵌管理页默认就读这个键，
