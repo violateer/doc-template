@@ -16,6 +16,12 @@
 
 ## [Unreleased]
 
+## [0.3.0.1] - 2026-11-12
+
+### 修复
+
+- **管理页能正常打开**：0.3.0 发布的管理页引用的脚本与样式，与实际打进 JAR 的文件不是同一次构建的产物，打开后页面空白、控制台报脚本加载失败。现在页面引用与打包文件始终一致；静态资源缺失时直接返回 404，不再回退成页面本身，排查时能看出是文件缺失；浏览器升级后也不会继续运行上一版本的旧脚本。
+
 ## [0.3.0] - 2026-11-12
 
 ### 新增
@@ -125,7 +131,8 @@
 - **运行接入**：复用宿主 `DataSource` 或配置独立库；MySQL 8 / MariaDB 自动建表；文件存储支持本地磁盘与 S3 兼容对象存储；同时兼容 Spring Boot 3.x / 4.x 的 Servlet Web 应用。
 - **内嵌管理界面**：模板、数据块、字典、生成记录的管理页随 JAR 发布，可 iframe 嵌入或同源部署。
 
-[Unreleased]: https://github.com/violateer/doc-template/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/violateer/doc-template/compare/v0.3.0.1...HEAD
+[0.3.0.1]: https://github.com/violateer/doc-template/releases/tag/v0.3.0.1
 [0.3.0]: https://github.com/violateer/doc-template/releases/tag/v0.3.0
 [0.2.1]: https://github.com/violateer/doc-template/releases/tag/v0.2.1
 [0.2.0]: https://github.com/violateer/doc-template/releases/tag/v0.2.0

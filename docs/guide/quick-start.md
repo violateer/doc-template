@@ -28,7 +28,7 @@ Starter 不绑定任何业务框架、认证框架、权限体系，也不要求
 <dependency>
   <groupId>io.github.violateer</groupId>
   <artifactId>doc-template-spring-boot-starter</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0.1</version>
 </dependency>
 ```
 
@@ -123,7 +123,7 @@ curl http://localhost:9150/api/doc-template/system/providers
 ```
 ========================================================================
  ____   ___   ____        doc-template · 文档模板引擎
-|  _ \ / _ \ / ___|       Spring Boot Starter 0.3.0
+|  _ \ / _ \ / ___|       Spring Boot Starter 0.3.0.1
 | | | | | | | |
 | |_| | |_| | |___
 |____/ \___/ \____|
@@ -150,7 +150,7 @@ mvn clean package
 mvn -pl doc-template-example -am spring-boot:run -Dspring-boot.run.profiles=dev
 
 # 想关掉认证
-java -jar doc-template-example/target/doc-template-example-0.3.0.jar --spring.profiles.active=dev --doc-template.auth.mode=none
+java -jar doc-template-example/target/doc-template-example-0.3.0.1.jar --spring.profiles.active=dev --doc-template.auth.mode=none
 ```
 
 示例账号 `admin / Admin@123`、`demo / Demo@123`；登录页 `/demo/login.html`，登录后 token 写入 `localStorage.token`。
