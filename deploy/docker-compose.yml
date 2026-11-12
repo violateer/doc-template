@@ -35,6 +35,14 @@ services:
       DOC_S3_BUCKET: "${DOC_S3_BUCKET:-doc-template}"
       DOC_S3_ACCESS_KEY: "${DOC_S3_ACCESS_KEY:?DOC_S3_ACCESS_KEY 未设置}"
       DOC_S3_SECRET_KEY: "${DOC_S3_SECRET_KEY:?DOC_S3_SECRET_KEY 未设置}"
+
+      # AI 标注：默认关闭。这里统一用 :- 兜默认值 —— 变量缺失时 compose 会传空串进容器，
+      # 而 Spring 的 ${X:默认值} 只在变量不存在时生效，空串会被当成「已配置但为空」。
+      # 开启后文档正文会发往 base-url 指向的服务。
+      DOC_AI_ENABLED: "${DOC_AI_ENABLED:-false}"
+      DOC_AI_BASE_URL: "${DOC_AI_BASE_URL:-https://api.deepseek.com}"
+      DOC_AI_API_KEY: "${DOC_AI_API_KEY:-}"
+      DOC_AI_MODEL: "${DOC_AI_MODEL:-deepseek-chat}"
     volumes:
       # 用命名卷而不是 ./data：Jenkins 常常跑在容器里、只挂了 docker.sock，
       # 那时 bind mount 的相对路径会被按「宿主机」解析，数据落到意想不到的地方。
