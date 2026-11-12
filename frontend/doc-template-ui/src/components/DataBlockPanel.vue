@@ -2435,19 +2435,19 @@ onMounted(() => {
   max-height: 60vh;
   overflow-y: auto;
   padding: 12px 14px;
-  border: 1px solid #e6ecf6;
+  border: 1px solid #e5e7eb;
   border-radius: 10px;
-  background: #fbfcfe;
+  background: #f8fafc;
 }
 
 /* 标题栏里的说明开关：与关闭按钮同排，展开时图标变色 */
 .aside-toggle {
-  color: #5b6577;
+  color: #475569;
 }
 
 .aside-toggle.is-active {
-  color: #2f6fed;
-  background-color: #eef4ff;
+  color: #1e40af;
+  background-color: #eff6ff;
 }
 
 .aside-icon {
@@ -2455,24 +2455,24 @@ onMounted(() => {
 }
 
 .aside-toggle.is-active .aside-icon {
-  color: #2f6fed;
+  color: #1e40af;
 }
 
 .aside-title {
   margin-bottom: 8px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: #1f2733;
+  color: #0f172a;
 }
 
 .aside-summary {
   margin-bottom: 12px;
   padding: 7px 9px;
-  border: 1px solid #d9e6fb;
+  border: 1px solid #dbeafe;
   border-radius: 8px;
-  background: #f4f8ff;
-  color: #4a5f88;
-  font-size: 11.5px;
+  background: #eff6ff;
+  color: #475569;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -2484,7 +2484,7 @@ onMounted(() => {
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #42506b;
+  color: #475569;
 }
 
 .aside-item + .aside-item {
@@ -2501,32 +2501,32 @@ onMounted(() => {
 .aside-item-label {
   font-size: 12px;
   font-weight: 500;
-  color: #1f2733;
+  color: #0f172a;
   line-height: 1.4;
 }
 
 .aside-item-key {
   padding: 0 5px;
   border-radius: 4px;
-  background: #f2f5fa;
-  color: #2f6fed;
+  background: #f1f5f9;
+  color: #1e40af;
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 16px;
 }
 
 .aside-item-desc {
   margin-top: 2px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
-  color: #5b6577;
+  color: #475569;
   word-break: break-word;
 }
 
 .aside-item-desc code {
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 11px;
-  color: #2f6fed;
+  color: #1e40af;
 }
 
 /* 窄屏：侧栏会把表单挤成一条，干脆不显示开关（打开弹窗时本就是收起状态） */
@@ -2548,28 +2548,28 @@ onMounted(() => {
   gap: 10px;
   margin: 2px 0 8px;
   padding-top: 10px;
-  border-top: 1px solid #eef2f8;
+  border-top: 1px solid #eef2f6;
 }
 
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1f2733;
+  color: #0f172a;
 }
 
 .section-badge {
   padding: 1px 8px;
-  border-radius: 20px;
+  border-radius: 999px;
   font-size: 11px;
-  color: #2f6fed;
-  background: #eef4ff;
-  border: 1px solid #dbe8ff;
+  color: #1e40af;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
 }
 
 /* 表单项下方的浅色说明（目前只有「改数据块编码」用） */
 .code-hint {
-  color: #8a94a6;
-  font-size: 11.5px;
+  color: #64748b;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -2580,18 +2580,18 @@ onMounted(() => {
   gap: 7px;
   margin: -4px 0 12px;
   padding: 7px 10px;
-  border: 1px solid #f2d4a8;
+  border: 1px solid #fde68a;
   border-radius: 8px;
-  background: #fdf6ec;
-  color: #8a5a12;
-  font-size: 11.5px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
   line-height: 1.55;
 }
 
 .cfg-warn-icon {
   flex: none;
   margin-top: 2px;
-  color: #d99026;
+  color: #b45309;
 }
 
 /* -------------------------------------------------- 配置项分组 */
@@ -2604,7 +2604,7 @@ onMounted(() => {
   margin-top: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #42506b;
+  color: #475569;
 }
 
 .cfg-group-title::before {
@@ -2612,7 +2612,7 @@ onMounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 2px;
-  background: #2f6fed;
+  background: #1e40af;
   opacity: 0.8;
 }
 
@@ -2620,7 +2620,7 @@ onMounted(() => {
   content: '';
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, #e9eff9, #f6f9fd);
+  background: #f1f5f9;
 }
 
 /* -------------------------------------------------- 配置项网格 */
@@ -2655,9 +2655,9 @@ onMounted(() => {
 }
 
 .cfg-label-text {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
-  color: #1f2733;
+  color: #0f172a;
   line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
@@ -2669,10 +2669,10 @@ onMounted(() => {
   flex: none;
   padding: 0 5px;
   border-radius: 4px;
-  background: #f2f5fa;
-  color: #9aa5b7;
+  background: #f1f5f9;
+  color: #94a3b8;
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 16px;
 }
 
@@ -2711,7 +2711,7 @@ onMounted(() => {
 .list-section {
   margin-top: 18px;
   padding-top: 12px;
-  border-top: 1px solid #eef2f8;
+  border-top: 1px solid #eef2f6;
 }
 
 /* 标题和右侧按钮同一行，用 flex 居中保证文字与按钮严格对齐 */
@@ -2728,11 +2728,11 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   line-height: 24px;
-  color: #1f2733;
+  color: #0f172a;
 }
 
 .field-required {
-  color: #d03050;
+  color: #dc2626;
   margin-left: 2px;
 }
 
@@ -2745,14 +2745,14 @@ onMounted(() => {
 
 .field-empty {
   font-size: 12px;
-  color: #a3adbb;
+  color: #94a3b8;
   line-height: 1.6;
 }
 
 .extra-hint {
   margin-top: 4px;
-  font-size: 11.5px;
-  color: #8b95a5;
+  font-size: 12px;
+  color: #64748b;
   line-height: 1.6;
 }
 
@@ -2795,9 +2795,9 @@ onMounted(() => {
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid #e6ecf6;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: #fbfcfe;
+  background: #f8fafc;
 }
 
 .qr-main {
@@ -2818,13 +2818,13 @@ onMounted(() => {
 
 .qr-label {
   font-size: 12px;
-  color: #5b6577;
+  color: #475569;
   white-space: nowrap;
 }
 
 .qr-hint {
   font-size: 12px;
-  color: #a3adbb;
+  color: #94a3b8;
 }
 
 /* -------------------------------------------------- 字段值转换 */
@@ -2840,9 +2840,9 @@ onMounted(() => {
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid #e6ecf6;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: #fbfcfe;
+  background: #f8fafc;
 }
 
 .converter-main {
@@ -2854,19 +2854,19 @@ onMounted(() => {
 
 .converter-label {
   font-size: 12px;
-  color: #5b6472;
+  color: #475569;
   white-space: nowrap;
 }
 
 .converter-desc {
-  font-size: 11.5px;
-  color: #8b95a5;
+  font-size: 12px;
+  color: #64748b;
   line-height: 1.5;
 }
 
 .converter-warn {
-  font-size: 11.5px;
-  color: #d03050;
+  font-size: 12px;
+  color: #dc2626;
   line-height: 1.5;
 }
 
@@ -2886,7 +2886,7 @@ onMounted(() => {
 
 .converter-arg-label {
   font-size: 12px;
-  color: #5b6472;
+  color: #475569;
   text-align: right;
   white-space: nowrap;
 }
@@ -2920,8 +2920,8 @@ onMounted(() => {
 }
 
 .converter-hint {
-  font-size: 11.5px;
-  color: #8b95a5;
+  font-size: 12px;
+  color: #64748b;
   line-height: 1.5;
 }
 
@@ -2944,12 +2944,12 @@ onMounted(() => {
 .preview-name {
   font-size: 13px;
   font-weight: 600;
-  color: #1f2733;
+  color: #0f172a;
 }
 
 .preview-elapsed {
-  font-size: 11.5px;
-  color: #8b95a5;
+  font-size: 12px;
+  color: #64748b;
 }
 
 .preview-head-right {
@@ -2979,36 +2979,36 @@ onMounted(() => {
 .preview-table-title {
   font-size: 12px;
   font-weight: 600;
-  color: #42506b;
+  color: #475569;
 }
 
 .preview-table-count {
-  font-size: 11.5px;
-  color: #8b95a5;
+  font-size: 12px;
+  color: #64748b;
 }
 
 .preview-table :deep(.n-data-table .n-data-table-th) {
-  background: #f7f9fd;
+  background: #f8fafc;
 }
 
 .preview-params {
   margin-bottom: 12px;
   padding: 10px 12px;
-  border: 1px solid #d9e6fb;
+  border: 1px solid #dbeafe;
   border-radius: 8px;
-  background: #f4f8ff;
+  background: #eff6ff;
 }
 
 .preview-params-title {
   margin-bottom: 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.55;
-  color: #4a5f88;
+  color: #475569;
 }
 
 .preview-params-title code {
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  color: #2f6fed;
+  color: #1e40af;
 }
 
 .preview-param-row {
@@ -3021,7 +3021,7 @@ onMounted(() => {
 
 .preview-param-key {
   font-size: 12px;
-  color: #42506b;
+  color: #475569;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3032,10 +3032,10 @@ onMounted(() => {
   margin: 0;
   padding: 12px 14px;
   overflow: auto;
-  border: 1px solid #e6ecf6;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: #fbfcfe;
-  color: #1f2733;
+  background: #f8fafc;
+  color: #0f172a;
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -3045,11 +3045,11 @@ onMounted(() => {
 
 .preview-error {
   padding: 10px 12px;
-  border: 1px solid #f3c9c9;
+  border: 1px solid #fecaca;
   border-radius: 8px;
-  background: #fef4f4;
-  color: #b42318;
-  font-size: 12.5px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
   line-height: 1.6;
   word-break: break-all;
 }
@@ -3057,7 +3057,7 @@ onMounted(() => {
 .preview-empty {
   padding: 18px 0;
   text-align: center;
-  font-size: 12.5px;
-  color: #a3adbb;
+  font-size: 12px;
+  color: #94a3b8;
 }
 </style>

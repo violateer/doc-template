@@ -278,7 +278,7 @@ onMounted(load);
         <div class="toolbar-left">
           <NInput v-model:value="keyword" placeholder="搜索记录号 / 模板 / 文件名" clearable style="width: 260px">
             <template #prefix>
-              <NIcon color="#a3adbd"><SearchOutline /></NIcon>
+              <NIcon color="#94a3b8"><SearchOutline /></NIcon>
             </template>
           </NInput>
           <NSelect v-model:value="statusFilter" :options="statusOptions" placeholder="全部状态" clearable style="width: 140px" />

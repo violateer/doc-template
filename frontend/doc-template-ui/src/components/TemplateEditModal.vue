@@ -363,7 +363,7 @@ const versionColumns = computed(() => [
           <template v-if="current">
             <NUpload :custom-request="handleUpload" :show-file-list="false" accept=".docx,.xlsx" :disabled="uploading">
               <NUploadDragger class="uploader">
-                <NIcon size="30" color="#2f6fed"><CloudUploadOutline /></NIcon>
+                <NIcon size="30" color="#1e40af"><CloudUploadOutline /></NIcon>
                 <div class="uploader-title">{{ uploading ? '正在上传…' : '点击或拖拽上传模板文件' }}</div>
                 <div class="uploader-sub">支持 .docx / .xlsx，上传后自动生成新版本</div>
               </NUploadDragger>
@@ -404,7 +404,7 @@ const versionColumns = computed(() => [
             <div v-else class="version-empty">尚未上传模板文件</div>
           </template>
           <div v-else class="uploader-placeholder">
-            <NIcon size="34" color="#b3bdcc"><DocumentTextOutline /></NIcon>
+            <NIcon size="34" color="#cbd5e1"><DocumentTextOutline /></NIcon>
             <div class="uploader-title">先保存模板信息</div>
             <div class="uploader-sub">创建成功后即可上传 .docx / .xlsx 模板并配置数据块</div>
           </div>
@@ -474,36 +474,36 @@ const versionColumns = computed(() => [
 
 .section-divider {
   height: 1px;
-  background: #eef1f7;
+  background: #e5e7eb;
   margin: 20px 0 18px;
 }
 
 .uploader {
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 18px 12px;
   text-align: center;
-  background: #fafcff;
+  background: #f8fafc;
 }
 
 .uploader-title {
   margin-top: 8px;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
-  color: #1f2733;
+  color: #0f172a;
 }
 
 .uploader-sub {
   margin-top: 4px;
   font-size: 12px;
-  color: #8b95a5;
+  color: #64748b;
 }
 
 .uploader-placeholder {
-  border: 1px dashed #dfe6f1;
-  border-radius: 14px;
+  border: 1px dashed #e5e7eb;
+  border-radius: 12px;
   padding: 40px 16px;
   text-align: center;
-  background: #fafcff;
+  background: #f8fafc;
 }
 
 .section-head {
@@ -522,11 +522,11 @@ const versionColumns = computed(() => [
 .version-count {
   margin-left: 5px;
   padding: 0 5px;
-  border-radius: 7px;
+  border-radius: 6px;
   font-size: 11px;
   line-height: 15px;
-  background: rgba(47, 111, 237, 0.12);
-  color: #2f6fed;
+  background: #eff6ff;
+  color: #1e40af;
 }
 
 /* -------------------------------------------------- 当前版本卡片 */
@@ -535,9 +535,9 @@ const versionColumns = computed(() => [
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #e4ebf7;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
-  background: linear-gradient(180deg, #f7faff 0%, #ffffff 100%);
+  background: #f8fafc;
 }
 
 .version-badge {
@@ -546,10 +546,10 @@ const versionColumns = computed(() => [
   padding: 3px 8px;
   border-radius: 8px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: #2f6fed;
-  background: rgba(47, 111, 237, 0.1);
+  color: #1e40af;
+  background: #eff6ff;
 }
 
 .version-main {
@@ -560,7 +560,7 @@ const versionColumns = computed(() => [
 .version-name {
   font-size: 13px;
   font-weight: 500;
-  color: #1f2733;
+  color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -571,12 +571,12 @@ const versionColumns = computed(() => [
   align-items: center;
   gap: 6px;
   margin-top: 2px;
-  font-size: 11.5px;
-  color: #8b95a5;
+  font-size: 12px;
+  color: #64748b;
 }
 
 .version-dot {
-  color: #c3ccda;
+  color: #cbd5e1;
 }
 
 .version-actions {
@@ -589,20 +589,20 @@ const versionColumns = computed(() => [
 .version-empty {
   padding: 18px 0;
   text-align: center;
-  font-size: 12.5px;
-  color: #a3adbb;
-  border: 1px dashed #dfe6f1;
+  font-size: 12px;
+  color: #94a3b8;
+  border: 1px dashed #e5e7eb;
   border-radius: 12px;
-  background: #fafcff;
+  background: #f8fafc;
 }
 
 .versions-tip {
   margin-bottom: 10px;
   padding: 7px 10px;
-  border: 1px solid #d9e6fb;
+  border: 1px solid #dbeafe;
   border-radius: 8px;
-  background: #f4f8ff;
-  color: #4a5f88;
+  background: #eff6ff;
+  color: #475569;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -610,7 +610,7 @@ const versionColumns = computed(() => [
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #4b5563;
+  color: #475569;
 }
 
 @media (max-width: 900px) {

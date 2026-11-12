@@ -5,90 +5,137 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>示例登录 · Vio Doc Template</title>
   <style>
+    /* 企业简洁：浅石板底、白卡片配发丝边框、单一企业蓝。动效 160ms ease-out。 */
+    :root {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --border: #e5e7eb;
+      --divider: #eef2f6;
+      --text: #0f172a;
+      --text-body: #334155;
+      --text-muted: #64748b;
+      --primary: #1e40af;
+      --primary-hover: #1d4ed8;
+      --primary-tint: #eff6ff;
+      --action: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #dc2626;
+      --radius-card: 12px;
+      --radius-control: 8px;
+      --shadow-rest: 0 1px 2px rgba(15, 23, 42, 0.06);
+      --shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.08);
+      --ease: cubic-bezier(0.2, 0, 0, 1);
+      --dur: 160ms;
+    }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       min-height: 100vh;
       display: grid;
       place-items: center;
       padding: 24px;
-      background: radial-gradient(900px 500px at 15% 0%, #ede9fe 0%, #f8fafc 55%, #f1f5f9 100%);
-      color: #1e293b;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "PingFang SC", "Microsoft YaHei", "Noto Sans", sans-serif;
       -webkit-font-smoothing: antialiased;
     }
+
+    :focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+
     .card {
       width: 100%;
-      max-width: 380px;
-      padding: 32px 28px 26px;
-      background: #fff;
-      border: 1px solid #ede9fe;
-      border-radius: 18px;
-      box-shadow: 0 24px 60px -28px rgba(91, 61, 240, 0.45), 0 2px 10px rgba(15, 23, 42, 0.05);
+      max-width: 400px;
+      padding: 32px 32px 28px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-rest), 0 10px 28px -18px rgba(15, 23, 42, 0.14);
     }
-    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
-    .brand svg { width: 34px; height: 34px; flex: none; }
-    .brand-name { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: #64748b; text-transform: uppercase; }
-    h1 { margin: 0 0 6px; font-size: 21px; font-weight: 650; letter-spacing: -0.01em; }
-    .sub { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #64748b; }
+
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .brand svg { width: 32px; height: 32px; flex: none; }
+    .brand-name {
+      font-size: 12px; font-weight: 500; letter-spacing: 0.04em;
+      color: var(--text-muted); text-transform: uppercase;
+    }
+
+    h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; }
+    .sub { margin: 0 0 20px; font-size: 13px; line-height: 1.65; color: var(--text-muted); }
+
     .badge {
       display: inline-flex; align-items: center; gap: 6px;
-      margin-bottom: 18px; padding: 4px 10px;
-      font-size: 12px; font-weight: 600; color: #5b3df0;
-      background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 999px;
+      margin-bottom: 20px; padding: 4px 10px;
+      font-size: 12px; font-weight: 500; color: var(--primary);
+      background: var(--primary-tint); border: 1px solid #dbeafe; border-radius: 999px;
     }
-    .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #8b5cf6; }
-    .badge.is-none { color: #b45309; background: #fffbeb; border-color: #fde68a; }
-    .badge.is-none .dot { background: #f59e0b; }
-    label { display: block; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #334155; }
+    .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+    .badge.is-none { color: #92400e; background: #fffbeb; border-color: #fde68a; }
+    .badge.is-none .dot { background: var(--warning); }
+
+    label { display: block; margin-bottom: 16px; font-size: 13px; font-weight: 500; color: var(--text-body); }
     input {
-      display: block; width: 100%; margin-top: 6px; padding: 10px 12px;
-      font-size: 14px; color: #0f172a;
-      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
-      outline: none; transition: border-color .15s, box-shadow .15s, background .15s;
+      display: block; width: 100%; margin-top: 6px; padding: 9px 12px;
+      font-size: 14px; color: var(--text);
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-control);
+      outline: none;
+      transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
     }
-    input:focus { background: #fff; border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15); }
+    input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.14); }
+
     button {
-      width: 100%; margin-top: 6px; padding: 11px 14px;
-      font-size: 14px; font-weight: 600; color: #fff; cursor: pointer;
-      background: linear-gradient(135deg, #8b5cf6, #5b3df0);
-      border: 0; border-radius: 10px;
-      box-shadow: 0 10px 24px -12px rgba(91, 61, 240, 0.9);
-      transition: transform .12s, box-shadow .12s, opacity .12s;
+      width: 100%; margin-top: 8px; padding: 10px 14px;
+      font-size: 14px; font-weight: 500; color: #fff; cursor: pointer;
+      background: var(--primary);
+      border: 0; border-radius: var(--radius-control);
+      box-shadow: var(--shadow-rest);
+      transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+        transform var(--dur) var(--ease);
     }
-    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 28px -12px rgba(91, 61, 240, 0.95); }
-    button:disabled { opacity: .6; cursor: not-allowed; }
+    button:hover:not(:disabled) { background: var(--primary-hover); box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+    button:active:not(:disabled) { transform: scale(0.98); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
     .ghost {
-      width: auto; margin: 0; padding: 0; color: #5b3df0;
-      background: none; border: 0; box-shadow: none; font-size: 13px; font-weight: 600;
+      width: auto; margin: 0; padding: 0; color: var(--primary);
+      background: none; border: 0; box-shadow: none; font-size: 13px; font-weight: 500;
     }
-    .ghost:hover { text-decoration: underline; transform: none; box-shadow: none; }
-    .error { min-height: 18px; margin: 10px 0 0; font-size: 12.5px; color: #dc2626; }
-    .hint { margin-top: 16px; padding-top: 14px; border-top: 1px dashed #e2e8f0; font-size: 12px; line-height: 1.9; color: #64748b; }
+    .ghost:hover { text-decoration: underline; transform: none; box-shadow: none; background: none; }
+
+    .error { min-height: 18px; margin: 10px 0 0; font-size: 13px; color: var(--danger); }
+
+    .hint {
+      margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--divider);
+      font-size: 12px; line-height: 1.9; color: var(--text-muted);
+    }
     .hint code {
-      padding: 1px 5px; font-size: 11.5px; color: #5b3df0;
-      background: #f5f3ff; border-radius: 5px;
+      padding: 1px 5px; font-size: 12px; color: var(--primary);
+      background: #f1f5f9; border-radius: 4px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
-    .status { display: none; margin-bottom: 16px; padding: 10px 12px; font-size: 13px; border-radius: 10px; }
-    .status.on { display: block; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
-    .status b { font-weight: 650; }
-    .link-row { margin-top: 14px; text-align: center; font-size: 13px; }
-    .link-row a { color: #5b3df0; text-decoration: none; font-weight: 600; }
+
+    .status { display: none; margin-bottom: 16px; padding: 10px 12px; font-size: 13px; border-radius: var(--radius-control); }
+    .status.on { display: block; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
+    .status b { font-weight: 600; }
+
+    .link-row { margin-top: 16px; text-align: center; font-size: 13px; }
+    .link-row a { color: var(--primary); text-decoration: none; font-weight: 500; }
     .link-row a:hover { text-decoration: underline; }
+
+    @media (prefers-reduced-motion: reduce) {
+      button { transition: none; }
+      button:hover:not(:disabled), button:active:not(:disabled) { transform: none; }
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="brand">
       <svg viewBox="0 0 64 64" aria-hidden="true">
-        <defs>
-          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#8b5cf6" />
-            <stop offset="1" stop-color="#5b3df0" />
-          </linearGradient>
-        </defs>
-        <rect width="64" height="64" rx="16" fill="url(#g)" />
+        <rect width="64" height="64" rx="12" fill="#1e40af" />
         <g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M32 14 12 23l20 9 20-9-20-9Z" />
           <path d="M12 33l20 9 20-9" />
@@ -118,7 +165,7 @@
 
     <div class="hint">
       演示账号：<code>admin / Admin@123</code> · <code>demo / Demo@123</code><br />
-      切换模式：<code>--spring.profiles.active=auth</code> 启用认证，去掉则回到 <code>none</code>。
+      切换模式：<code>--doc-template.auth.mode=custom</code> 启用认证，去掉则回到 <code>none</code>。
     </div>
 
     <div class="link-row"><a href="/doc-template/">直接进入模板管理 →</a></div>

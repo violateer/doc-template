@@ -1,0 +1,4 @@
+# 内嵌前端构建产物由 vite 生成，行尾固定为 LF。
+# 缺少这条规则时，Windows 下 core.autocrlf=true 会在检出时把产物转成 CRLF，
+# 而构建又写出 LF，导致每次打包后这些文件都显示「已修改」（内容其实一致）。
+backend/doc-template-spring-boot-starter/src/main/resources/META-INF/resources/doc-template/** text eol=lf

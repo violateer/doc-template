@@ -440,7 +440,7 @@ onMounted(loadDicts);
       <div class="side-toolbar">
         <NInput v-model:value="keyword" size="small" placeholder="搜索编码 / 名称 / 备注" clearable>
           <template #prefix>
-            <NIcon color="#a3adbd"><SearchOutline /></NIcon>
+            <NIcon color="#94a3b8"><SearchOutline /></NIcon>
           </template>
         </NInput>
         <NTooltip trigger="hover">
@@ -656,28 +656,28 @@ onMounted(loadDicts);
 .items-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink, #1f2733);
+  color: var(--ink, #0f172a);
 }
 
 .items-sub {
   font-size: 12px;
-  color: #8b95a5;
+  color: #64748b;
 }
 
 .items-hint {
   flex: none;
   margin-bottom: 10px;
   padding: 7px 10px;
-  border: 1px solid #d9e6fb;
+  border: 1px solid #dbeafe;
   border-radius: 8px;
-  background: #f4f8ff;
-  color: #4a5f88;
-  font-size: 11.5px;
+  background: #eff6ff;
+  color: #475569;
+  font-size: 12px;
   line-height: 1.6;
 }
 
 .items-hint .mono {
-  color: #2f6fed;
+  color: #1e40af;
 }
 
 .dict-grid {
