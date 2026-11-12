@@ -74,6 +74,40 @@ RUN set -eu; \
 
 COPY backend/ /src/backend/
 
+# ---------------------------------------------------------------------------
+# 内嵌管理页产物自检
+#
+# index.html 引用的每个资源（assets/index.js、assets/index.css 等）都必须真的在
+# 产物目录里。文件名已经不带内容哈希，但产物仍然可能不完整：构建中途失败只写了
+# 一部分、合并分支时只取了其中一部分、或者被忽略规则误伤。缺文件时镜像能启动、
+# 健康检查也能通过（只探测 /doc-template/），要打开页面才暴露：白屏，控制台报
+# 资源 404（管理页的页面控制器会把缺失的静态资源如实返回 404）。
+# 所以在这里就拦下来，引用的文件缺一个即判定构建失败。
+#
+# 用 Central 上的 Starter 时（DOC_TEMPLATE_VERSION 非空）这份产物不参与镜像，
+# 仍然要检查：仓库里的状态坏了，下一次发版就会把它打进 jar 发出去。
+# ---------------------------------------------------------------------------
+# 下面 shell 变量一律写成 \$：Dockerfile 在执行前会把 $NAME 换成构建参数的值，
+# 未定义的变量换成空串，脚本会被静默改坏。
+RUN set -eu; \
+    UI=/src/backend/doc-template-spring-boot-starter/src/main/resources/META-INF/resources/doc-template; \
+    grep -o '/doc-template/assets/[A-Za-z0-9._-]*' "\$UI/index.html" \
+      | sed 's#^/doc-template/##' | sort -u > /tmp/ui-refs; \
+    if [ ! -s /tmp/ui-refs ]; then \
+      echo "错误：\$UI/index.html 未引用任何 assets 资源，管理页产物不完整"; \
+      exit 1; \
+    fi; \
+    ( cd "\$UI" && find . -type f | sed 's#^\./##' | sort ) > /tmp/ui-files; \
+    MISSING=\$(comm -23 /tmp/ui-refs /tmp/ui-files); \
+    if [ -n "\$MISSING" ]; then \
+      echo "错误：内嵌管理页产物与 index.html 不一致，以下文件不存在："; \
+      printf '%s\n' "\$MISSING" | sed 's/^/  缺失 /'; \
+      echo "成因通常是前端产物只重建或只提交了一部分，或者分支合并后没有重新构建。"; \
+      echo "修复：pnpm --filter doc-template-frontend-ui build 之后，把 index.html 与 assets/ 一并提交。"; \
+      exit 1; \
+    fi; \
+    echo "内嵌管理页产物自检通过：\$(wc -l < /tmp/ui-refs) 个资源引用全部存在"
+
 # -U 不能去掉：上面 go-offline 若撞上阿里云的 404，Maven 会把「该坐标不存在」写进 ~/.m2 的
 # 负缓存，而同一次构建的两步共用同一层文件系统。没有 -U 时 package 会直接沿用那个结论，
 # 报错是 "was not found ... during a previous attempt. This failure was cached"，

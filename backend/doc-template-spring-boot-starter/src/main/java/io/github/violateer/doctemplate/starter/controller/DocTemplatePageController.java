@@ -5,6 +5,7 @@ import io.github.violateer.doctemplate.starter.auth.DocTemplateGuard;
 import io.github.violateer.doctemplate.starter.autoconfigure.DocTemplateProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
 
 /**
  * 从 Starter 的 jar 里提供内嵌管理页。
@@ -30,6 +32,16 @@ import java.nio.charset.StandardCharsets;
 public class DocTemplatePageController {
     private static final String ROOT = "META-INF/resources/doc-template/";
     private static final String INDEX = "index.html";
+
+    /**
+     * 静态资源的后缀。这类请求缺失时不能回落到 {@code index.html}。
+     *
+     * <p>回落会让浏览器拿到 {@code text/html}，按 module script 校验时报
+     * 「Expected a JavaScript-or-Wasm module script ... MIME type of "text/html"」，
+     * 看起来像 MIME 或网关配置问题，实际是文件没有打进 jar。</p>
+     */
+    private static final Pattern ASSET_SUFFIX =
+            Pattern.compile("\\.(js|mjs|css|map|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|eot)$", Pattern.CASE_INSENSITIVE);
 
     private final DocTemplateGuard guard;
     private final DocTemplateProperties properties;
@@ -47,7 +59,10 @@ public class DocTemplatePageController {
         if (relative.contains("..") || relative.startsWith("/")) return ResponseEntity.badRequest().build();
         ClassPathResource resource = new ClassPathResource(ROOT + relative);
         boolean exists = resource.exists() && resource.isReadable();
-        // 资源不存在按 SPA 路由处理，回 index.html
+        if (!exists && ASSET_SUFFIX.matcher(relative).find()) {
+            return ResponseEntity.notFound().build();
+        }
+        // 其余不存在的路径按 SPA 路由处理，回 index.html
         if (!exists) {
             resource = new ClassPathResource(ROOT + INDEX);
         }
@@ -70,7 +85,12 @@ public class DocTemplatePageController {
         if (pageRequest && loginPage != null) {
             body = withLoginUrl(body, loginPage);
         }
-        return ResponseEntity.ok().contentType(mediaType).body(body);
+        // 产物文件名固定（index.js / index.css），文件名不再承担缓存失效，
+        // 因此要求每次请求都回源校验；否则宿主升级 Starter 后，浏览器仍会跑旧脚本。
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noCache())
+                .contentType(mediaType)
+                .body(body);
     }
 
     /** 配了才算「要跳转」；空串和纯空白都当没配。 */
