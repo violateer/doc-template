@@ -47,3 +47,26 @@ CREATE TABLE doc_template_dict_item (
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_dict_item_dict'
                AND object_id = OBJECT_ID(N'doc_template_dict_item'))
 CREATE INDEX idx_dict_item_dict ON doc_template_dict_item (dict_id);
+-- AI 导入任务：上传只产生一条任务，分析在后台线程里跑，模板、版本、数据块统一在 APPLY 阶段创建。
+-- status：PENDING / RUNNING / SUCCEEDED / FAILED / CANCELED
+-- stage：SNAPSHOT / PROMPT / CALL / PARSE / VALIDATE / CHECK / APPLY / DONE
+IF OBJECT_ID(N'doc_template_ai_import', N'U') IS NULL
+CREATE TABLE doc_template_ai_import (
+ id BIGINT IDENTITY(1,1) PRIMARY KEY, file_name NVARCHAR(255) NOT NULL, file_url NVARCHAR(1000) NOT NULL,
+ file_sha256 NVARCHAR(64), file_type NVARCHAR(20) NOT NULL, template_name NVARCHAR(200) NOT NULL,
+ template_code NVARCHAR(100) NOT NULL, hint NVARCHAR(1000), status NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
+ stage NVARCHAR(20), template_id BIGINT NULL, plan_json NVARCHAR(MAX), error_message NVARCHAR(MAX),
+ create_by NVARCHAR(100), create_time DATETIME2 DEFAULT CURRENT_TIMESTAMP, start_time DATETIME2 NULL,
+ finish_time DATETIME2 NULL, elapsed_ms BIGINT
+);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'idx_ai_import_status'
+               AND object_id = OBJECT_ID(N'doc_template_ai_import'))
+CREATE INDEX idx_ai_import_status ON doc_template_ai_import (status);
+-- 思维链：一次导入的每次尝试一行，大文本列只在详情接口里读。
+IF OBJECT_ID(N'doc_template_ai_trace', N'U') IS NULL
+CREATE TABLE doc_template_ai_trace (
+ id BIGINT IDENTITY(1,1) PRIMARY KEY, import_id BIGINT NOT NULL, attempt INT NOT NULL, stage NVARCHAR(20),
+ model NVARCHAR(100), system_prompt NVARCHAR(MAX), user_prompt NVARCHAR(MAX), reasoning NVARCHAR(MAX),
+ content NVARCHAR(MAX), prompt_tokens INT, completion_tokens INT, elapsed_ms BIGINT, error NVARCHAR(2000),
+ create_time DATETIME2 DEFAULT CURRENT_TIMESTAMP, CONSTRAINT uk_ai_trace_attempt UNIQUE (import_id, attempt)
+);

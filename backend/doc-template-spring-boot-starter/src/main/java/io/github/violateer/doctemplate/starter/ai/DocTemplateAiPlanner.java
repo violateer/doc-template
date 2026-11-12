@@ -26,6 +26,8 @@ import java.util.Map;
  *
  * <p>全部尝试都失败时返回 {@code ok=false} 而不是抛异常：这是「模型没给出可用计划」，
  * 不是「接口出错了」，页面应该把每次的原因列出来，让人决定是补提示词还是自己手写计划。</p>
+ *
+ * <p><b>只认文件字节</b>，不认模板：AI 导入在落库前还没有模板，同步接口那条路自己把当前版本读成字节传进来。</p>
  */
 public class DocTemplateAiPlanner {
     private static final Logger log = LoggerFactory.getLogger(DocTemplateAiPlanner.class);
@@ -36,7 +38,7 @@ public class DocTemplateAiPlanner {
     private final DocTemplateProperties.Ai config;
 
     /**
-     * @param client 可以为 {@code null}：没有可用的模型客户端时，只有 {@code /ai/plan} 不可用，
+     * @param client 可以为 {@code null}：没有可用的模型客户端时，只有出计划不可用，
      *               快照、自检、预览、落库这些不依赖模型的能力照常工作
      */
     public DocTemplateAiPlanner(DocTemplateAnnotateService annotate, DocTemplateAiClient client,
@@ -44,6 +46,58 @@ public class DocTemplateAiPlanner {
         this.annotate = annotate;
         this.client = client;
         this.config = config;
+    }
+
+    /**
+     * 阶段与尝试的回调。
+     *
+     * <p>同步接口不需要它（传 {@link #NONE}）；AI 导入用它把阶段写进任务表、把每次尝试写进思维链表。</p>
+     */
+    public interface Listener {
+        Listener NONE = new Listener() {
+        };
+
+        /** 进入某个阶段。 */
+        default void stage(DocTemplateAiStage stage) {
+        }
+
+        /**
+         * 一次尝试开始：提示词已经拼好、请求还没发出。
+         *
+         * <p>流式内容需要有地方落，所以思维链行要在调模型之前就建出来；一次性返回的实现
+         * 可以忽略这个回调，等 {@link #attempt(Attempt)} 一次写全。</p>
+         */
+        default void attemptStarted(int attempt, String model, String systemPrompt, String userPrompt) {
+        }
+
+        /**
+         * 流式增量：{@code reasoning} 与 {@code content} 是<b>到当前为止的全文</b>，不是本次新增的片段。
+         *
+         * <p>调用频率跟模型的输出节奏一致（每秒可能几十次），实现方必须自己节流，
+         * 不要逐包写库。</p>
+         */
+        default void delta(int attempt, String reasoning, String content) {
+        }
+
+        /** 一次尝试结束（成功或失败各一次）。 */
+        default void attempt(Attempt attempt) {
+        }
+
+        /** 返回 {@code true} 表示外部要求中止；每次调模型前检查一次。 */
+        default boolean aborted() {
+            return false;
+        }
+    }
+
+    /**
+     * 一次尝试的完整记录。
+     *
+     * @param stage 这次尝试结束在哪个阶段；成功时为 {@link DocTemplateAiStage#CHECK}
+     * @param error 失败原因，成功时为 {@code null}
+     */
+    public record Attempt(int attempt, DocTemplateAiStage stage, String model, String systemPrompt,
+                          String userPrompt, String reasoning, String content, Integer promptTokens,
+                          Integer completionTokens, long elapsedMs, String error) {
     }
 
     public boolean available() {
@@ -57,22 +111,32 @@ public class DocTemplateAiPlanner {
         result.put("model", available() ? config.getModel() : null);
         result.put("max_attempts", attempts());
         result.put("max_input_chars", maxInputChars());
+        result.put("trace_enabled", config.isTraceEnabled());
+        return result;
+    }
+
+    /** 出计划并自检（模板当前版本）。同步接口用，不带阶段回调。 */
+    public Map<String, Object> plan(long templateId, String hint) throws Exception {
+        Map<String, Object> result = plan(annotate.source(templateId), hint, Listener.NONE);
+        result.put("template_id", templateId);
         return result;
     }
 
     /**
-     * 出计划并自检。
+     * 出计划并自检（按文件字节）。
      *
-     * @param hint 用户补充要求（例如「日期那栏要拆成开始和结束两个字段」），可为空
+     * @param hint     用户补充要求（例如「日期那栏要拆成开始和结束两个字段」），可为空
+     * @param listener 阶段与尝试回调，可为 {@link Listener#NONE}
      * @return {@code ok=true} 时带 {@code plan} 与自检结果；{@code ok=false} 时带 {@code error}
      *         和每次尝试的失败原因
      */
-    public Map<String, Object> plan(long templateId, String hint) throws Exception {
+    public Map<String, Object> plan(DocTemplateAnnotateService.Source source, String hint, Listener listener)
+            throws Exception {
         if (client == null) {
             throw new IllegalArgumentException("AI 标注未启用：设置 doc-template.ai.enabled=true 并配好 base-url、"
                     + "api-key、model，或者自己注册一个 DocTemplateAiClient Bean");
         }
-        String snapshotJson = snapshotJson(templateId);
+        Listener progress = listener == null ? Listener.NONE : listener;
         int attempts = attempts();
         List<Map<String, Object>> failures = new ArrayList<>();
         String feedback = null;
@@ -81,55 +145,99 @@ public class DocTemplateAiPlanner {
         int maxTokens = config.getMaxTokens();
         long started = System.currentTimeMillis();
 
+        progress.stage(DocTemplateAiStage.SNAPSHOT);
+        String snapshotJson = snapshotJson(source);
+
         for (int attempt = 1; attempt <= attempts; attempt++) {
             long attemptStarted = System.currentTimeMillis();
-            DocTemplateMarkPlan plan;
+            String systemPrompt = DocTemplatePrompts.system();
+            String userPrompt = DocTemplatePrompts.user(snapshotJson, hint, feedback);
+
+            if (progress.aborted()) throw new DocTemplateAiAbortedException();
+            progress.stage(DocTemplateAiStage.PROMPT);
+            progress.stage(DocTemplateAiStage.CALL);
+            DocTemplateAiClient.Response response;
             try {
-                String raw = client.complete(new DocTemplateAiClient.Request(
-                        DocTemplatePrompts.system(),
-                        DocTemplatePrompts.user(snapshotJson, hint, feedback),
-                        config.getModel(), config.getTemperature(), maxTokens));
-                plan = DocTemplateMarkPlan.parse(raw);
+                // 先建思维链行，再发请求：流式内容才有地方写进去
+                notifyStarted(progress, attempt, systemPrompt, userPrompt);
+                response = client.complete(new DocTemplateAiClient.Request(
+                        systemPrompt, userPrompt, config.getModel(), config.getTemperature(), maxTokens),
+                        deltaOf(progress, attempt));
             } catch (DocTemplateAiBudgetException error) {
+                if (progress.aborted()) throw new DocTemplateAiAbortedException();
                 // 上限已经给足还被截断，说明这个模型的思考比计划本身长得多。重问是同一个请求：
                 // 上限不会再涨，只会再等一次超时，还会把剩下的尝试次数耗掉。
                 lastError = message(error);
-                failures.add(failure(attempt, "call", lastError, attemptStarted));
-                log.warn("第 {} 次输出被截断，停止重试：templateId={}，{}", attempt, templateId, lastError);
+                failures.add(failure(attempt, DocTemplateAiStage.CALL, lastError, attemptStarted));
+                report(progress, new Attempt(attempt, DocTemplateAiStage.CALL, config.getModel(), systemPrompt,
+                        userPrompt, null, null, null, null, elapsed(attemptStarted), lastError));
+                log.warn("第 {} 次输出被截断，停止重试：{}", attempt, lastError);
                 break;
             } catch (Exception error) {
+                // 流式读取被取消时抛的是 IO 异常而不是 InterruptedException，靠这个标志区分「取消」和「失败」
+                if (progress.aborted()) throw new DocTemplateAiAbortedException();
                 // 调用失败和解析失败都归到这一步：对模型而言都属于「上次输出不可用」
                 lastError = message(error);
-                failures.add(failure(attempt, "call", lastError, attemptStarted));
+                failures.add(failure(attempt, DocTemplateAiStage.CALL, lastError, attemptStarted));
+                report(progress, new Attempt(attempt, DocTemplateAiStage.CALL, config.getModel(), systemPrompt,
+                        userPrompt, null, null, null, null, elapsed(attemptStarted), lastError));
                 feedback = "上一次的输出不能用：" + lastError;
-                log.warn("第 {} 次出计划失败（调用/解析）：templateId={}，{}", attempt, templateId, lastError);
+                log.warn("第 {} 次出计划失败（调用）：{}", attempt, lastError);
                 continue;
             }
 
+            DocTemplateAiClient.Usage usage = response.usage();
+            Integer promptTokens = usage == null ? null : usage.promptTokens();
+            Integer completionTokens = usage == null ? null : usage.completionTokens();
+
+            progress.stage(DocTemplateAiStage.PARSE);
+            DocTemplateMarkPlan plan;
+            try {
+                plan = DocTemplateMarkPlan.parse(response.text());
+            } catch (Exception error) {
+                lastError = message(error);
+                failures.add(failure(attempt, DocTemplateAiStage.PARSE, lastError, attemptStarted));
+                report(progress, new Attempt(attempt, DocTemplateAiStage.PARSE, config.getModel(), systemPrompt,
+                        userPrompt, response.reasoning(), response.text(), promptTokens, completionTokens,
+                        elapsed(attemptStarted), lastError));
+                feedback = "上一次的输出不能用：" + lastError;
+                log.warn("第 {} 次出计划失败（解析）：{}", attempt, lastError);
+                continue;
+            }
+
+            progress.stage(DocTemplateAiStage.VALIDATE);
             try {
                 plan.validate();
             } catch (IllegalArgumentException error) {
                 lastError = error.getMessage();
-                failures.add(failure(attempt, "validate", lastError, attemptStarted));
+                failures.add(failure(attempt, DocTemplateAiStage.VALIDATE, lastError, attemptStarted));
+                report(progress, new Attempt(attempt, DocTemplateAiStage.VALIDATE, config.getModel(), systemPrompt,
+                        userPrompt, response.reasoning(), response.text(), promptTokens, completionTokens,
+                        elapsed(attemptStarted), lastError));
                 feedback = "计划校验没通过：" + lastError;
-                log.warn("第 {} 次出计划失败（校验）：templateId={}，{}", attempt, templateId, lastError);
+                log.warn("第 {} 次出计划失败（校验）：{}", attempt, lastError);
                 continue;
             }
 
-            Map<String, Object> check = annotate.check(templateId, plan);
+            progress.stage(DocTemplateAiStage.CHECK);
+            Map<String, Object> check = annotate.check(source.bytes(), source.fileType(), plan);
             if (!Boolean.TRUE.equals(check.get("ok"))) {
                 lastError = String.valueOf(check.get("error"));
-                failures.add(failure(attempt, "check", lastError, attemptStarted));
+                failures.add(failure(attempt, DocTemplateAiStage.CHECK, lastError, attemptStarted));
+                report(progress, new Attempt(attempt, DocTemplateAiStage.CHECK, config.getModel(), systemPrompt,
+                        userPrompt, response.reasoning(), response.text(), promptTokens, completionTokens,
+                        elapsed(attemptStarted), lastError));
                 feedback = "落笔或渲染没通过：" + lastError + loopSummary(plan);
-                log.warn("第 {} 次出计划失败（自检）：templateId={}，{}", attempt, templateId, lastError);
+                log.warn("第 {} 次出计划失败（自检）：{}", attempt, lastError);
                 continue;
             }
 
-            log.info("第 {} 次出计划通过：templateId={}，{} 个块，{} 条标记", attempt, templateId,
-                    plan.blocks().size(), plan.marks().size());
+            report(progress, new Attempt(attempt, DocTemplateAiStage.CHECK, config.getModel(), systemPrompt,
+                    userPrompt, response.reasoning(), response.text(), promptTokens, completionTokens,
+                    elapsed(attemptStarted), null));
+            log.info("第 {} 次出计划通过：{} 个块，{} 条标记", attempt, plan.blocks().size(), plan.marks().size());
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("ok", true);
-            result.put("template_id", templateId);
             result.put("attempt", attempt);
             result.put("attempts", failures.size() + 1);
             result.put("model", config.getModel());
@@ -143,7 +251,6 @@ public class DocTemplateAiPlanner {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("ok", false);
-        result.put("template_id", templateId);
         result.put("error", "尝试 " + attempts + " 次仍未生成可用计划，最后一次失败原因：" + lastError);
         result.put("attempts", failures.size());
         result.put("failures", failures);
@@ -157,8 +264,8 @@ public class DocTemplateAiPlanner {
      * <p>超过 {@code max-input-chars} 时从末尾开始丢内容（先段落、再表格、再工作表），
      * 而不是按字符截断 —— 截断会切出一个不合法的 JSON，模型只会更糊涂。丢过内容会加一条告警。</p>
      */
-    private String snapshotJson(long templateId) throws Exception {
-        DocTemplateSnapshot snapshot = annotate.readSnapshot(templateId);
+    private String snapshotJson(DocTemplateAnnotateService.Source source) throws Exception {
+        DocTemplateSnapshot snapshot = annotate.readSnapshot(source.bytes(), source.fileType());
         int limit = maxInputChars();
         String json = DocTemplateJson.toJson(snapshot);
         if (json.length() <= limit) return json;
@@ -181,16 +288,48 @@ public class DocTemplateAiPlanner {
             json = DocTemplateJson.toJson(new DocTemplateSnapshot(snapshot.fileType(), snapshot.coordinateBase(),
                     paragraphs, tables, sheets, warnings));
         }
-        log.warn("文档结构超过 {} 字符，已裁到 {} 字符：templateId={}", limit, json.length(), templateId);
+        log.warn("文档结构超过 {} 字符，已裁到 {} 字符", limit, json.length());
         return json;
     }
 
-    private static Map<String, Object> failure(int attempt, String stage, String error, long started) {
+    private static void report(Listener listener, Attempt attempt) {
+        try {
+            listener.attempt(attempt);
+        } catch (RuntimeException error) {
+            // 记录失败不能反过来把「已经算出计划」这件事弄丢
+            log.warn("写入导入任务的尝试记录失败：attempt={}", attempt.attempt(), error);
+        }
+    }
+
+    private void notifyStarted(Listener listener, int attempt, String systemPrompt, String userPrompt) {
+        try {
+            listener.attemptStarted(attempt, config.getModel(), systemPrompt, userPrompt);
+        } catch (RuntimeException error) {
+            log.warn("记录导入任务的尝试开始失败：attempt={}", attempt, error);
+        }
+    }
+
+    /** 流式回调：这里只转发，节流与落库都在监听方做；转发本身失败不能中断模型调用。 */
+    private static DocTemplateAiClient.Delta deltaOf(Listener listener, int attempt) {
+        return (reasoning, content) -> {
+            try {
+                listener.delta(attempt, reasoning, content);
+            } catch (RuntimeException ignored) {
+                // 过程记录是旁路，写不进去也不该把这次调用搞挂
+            }
+        };
+    }
+
+    private static long elapsed(long started) {
+        return System.currentTimeMillis() - started;
+    }
+
+    private static Map<String, Object> failure(int attempt, DocTemplateAiStage stage, String error, long started) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("attempt", attempt);
-        item.put("stage", stage);
+        item.put("stage", stage.name().toLowerCase(java.util.Locale.ROOT));
         item.put("error", error);
-        item.put("elapsed_ms", System.currentTimeMillis() - started);
+        item.put("elapsed_ms", elapsed(started));
         return item;
     }
 

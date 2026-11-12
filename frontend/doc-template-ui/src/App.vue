@@ -13,7 +13,7 @@ import {
   dateZhCN
 } from 'naive-ui';
 import type { MenuOption } from 'naive-ui';
-import { DocumentTextOutline, LibraryOutline, TimeOutline } from '@vicons/ionicons5';
+import { DocumentTextOutline, LibraryOutline, SparklesOutline, TimeOutline } from '@vicons/ionicons5';
 import { themeOverrides } from './theme';
 import { fetchStarterVersion, layoutMode } from './api';
 
@@ -27,7 +27,8 @@ function renderIcon(icon: any) {
 const menuOptions: MenuOption[] = [
   { label: '模板管理', key: '/templates', icon: renderIcon(DocumentTextOutline) },
   { label: '生成记录', key: '/generate-records', icon: renderIcon(TimeOutline) },
-  { label: '数据字典', key: '/dicts', icon: renderIcon(LibraryOutline) }
+  { label: '数据字典', key: '/dicts', icon: renderIcon(LibraryOutline) },
+  { label: 'AI 导入', key: '/ai-imports', icon: renderIcon(SparklesOutline) }
 ];
 
 /** 窄屏顶栏空间紧，去掉图标只留文字 */

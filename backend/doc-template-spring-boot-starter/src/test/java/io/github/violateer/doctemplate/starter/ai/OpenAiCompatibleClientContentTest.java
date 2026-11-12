@@ -22,7 +22,22 @@ class OpenAiCompatibleClientContentTest {
                 {"choices":[{"index":0,"finish_reason":"stop",
                   "message":{"role":"assistant","content":"{\\"blocks\\":[],\\"marks\\":[]}"}}]}
                 """;
-        assertEquals("{\"blocks\":[],\"marks\":[]}", OpenAiCompatibleClient.contentOf(body));
+        assertEquals("{\"blocks\":[],\"marks\":[]}", OpenAiCompatibleClient.contentOf(body).text());
+    }
+
+    @Test
+    @DisplayName("思考过程与用量一并带回，供思维链记录")
+    void keepsReasoningAndUsage() {
+        String body = """
+                {"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant",
+                  "content":"{\\"blocks\\":[],\\"marks\\":[]}","reasoning_content":"先看表头再定字段"}}],
+                 "usage":{"prompt_tokens":1234,"completion_tokens":567}}
+                """;
+        DocTemplateAiClient.Response response = OpenAiCompatibleClient.contentOf(body);
+        assertEquals("{\"blocks\":[],\"marks\":[]}", response.text());
+        assertEquals("先看表头再定字段", response.reasoning(), "思考过程要留给思维链表");
+        assertEquals(1234, response.usage().promptTokens());
+        assertEquals(567, response.usage().completionTokens());
     }
 
     @Test
@@ -50,7 +65,7 @@ class OpenAiCompatibleClientContentTest {
                     "We need produce JSON plan. Final: {\\"blocks\\":[],\\"marks\\":[]} done."}}],
                  "usage":{"completion_tokens":8192}}
                 """;
-        assertEquals("{\"blocks\":[],\"marks\":[]}", OpenAiCompatibleClient.contentOf(body));
+        assertEquals("{\"blocks\":[],\"marks\":[]}", OpenAiCompatibleClient.contentOf(body).text());
     }
 
     @Test

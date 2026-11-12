@@ -29,3 +29,22 @@ CREATE TABLE IF NOT EXISTS doc_template_dict_item (
  item_label VARCHAR(500) NOT NULL, sort_order INT NOT NULL DEFAULT 0, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  UNIQUE KEY uk_dict_item_value (dict_id, item_value), KEY idx_dict_item_dict (dict_id)
 );
+-- AI 导入任务：上传只产生一条任务，分析在后台线程里跑，模板、版本、数据块统一在 APPLY 阶段创建，
+-- 分析失败不会留下「只有文件、没有数据块」的草稿。
+-- status：PENDING / RUNNING / SUCCEEDED / FAILED / CANCELED
+-- stage：SNAPSHOT / PROMPT / CALL / PARSE / VALIDATE / CHECK / APPLY / DONE
+CREATE TABLE IF NOT EXISTS doc_template_ai_import (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY, file_name VARCHAR(255) NOT NULL, file_url VARCHAR(1000) NOT NULL,
+ file_sha256 VARCHAR(64), file_type VARCHAR(20) NOT NULL, template_name VARCHAR(200) NOT NULL,
+ template_code VARCHAR(100) NOT NULL, hint VARCHAR(1000), status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+ stage VARCHAR(20), template_id BIGINT NULL, plan_json LONGTEXT, error_message TEXT, create_by VARCHAR(100),
+ create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, start_time TIMESTAMP NULL, finish_time TIMESTAMP NULL,
+ elapsed_ms BIGINT, KEY idx_ai_import_status (status)
+);
+-- 思维链：一次导入的每次尝试一行。列表页不查大文本列（Oracle 的 CLOB 不能 LIKE，也不适合排序）。
+CREATE TABLE IF NOT EXISTS doc_template_ai_trace (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY, import_id BIGINT NOT NULL, attempt INT NOT NULL, stage VARCHAR(20),
+ model VARCHAR(100), system_prompt LONGTEXT, user_prompt LONGTEXT, reasoning LONGTEXT, content LONGTEXT,
+ prompt_tokens INT, completion_tokens INT, elapsed_ms BIGINT, error VARCHAR(2000),
+ create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uk_ai_trace_attempt (import_id, attempt)
+);

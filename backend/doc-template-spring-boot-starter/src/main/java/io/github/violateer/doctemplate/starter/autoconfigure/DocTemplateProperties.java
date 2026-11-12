@@ -97,6 +97,32 @@ public class DocTemplateProperties {
          * 包括 {@code max_tokens}、{@code temperature}。</p>
          */
         private Map<String, Object> extraBody = new LinkedHashMap<>();
+        /**
+         * 是否把每次尝试的提示词、思考过程、回答原文落进 {@code doc_template_ai_trace}。
+         *
+         * <p><b>默认开启</b>，但提示词里是文档全文，可能含业务数据。文档涉敏时关掉即可：
+         * 关掉只影响「详情页能不能看到思维链」，出计划本身不受影响。</p>
+         */
+        private boolean traceEnabled = true;
+        /** 思维链保留天数，{@code 0} 表示不清理。启动时删一次过期行，不引定时任务。 */
+        private int traceRetentionDays = 30;
+        /**
+         * 是否用流式响应（{@code stream: true}）调用模型。
+         *
+         * <p><b>默认开启</b>：推理模型先想几十秒再出正文，一次性返回意味着这段时间页面上什么都看不到。
+         * 流式之后思考过程与正文边生成边落进思维链表，详情里能看到内容一行行长出来。</p>
+         *
+         * <p>服务端不认 {@code stream} 或 {@code stream_options} 时（网关透传不全的情况），
+         * 会自动退回一次性返回，功能不受影响，只是没有过程可看。</p>
+         */
+        private boolean stream = true;
+        /**
+         * 异步导入任务的线程池。
+         *
+         * <p>字段名与 getter 不一致是因为 {@code import} 是 Java 关键字 —— Spring 按 getter 绑定，
+         * 配置里写的仍然是 {@code doc-template.ai.import.threads}。</p>
+         */
+        private final Import importConfig = new Import();
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -124,6 +150,29 @@ public class DocTemplateProperties {
             this.extraBody = extraBody == null ? new LinkedHashMap<>() : extraBody;
         }
         public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
+        public boolean isTraceEnabled() { return traceEnabled; }
+        public void setTraceEnabled(boolean traceEnabled) { this.traceEnabled = traceEnabled; }
+        public int getTraceRetentionDays() { return traceRetentionDays; }
+        public void setTraceRetentionDays(int traceRetentionDays) { this.traceRetentionDays = traceRetentionDays; }
+        public boolean isStream() { return stream; }
+        public void setStream(boolean stream) { this.stream = stream; }
+        public Import getImport() { return importConfig; }
+
+        /**
+         * 导入任务的执行队列。
+         *
+         * <p>默认 1 线程：一次导入要跑几十秒到几分钟，并发几路对模型服务商没有好处，只会互相抢限流。
+         * 队列有界，满了直接拒绝（任务保持 {@code PENDING}），而不是把内存堆起来。</p>
+         */
+        public static class Import {
+            private int threads = 1;
+            private int queueCapacity = 50;
+
+            public int getThreads() { return threads; }
+            public void setThreads(int threads) { this.threads = threads; }
+            public int getQueueCapacity() { return queueCapacity; }
+            public void setQueueCapacity(int queueCapacity) { this.queueCapacity = queueCapacity; }
+        }
     }
 
     /**

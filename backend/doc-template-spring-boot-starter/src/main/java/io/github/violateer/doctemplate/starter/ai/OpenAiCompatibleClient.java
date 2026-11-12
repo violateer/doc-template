@@ -5,6 +5,9 @@ import io.github.violateer.doctemplate.starter.support.DocTemplateJson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -68,6 +71,7 @@ public class OpenAiCompatibleClient implements DocTemplateAiClient {
     private final double temperature;
     private final int maxTokens;
     private final boolean jsonMode;
+    private final boolean stream;
     private final long timeoutMs;
     private final Map<String, Object> extraBody;
     private final HttpClient http;
@@ -86,19 +90,21 @@ public class OpenAiCompatibleClient implements DocTemplateAiClient {
         this.temperature = config.getTemperature();
         this.maxTokens = config.getMaxTokens();
         this.jsonMode = config.isJsonMode();
+        this.stream = config.isStream();
         this.timeoutMs = config.getTimeoutMs() <= 0 ? 120000 : config.getTimeoutMs();
         this.extraBody = Map.copyOf(config.getExtraBody() == null ? Map.of() : config.getExtraBody());
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(Math.min(this.timeoutMs, 10000)))
                 .build();
         // 拼出来的地址直接打一行：base-url 写重了会 404，有这一行能立刻看出来
-        log.info("AI 标注接口：{}（model={}，输出上限={}{}）", this.url, this.model,
+        log.info("AI 标注接口：{}（model={}，输出上限={}，{}{}）", this.url, this.model,
                 this.maxTokens > 0 ? this.maxTokens + " tokens" : "由服务端决定",
+                this.stream ? "流式" : "一次性返回",
                 extraBody.isEmpty() ? "" : "，额外参数 " + extraBody.keySet());
     }
 
     @Override
-    public String complete(Request request) throws Exception {
+    public Response complete(Request request) throws Exception {
         Map<String, Object> body = requestBody(request);
         long started = System.currentTimeMillis();
         HttpResponse<String> response = send(body);
@@ -133,10 +139,181 @@ public class OpenAiCompatibleClient implements DocTemplateAiClient {
             // 带上实际请求地址：404 基本都是 base-url 和 completions-path 拼重了
             throw new IllegalStateException("AI 接口返回 HTTP " + response.statusCode() + "（" + url + "）"
                     + (adjusted.isEmpty() ? "" : "，已调整 " + adjusted) + "：" + shorten(text));
-        String content = contentOf(text);
-        log.info("模型返回计划：model={}，{} ms，{} 字符{}", model, elapsed, content.length(),
+        Response parsed = contentOf(text);
+        log.info("模型返回计划：model={}，{} ms，{} 字符{}", model, elapsed,
+                parsed.text() == null ? 0 : parsed.text().length(),
                 adjusted.isEmpty() ? "" : "，已调整 " + adjusted);
-        return content;
+        return parsed;
+    }
+
+    /**
+     * 流式调用：边收边把累计全文交给 {@code delta}，返回值与一次性调用完全一致。
+     *
+     * <p>服务端不认 {@code stream} / {@code stream_options}（网关透传不全时会直接 400）时，
+     * 退回一次性返回 —— 用户只是看不到过程，出计划本身不受影响。</p>
+     */
+    @Override
+    public Response complete(Request request, Delta delta) throws Exception {
+        if (!stream || delta == null) {
+            Response response = complete(request);
+            if (delta != null) delta.onDelta(response.reasoning(), response.text());
+            return response;
+        }
+        Map<String, Object> body = requestBody(request);
+        body.put("stream", true);
+        // 只有带了这个，流式响应才会在最后补一包 usage；不认它的服务端会 400，下面单独处理
+        body.put("stream_options", Map.of("include_usage", true));
+        try {
+            return streamOnce(body, delta);
+        } catch (StreamUnsupported unsupported) {
+            // 网关只拦 stream_options 的情况很常见：去掉它继续流式，只是拿不到 token 用量
+            if (body.containsKey("stream_options") && mentions(unsupported.getMessage(), "stream_options")) {
+                body.remove("stream_options");
+                log.warn("服务端不接受 stream_options，去掉后继续流式：{}", unsupported.getMessage());
+                try {
+                    return streamOnce(body, delta);
+                } catch (StreamUnsupported again) {
+                    log.warn("服务端不接受流式请求，退回一次性返回：{}", again.getMessage());
+                }
+            } else {
+                log.warn("服务端不接受流式请求，退回一次性返回：{}", unsupported.getMessage());
+            }
+            Response response = complete(request);
+            delta.onDelta(response.reasoning(), response.text());
+            return response;
+        }
+    }
+
+    /** 读一次 SSE 流。 */
+    private Response streamOnce(Map<String, Object> body, Delta delta) throws Exception {
+        long started = System.currentTimeMillis();
+        HttpResponse<InputStream> response = http.send(build(body), HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() / 100 != 2) {
+            String text;
+            try (InputStream in = response.body()) {
+                text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            throw new StreamUnsupported("HTTP " + response.statusCode() + "（" + url + "）：" + shorten(text));
+        }
+        StreamAccumulator accumulator = new StreamAccumulator();
+        int chunks = 0;
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // 取消是中断线程：读流时被打断不会抛 InterruptedException，只能自己查标志
+                if (Thread.currentThread().isInterrupted()) throw new InterruptedException("流式读取被中断");
+                if (System.currentTimeMillis() - started > timeoutMs)
+                    throw new IllegalStateException("模型响应超时（" + timeoutMs + "ms，流式读取未结束）。"
+                            + "推理模型的思考时间不可控，可调大 doc-template.ai.timeout-ms");
+                String payload = ssePayload(line);
+                if (payload == null) continue;
+                if (!accumulator.accept(payload)) break;
+                chunks++;
+                delta.onDelta(accumulator.reasoningText(), accumulator.contentText());
+            }
+        } catch (HttpTimeoutException timeout) {
+            throw new IllegalStateException("模型响应超时（" + timeoutMs + "ms）。推理模型的思考时间不可控，"
+                    + "可调大 doc-template.ai.timeout-ms", timeout);
+        }
+        Response parsed = accumulator.toResponse();
+        log.info("模型流式返回：model={}，{} ms，{} 个数据块，{} 字符{}", model,
+                System.currentTimeMillis() - started, chunks,
+                parsed.text() == null ? 0 : parsed.text().length(),
+                parsed.reasoning() == null ? "" : "，思考 " + parsed.reasoning().length() + " 字符");
+        return parsed;
+    }
+
+    /** 取 SSE 一行的负载；注释行、心跳行、{@code event:} 行都返回 {@code null}。 */
+    static String ssePayload(String line) {
+        if (line == null) return null;
+        String trimmed = line.trim();
+        if (trimmed.isEmpty() || trimmed.startsWith(":") || !trimmed.startsWith("data:")) return null;
+        String payload = trimmed.substring("data:".length()).trim();
+        return payload.isEmpty() ? null : payload;
+    }
+
+    /**
+     * 流式分片的累加器。
+     *
+     * <p>各家流式分片的结构与一次性返回一致，只是把 {@code message} 换成 {@code delta}：
+     * 正文与思考都是<b>片段</b>，要按顺序拼起来。收完以后拼成一次性响应的形状交给
+     * {@link #contentOf(String)}，这样「正文为空时从思考里捞 JSON」「finish_reason=length
+     * 判定为预算不足」这些规则只有一份实现，流式与非流式不会走岔。</p>
+     */
+    static final class StreamAccumulator {
+        private final StringBuilder reasoning = new StringBuilder();
+        private final StringBuilder content = new StringBuilder();
+        private String finishReason;
+        private Usage usage;
+
+        /** 处理一包；返回 {@code false} 表示流结束（{@code [DONE]}）。 */
+        boolean accept(String payload) {
+            if ("[DONE]".equals(payload)) return false;
+            Object parsed;
+            try {
+                parsed = DocTemplateJson.read(payload);
+            } catch (RuntimeException ignored) {
+                // 个别网关会在流里插非 JSON 的心跳文本，跳过即可
+                return true;
+            }
+            if (!(parsed instanceof Map<?, ?> root)) return true;
+            Usage reported = usageOf(root.get("usage"));
+            if (reported != null) usage = reported;
+            Object choices = root.get("choices");
+            // 开了 include_usage 时最后一包只有 usage、没有 choices
+            if (!(choices instanceof List<?> list) || list.isEmpty()) return true;
+            Map<?, ?> choice = list.get(0) instanceof Map<?, ?> first ? first : Map.of();
+            Object finish = choice.get("finish_reason");
+            if (finish != null) finishReason = String.valueOf(finish);
+            // 正常是 delta；少数网关在流式下仍回整段 message，一并接住
+            Map<?, ?> part = choice.get("delta") instanceof Map<?, ?> delta ? delta
+                    : choice.get("message") instanceof Map<?, ?> message ? message : Map.of();
+            for (String key : REASONING_KEYS) {
+                String piece = textOf(part.get(key));
+                if (piece != null && !piece.isEmpty()) {
+                    reasoning.append(piece);
+                    break;
+                }
+            }
+            String text = textOf(part.get("content"));
+            if (text != null) content.append(text);
+            return true;
+        }
+
+        String reasoningText() {
+            return reasoning.length() == 0 ? null : reasoning.toString();
+        }
+
+        String contentText() {
+            return content.length() == 0 ? null : content.toString();
+        }
+
+        /** 拼成一次性响应的形状，交给同一套判定逻辑。 */
+        Response toResponse() {
+            Map<String, Object> message = new LinkedHashMap<>();
+            if (content.length() > 0) message.put("content", content.toString());
+            if (reasoning.length() > 0) message.put("reasoning_content", reasoning.toString());
+            Map<String, Object> choice = new LinkedHashMap<>();
+            choice.put("message", message);
+            if (finishReason != null) choice.put("finish_reason", finishReason);
+            Map<String, Object> root = new LinkedHashMap<>();
+            root.put("choices", List.of(choice));
+            if (usage != null) {
+                Map<String, Object> tokens = new LinkedHashMap<>();
+                if (usage.promptTokens() != null) tokens.put("prompt_tokens", usage.promptTokens());
+                if (usage.completionTokens() != null) tokens.put("completion_tokens", usage.completionTokens());
+                root.put("usage", tokens);
+            }
+            return contentOf(DocTemplateJson.toJson(root));
+        }
+    }
+
+    /** 服务端不接受流式请求：退回一次性返回，不算错误。 */
+    private static final class StreamUnsupported extends Exception {
+        StreamUnsupported(String message) {
+            super(message);
+        }
     }
 
     /** 按配置拼请求体。{@code 0} 与负数都表示「不发这个字段」。 */
@@ -204,20 +381,23 @@ public class OpenAiCompatibleClient implements DocTemplateAiClient {
     }
 
     private HttpResponse<String> send(Map<String, Object> body) throws Exception {
-        HttpRequest httpRequest = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofMillis(timeoutMs))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(DocTemplateJson.toJson(body), StandardCharsets.UTF_8))
-                .build();
         try {
-            return http.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return http.send(build(body), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (HttpTimeoutException timeout) {
             // 推理模型的思考时间不可控，撞超时和「预算不够」是同一类问题：模型没写完
             throw new IllegalStateException("模型响应超时（" + timeoutMs + "ms）。推理模型的思考时间不可控，"
                     + "可调大 doc-template.ai.timeout-ms；模型支持关闭思考时，也可在 doc-template.ai.extra-body "
                     + "中按服务商文档关闭", timeout);
         }
+    }
+
+    private HttpRequest build(Map<String, Object> body) {
+        return HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofMillis(timeoutMs))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(DocTemplateJson.toJson(body), StandardCharsets.UTF_8))
+                .build();
     }
 
     /**
@@ -249,7 +429,7 @@ public class OpenAiCompatibleClient implements DocTemplateAiClient {
      *   <li>都拿不到 —— 抛 {@link DocTemplateAiBudgetException}，由编排层决定要不要再问一次。</li>
      * </ol>
      */
-    static String contentOf(String text) {
+    static Response contentOf(String text) {
         Object parsed = DocTemplateJson.read(text);
         if (!(parsed instanceof Map<?, ?> root))
             throw new IllegalStateException("AI 接口返回的不是 JSON 对象：" + shorten(text));
@@ -260,29 +440,39 @@ public class OpenAiCompatibleClient implements DocTemplateAiClient {
         Map<?, ?> message = choice.get("message") instanceof Map<?, ?> value ? value : Map.of();
         Object finishReason = choice.get("finish_reason");
         String finish = finishReason == null ? "未知" : String.valueOf(finishReason);
-        String usage = usageOf(root.get("usage"));
+        Usage usage = usageOf(root.get("usage"));
+        String usageNote = usageNote(usage);
+
+        // 思考过程一次取出：正文完整时它是「附带记录」，正文为空时它是最后的兜底材料
+        String reasoning = null;
+        String reasoningKey = null;
+        for (String key : REASONING_KEYS) {
+            String thought = textOf(message.get(key));
+            if (thought == null || thought.isBlank()) continue;
+            reasoning = thought;
+            reasoningKey = key;
+            break;
+        }
 
         String content = textOf(message.get("content"));
         if (content != null && !content.isBlank()) {
             // 正常收尾，或者虽然标了 length 但 JSON 已经写完整了
-            if (!"length".equals(finish) || isJsonObject(content)) return content;
-            throw new DocTemplateAiBudgetException("模型输出被截断（finish_reason=length" + usage
+            if (!"length".equals(finish) || isJsonObject(content)) return new Response(content, reasoning, usage);
+            throw new DocTemplateAiBudgetException("模型输出被截断（finish_reason=length" + usageNote
                     + "）：可调大 doc-template.ai.max-tokens");
         }
 
-        for (String key : REASONING_KEYS) {
-            String thought = textOf(message.get(key));
-            if (thought == null || thought.isBlank()) continue;
-            String salvaged = jsonInReasoning(thought);
+        if (reasoning != null) {
+            String salvaged = jsonInReasoning(reasoning);
             if (salvaged != null) {
-                log.warn("模型正文为空，已从 {} 中取出完整 JSON（finish_reason={}）", key, finish);
-                return salvaged;
+                log.warn("模型正文为空，已从 {} 中取出完整 JSON（finish_reason={}）", reasoningKey, finish);
+                return new Response(salvaged, reasoning, usage);
             }
-            throw new DocTemplateAiBudgetException("模型只输出了推理内容，正文为空（finish_reason=" + finish + usage
+            throw new DocTemplateAiBudgetException("模型只输出了推理内容，正文为空（finish_reason=" + finish + usageNote
                     + "）：推理过程占满了输出上限。可调大 doc-template.ai.max-tokens，"
                     + "或调大 doc-template.ai.timeout-ms，或按服务商文档在 doc-template.ai.extra-body 中关闭思考");
         }
-        throw new IllegalStateException("AI 接口返回的 content 为空（finish_reason=" + finish + usage + "）");
+        throw new IllegalStateException("AI 接口返回的 content 为空（finish_reason=" + finish + usageNote + "）");
     }
 
     /**
@@ -354,11 +544,25 @@ public class OpenAiCompatibleClient implements DocTemplateAiClient {
         }
     }
 
-    /** 把 {@code usage.completion_tokens} 拼成一句，用来判断是不是撞上了输出上限。 */
-    private static String usageOf(Object usage) {
-        if (!(usage instanceof Map<?, ?> map)) return "";
-        Object completion = map.get("completion_tokens");
-        return completion == null ? "" : "，completion_tokens=" + completion;
+    /** 解析 {@code usage}：服务商没给就返回 {@code null}，不要造一个全零的用量。 */
+    static Usage usageOf(Object usage) {
+        if (!(usage instanceof Map<?, ?> map)) return null;
+        Integer prompt = tokens(map.get("prompt_tokens"));
+        Integer completion = tokens(map.get("completion_tokens"));
+        return prompt == null && completion == null ? null : new Usage(prompt, completion);
+    }
+
+    private static Integer tokens(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    /** 把用量拼成一句，用来判断是不是撞上了输出上限。 */
+    private static String usageNote(Usage usage) {
+        if (usage == null) return "";
+        StringBuilder text = new StringBuilder();
+        if (usage.promptTokens() != null) text.append("，prompt_tokens=").append(usage.promptTokens());
+        if (usage.completionTokens() != null) text.append("，completion_tokens=").append(usage.completionTokens());
+        return text.toString();
     }
 
     private static boolean isBlank(String value) {

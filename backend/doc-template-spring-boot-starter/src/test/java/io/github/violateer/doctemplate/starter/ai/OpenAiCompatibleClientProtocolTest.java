@@ -55,7 +55,7 @@ class OpenAiCompatibleClientProtocolTest {
         String body = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":["
                 + "{\"type\":\"text\",\"text\":\"{\\\"blocks\\\":[],\"},"
                 + "{\"type\":\"text\",\"text\":\"\\\"marks\\\":[]}\"}]}}]}";
-        assertEquals("{\"blocks\":[],\n\"marks\":[]}", OpenAiCompatibleClient.contentOf(body));
+        assertEquals("{\"blocks\":[],\n\"marks\":[]}", OpenAiCompatibleClient.contentOf(body).text());
     }
 
     @Test
@@ -63,7 +63,7 @@ class OpenAiCompatibleClientProtocolTest {
     void readsReasoningUnderAnotherName() {
         String body = "{\"choices\":[{\"finish_reason\":\"length\",\"message\":{\"content\":\"\","
                 + "\"reasoning\":\"考虑完毕，结果：" + PLAN.replace("\"", "\\\"") + "\"}}]}";
-        assertEquals(PLAN, OpenAiCompatibleClient.contentOf(body));
+        assertEquals(PLAN, OpenAiCompatibleClient.contentOf(body).text());
     }
 
     @Test
@@ -72,7 +72,7 @@ class OpenAiCompatibleClientProtocolTest {
         String body = "{\"choices\":[{\"finish_reason\":\"length\",\"message\":{\"content\":null,"
                 + "\"thinking\":{\"type\":\"thinking\",\"thinking\":\"计划 "
                 + PLAN.replace("\"", "\\\"") + "\"}}}]}";
-        assertEquals(PLAN, OpenAiCompatibleClient.contentOf(body));
+        assertEquals(PLAN, OpenAiCompatibleClient.contentOf(body).text());
     }
 
     @Test

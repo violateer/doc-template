@@ -80,6 +80,11 @@
 | `json-mode` | `true` | 是否带 `response_format: {"type":"json_object"}`；不认这个字段的服务商会在 400 后被自动去掉，也可直接关掉 |
 | `max-input-chars` | `60000` | 快照字符上限，超了从末尾丢内容（先段落、再表格、再工作表）并告警 |
 | `max-attempts` | `3` | 含首次在内的最大尝试次数：自检没过就把错误回灌给模型重来 |
+| `trace-enabled` | `true` | 是否记录每次尝试的提示词、思考过程、回答原文与用量。提示词里是文档全文，可能含业务数据，涉敏时关掉；关掉只影响详情页展示 |
+| `trace-retention-days` | `30` | 思维链保留天数，`0` 表示不清理。启动时删一次过期记录，不引定时任务 |
+| `stream` | `true` | 是否用流式响应调模型。开启后思考过程与正文边生成边落进思维链，详情里能看到内容持续增长；服务端不认 `stream` 时自动退回一次性返回 |
+| `import.threads` | `1` | AI 导入任务的后台线程数。一次导入要跑几十秒到几分钟，并发几路只会互相抢限流 |
+| `import.queue-capacity` | `50` | 导入队列长度；满了直接拒绝（任务保持未开始），不会把内存堆起来 |
 | `extra-body` | 空 | 原样并入请求体的厂商私有字段，用于关闭思考、调推理强度、传 `chat_template_kwargs` 这类只有某家认的开关。键名和取值以服务商文档为准，各家互不通用；`messages` 与 `stream` 不允许覆盖 |
 
 宿主注册一个 `DocTemplateAiClient` Bean 就完全接管模型调用，这一整段配置都不参与。
@@ -127,4 +132,5 @@ doc-template:
     api-key: ${AI_API_KEY}
     model: deepseek-chat
     max-attempts: 3
+    stream: true
 ```

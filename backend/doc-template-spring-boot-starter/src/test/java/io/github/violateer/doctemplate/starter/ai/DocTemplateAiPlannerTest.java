@@ -138,9 +138,9 @@ class DocTemplateAiPlannerTest {
         }
 
         @Override
-        public String complete(Request request) {
+        public Response complete(Request request) {
             prompts.add(request.userPrompt());
-            return responses.get(Math.min(cursor++, responses.size() - 1));
+            return new Response(responses.get(Math.min(cursor++, responses.size() - 1)));
         }
     }
 
@@ -156,29 +156,34 @@ class DocTemplateAiPlannerTest {
         }
 
         @Override
-        public String complete(Request request) {
+        public Response complete(Request request) {
             maxTokens.add(request.maxTokens());
             prompts.add(request.userPrompt());
             if (cursor++ == 0) throw new DocTemplateAiBudgetException("推理过程占满了输出上限");
-            return answer;
+            return new Response(answer);
         }
     }
 
-    /** 只覆盖出计划用得到的两个方法：快照给固定内容，自检就是校验。 */
+    /** 只覆盖出计划用得到的几个方法：文件给固定内容，快照固定，自检就是校验。 */
     private static final class FakeAnnotate extends DocTemplateAnnotateService {
         private FakeAnnotate() {
             super(null, null, null, null);
         }
 
         @Override
-        public DocTemplateSnapshot readSnapshot(long templateId) {
+        public Source source(long templateId) {
+            return new Source(new byte[0], "DOCX");
+        }
+
+        @Override
+        public DocTemplateSnapshot readSnapshot(byte[] source, String fileType) {
             return new DocTemplateSnapshot("DOCX", "0",
                     List.of(new DocTemplateSnapshot.Paragraph(0, "报告编号：2026-0011", null, 1)),
                     List.of(), List.of(), List.of());
         }
 
         @Override
-        public Map<String, Object> check(long templateId, DocTemplateMarkPlan plan) {
+        public Map<String, Object> check(byte[] source, String fileType, DocTemplateMarkPlan plan) {
             Map<String, Object> result = new LinkedHashMap<>();
             try {
                 plan.validate();

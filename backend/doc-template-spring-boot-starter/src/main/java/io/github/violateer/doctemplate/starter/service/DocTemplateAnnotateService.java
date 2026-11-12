@@ -61,9 +61,37 @@ public class DocTemplateAnnotateService {
         return result;
     }
 
+    /**
+     * 按文件字节取快照。
+     *
+     * <p>AI 导入在落库前还没有模板，文件在导入任务里，所以这里不能只认 {@code templateId}。
+     * 返回结构与 {@link #snapshot(long)} 一致，只是没有模板与版本号。</p>
+     */
+    public Map<String, Object> snapshot(byte[] source, String fileType) throws Exception {
+        DocTemplateSnapshot snapshot = readSnapshot(source, fileType);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("file_type", snapshot.fileType());
+        result.put("snapshot", DocTemplateJson.toMap(snapshot));
+        return result;
+    }
+
     /** 快照对象本身。拼提示词时要用它按上限裁剪，所以单独暴露一份，不再从 Map 里反解析。 */
     public DocTemplateSnapshot readSnapshot(long templateId) throws Exception {
-        return snapshotReader.read(templates.currentVersionBytes(templateId), templates.currentFileType(templateId));
+        return readSnapshot(templates.currentVersionBytes(templateId), templates.currentFileType(templateId));
+    }
+
+    /** 快照对象本身（按文件字节）。 */
+    public DocTemplateSnapshot readSnapshot(byte[] source, String fileType) throws Exception {
+        return snapshotReader.read(source, fileType);
+    }
+
+    /** 模板当前版本的文件内容与类型。标注的每一步都要用它，所以单独包一层。 */
+    public Source source(long templateId) throws Exception {
+        return new Source(templates.currentVersionBytes(templateId), templates.currentFileType(templateId));
+    }
+
+    /** 一份待标注的文件：字节 + 类型。AI 导入在落库前只有这两样。 */
+    public record Source(byte[] bytes, String fileType) {
     }
 
     /**
@@ -72,30 +100,57 @@ public class DocTemplateAnnotateService {
      * <p>计划本身写错（编码非法、字段不存在、坐标缺失）抛 400；坐标越界、渲染失败这类
      * 「文档和计划对不上」的问题放进 {@code ok=false}，由页面直接显示原因。</p>
      */
-    public Map<String, Object> check(long templateId, DocTemplateMarkPlan plan) {
+    public Map<String, Object> check(long templateId, DocTemplateMarkPlan plan) throws Exception {
         plan.validate();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("template_id", templateId);
         try {
-            Verified verified = verify(templateId, plan);
+            Verified verified = verify(templates.currentVersionBytes(templateId),
+                    templates.currentFileType(templateId), plan);
             result.put("ok", true);
             result.put("version_id", templates.currentVersionId(templateId));
-            result.put("file_type", verified.fileType());
-            result.put("blocks", verified.blocks());
-            result.put("placeholders", new ArrayList<>(verified.placeholders()));
-            result.put("unbound", verified.unbound());
-            result.put("suggestions", suggestions(plan));
-            result.put("warnings", verified.warnings());
-            result.put("ignored", plan.ignore());
-            result.put("output_bytes", verified.outputBytes());
+            fill(result, verified, plan);
             return result;
         } catch (Exception error) {
             log.warn("模板标注自检未通过：templateId={}", templateId, error);
-            result.put("ok", false);
-            result.put("error", message(error));
-            result.put("warnings", List.of());
-            return result;
+            return failed(result, error);
         }
+    }
+
+    /**
+     * 只校验不落库（按文件字节）：AI 导入在 APPLY 之前还没有模板版本，自检只能针对任务里的文件。
+     */
+    public Map<String, Object> check(byte[] source, String fileType, DocTemplateMarkPlan plan) {
+        plan.validate();
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            Verified verified = verify(source, fileType, plan);
+            result.put("ok", true);
+            fill(result, verified, plan);
+            return result;
+        } catch (Exception error) {
+            log.warn("标注自检未通过（按文件字节，{} 字节）", source == null ? 0 : source.length, error);
+            return failed(result, error);
+        }
+    }
+
+    /** 自检通过后的公共字段：块清单、占位符、没绑上的占位符、告警、产出大小。 */
+    private static void fill(Map<String, Object> result, Verified verified, DocTemplateMarkPlan plan) {
+        result.put("file_type", verified.fileType());
+        result.put("blocks", verified.blocks());
+        result.put("placeholders", new ArrayList<>(verified.placeholders()));
+        result.put("unbound", verified.unbound());
+        result.put("suggestions", suggestions(plan));
+        result.put("warnings", verified.warnings());
+        result.put("ignored", plan.ignore());
+        result.put("output_bytes", verified.outputBytes());
+    }
+
+    private static Map<String, Object> failed(Map<String, Object> result, Exception error) {
+        result.put("ok", false);
+        result.put("error", message(error));
+        result.put("warnings", List.of());
+        return result;
     }
 
     /**
@@ -105,9 +160,12 @@ public class DocTemplateAnnotateService {
      *             其余返回用模拟数据渲染出来的文档（看效果和原文像不像）
      */
     public byte[] preview(long templateId, DocTemplateMarkPlan plan, String mode) throws Exception {
+        return preview(templates.currentVersionBytes(templateId), templates.currentFileType(templateId), plan, mode);
+    }
+
+    /** 预览（按文件字节）。 */
+    public byte[] preview(byte[] source, String fileType, DocTemplateMarkPlan plan, String mode) throws Exception {
         plan.validate();
-        String fileType = templates.currentFileType(templateId);
-        byte[] source = templates.currentVersionBytes(templateId);
         DocTemplateAnnotator.Result annotated = annotator.apply(source, fileType, plan);
         if ("template".equalsIgnoreCase(mode)) return annotated.bytes();
         return renderer.render(annotated.bytes(), fileType, DocTemplateMockData.params(plan));
@@ -119,15 +177,25 @@ public class DocTemplateAnnotateService {
      * <p>写之前把能预检的都检掉（SQL 开关、块编码冲突、自检），避免留下「版本有了、块没建」的半截状态。</p>
      */
     public Map<String, Object> apply(long templateId, DocTemplateMarkPlan plan) throws Exception {
+        return applyTo(templateId, templates.currentFileName(templateId),
+                templates.currentVersionBytes(templateId), templates.currentFileType(templateId), plan);
+    }
+
+    /**
+     * 把一份文件标注后写进指定模板：新建一个版本 + 按计划建数据块。
+     *
+     * <p>文件由调用方给，是因为 AI 导入的文件在导入任务里、不一定是模板的当前版本。
+     * 失败时调用方负责删掉刚建的模板，这里只管「要么全成、要么抛出」。</p>
+     */
+    public Map<String, Object> applyTo(long templateId, String fileName, byte[] source, String fileType,
+                                       DocTemplateMarkPlan plan) throws Exception {
         plan.validate();
         if (!properties.getDataBlock().isSqlEnabled())
             throw new IllegalArgumentException("SQL 数据源已关闭（doc-template.data-block.sql-enabled=false），"
                     + "生成的块为 SQL 类型，无法保存；请打开该开关，或改用 JAVA 数据块");
         // 已经标注过的文档不能再标一遍：标记套标记，渲染出来是一堆字面量
-        byte[] current = templates.currentVersionBytes(templateId);
-        String fileType = templates.currentFileType(templateId);
-        if (!renderer.placeholders(current, fileType).isEmpty() || !renderer.loopFields(current, fileType).isEmpty())
-            throw new IllegalArgumentException("当前版本已包含模板标记，不能重复标注；"
+        if (!renderer.placeholders(source, fileType).isEmpty() || !renderer.loopFields(source, fileType).isEmpty())
+            throw new IllegalArgumentException("当前文件已包含模板标记，不能重复标注；"
                     + "重复标注会导致标记嵌套。如需重做，请先上传原始文档");
         Set<String> existing = new LinkedHashSet<>();
         for (Map<String, Object> block : templates.blocks(templateId)) {
@@ -140,12 +208,11 @@ public class DocTemplateAnnotateService {
         }
         Verified verified;
         try {
-            verified = verify(templateId, plan);
+            verified = verify(source, fileType, plan);
         } catch (Exception error) {
             throw new IllegalArgumentException("模板自检没通过，没有保存：" + message(error), error);
         }
 
-        String fileName = templates.currentFileName(templateId);
         Map<String, Object> version = templates.addVersion(templateId, fileName, verified.template());
         List<Map<String, Object>> created = new ArrayList<>();
         for (int i = 0; i < plan.blocks().size(); i++) {
@@ -176,10 +243,8 @@ public class DocTemplateAnnotateService {
     }
 
     /** 落笔 + 建 SQL + 渲染一次；任何一步不通过都抛，调用方决定是回显还是拒绝。 */
-    private Verified verify(long templateId, DocTemplateMarkPlan plan) throws Exception {
+    private Verified verify(byte[] source, String fileType, DocTemplateMarkPlan plan) throws Exception {
         requireKnownBlocks(plan);
-        String fileType = templates.currentFileType(templateId);
-        byte[] source = templates.currentVersionBytes(templateId);
         DocTemplateAnnotator.Result annotated = annotator.apply(source, fileType, plan);
 
         DocTemplateDialect dialect = dialects.current();

@@ -362,6 +362,23 @@ body,
   font-size: 12px;
 }
 
+/* 阶段单元格：阶段名 + 进度序号；正在执行的阶段用主色标出，一眼能看出走到哪一步 */
+.cell-stage {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.stage-name {
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.stage-name.is-active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .code-block {
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 12px;

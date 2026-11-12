@@ -1,4 +1,12 @@
-import type { AiStatus } from './types';
+import type {
+  AiImportDetail,
+  AiImportProgress,
+  AiImportRow,
+  AiStatus,
+  CheckResult,
+  MarkPlan,
+  PageResult
+} from './types';
 
 declare global {
   interface Window {
@@ -171,3 +179,52 @@ export async function fetchAiStatus(): Promise<AiStatus> {
     return { enabled: false, model: null, max_attempts: 0, max_input_chars: 0 };
   }
 }
+
+/**
+ * 新建 AI 导入任务：只上传文件与命名，分析要另外点「开始导入」。
+ *
+ * <p>这一步不建模板，所以分析失败不会在模板列表里留下空壳。</p>
+ */
+export function createAiImport(
+  file: File,
+  form: { templateName: string; templateCode: string; hint: string }
+) {
+  const data = new FormData();
+  data.append('file', file);
+  data.append('templateName', form.templateName);
+  if (form.templateCode.trim()) data.append('templateCode', form.templateCode.trim());
+  if (form.hint.trim()) data.append('hint', form.hint.trim());
+  return api<AiImportDetail>('/ai/imports', { method: 'POST', body: data });
+}
+
+export const fetchAiImports = (query: string) => api<PageResult<AiImportRow>>(`/ai/imports?${query}`);
+export const fetchAiImport = (id: number | string) => api<AiImportDetail>(`/ai/imports/${id}`);
+
+/** 轮询用的轻量进度：不含提示词与计划原文，流式期间每秒拉一次也不重。 */
+export const fetchAiImportProgress = (id: number | string) =>
+  api<AiImportProgress>(`/ai/imports/${id}/progress`);
+
+/** 开始导入：进队列后立即返回，进度靠轮询详情。 */
+export const startAiImport = (id: number | string) =>
+  api<AiImportDetail>(`/ai/imports/${id}/start`, { method: 'POST' });
+
+export const cancelAiImport = (id: number | string) =>
+  api<AiImportDetail>(`/ai/imports/${id}/cancel`, { method: 'POST' });
+
+/** 重新分析：清掉上一次结果再走一遍流程；已生成模板的写回原模板。 */
+export const rerunAiImport = (id: number | string) =>
+  api<AiImportDetail>(`/ai/imports/${id}/rerun`, { method: 'POST' });
+
+export const deleteAiImport = (id: number | string) =>
+  api(`/ai/imports/${id}`, { method: 'DELETE' });
+
+/** 改完计划后重新自检（落笔 + 生成 SQL + 渲染一次，都在任务文件上做）。 */
+export const checkAiImport = (id: number | string, plan: MarkPlan) =>
+  api<CheckResult>(`/ai/imports/${id}/check`, { method: 'POST', body: JSON.stringify(plan) });
+
+export const previewAiImport = (id: number | string, mode: 'template' | 'render', plan: MarkPlan) =>
+  apiPostBlob(`/ai/imports/${id}/preview?mode=${mode}`, plan);
+
+/** 按改过的计划落库：建模板、版本与数据块。 */
+export const applyAiImport = (id: number | string, plan: MarkPlan) =>
+  api<AiImportDetail>(`/ai/imports/${id}/apply`, { method: 'POST', body: JSON.stringify(plan) });

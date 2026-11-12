@@ -11,7 +11,10 @@ import io.github.violateer.doctemplate.starter.controller.DocTemplatePageControl
 import io.github.violateer.doctemplate.starter.controller.DocTemplateExceptionHandler;
 import io.github.violateer.doctemplate.starter.controller.DocTemplateAnnotateController;
 import io.github.violateer.doctemplate.starter.controller.DocTemplateAiController;
+import io.github.violateer.doctemplate.starter.controller.DocTemplateAiImportController;
 import io.github.violateer.doctemplate.starter.ai.DocTemplateAiClient;
+import io.github.violateer.doctemplate.starter.ai.DocTemplateAiImportExecutor;
+import io.github.violateer.doctemplate.starter.ai.DocTemplateAiImportService;
 import io.github.violateer.doctemplate.starter.ai.DocTemplateAiPlanner;
 import io.github.violateer.doctemplate.starter.ai.OpenAiCompatibleClient;
 import io.github.violateer.doctemplate.starter.convert.BuiltinConverters;
@@ -35,6 +38,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import io.github.violateer.doctemplate.starter.repository.DocTemplateDataBlockRepository;
+import io.github.violateer.doctemplate.starter.repository.DocTemplateAiImportRepository;
+import io.github.violateer.doctemplate.starter.repository.DocTemplateAiTraceRepository;
 import io.github.violateer.doctemplate.starter.repository.DocTemplateDictItemRepository;
 import io.github.violateer.doctemplate.starter.repository.DocTemplateDictRepository;
 import io.github.violateer.doctemplate.starter.repository.DocTemplateGenerateRecordRepository;
@@ -61,7 +66,7 @@ import java.util.TreeMap;
         "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
         "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"})
 @EnableConfigurationProperties(DocTemplateProperties.class)
-@Import({DocTemplatePageController.class, DocTemplateSystemController.class, DocTemplateTemplateController.class, DocTemplateDataBlockController.class, DocTemplateGenerateRecordController.class, DocTemplateDictController.class, DocTemplateAnnotateController.class, DocTemplateAiController.class, DocTemplateExceptionHandler.class})
+@Import({DocTemplatePageController.class, DocTemplateSystemController.class, DocTemplateTemplateController.class, DocTemplateDataBlockController.class, DocTemplateGenerateRecordController.class, DocTemplateDictController.class, DocTemplateAnnotateController.class, DocTemplateAiController.class, DocTemplateAiImportController.class, DocTemplateExceptionHandler.class})
 @ConditionalOnProperty(prefix = "doc-template", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DocTemplateAutoConfiguration {
 
@@ -175,6 +180,18 @@ public class DocTemplateAutoConfiguration {
                                                                        DocTemplateDialectProvider dialectProvider) {
         return new DocTemplateDictItemRepository(jdbcTemplate, dialectProvider);
     }
+
+    @Bean
+    public DocTemplateAiImportRepository docTemplateAiImportRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                                       DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateAiImportRepository(jdbcTemplate, dialectProvider);
+    }
+
+    @Bean
+    public DocTemplateAiTraceRepository docTemplateAiTraceRepository(@Qualifier("docTemplateJdbcTemplate") JdbcTemplate jdbcTemplate,
+                                                                     DocTemplateDialectProvider dialectProvider) {
+        return new DocTemplateAiTraceRepository(jdbcTemplate, dialectProvider);
+    }
     @Bean
     public DocTemplateService docTemplateService(
             DocTemplateRepository templateRepository,
@@ -229,6 +246,40 @@ public class DocTemplateAutoConfiguration {
     }
 
     /**
+     * 导入任务的执行队列。
+     *
+     * <p>宿主注册一个同类型的 Bean 就完全接管（自建线程池、接公司的调度平台都行）；
+     * 内置的按 {@code doc-template.ai.import.threads} 建，默认 1 线程 —— 并发几路对模型服务商
+     * 没有好处，只会互相抢限流。</p>
+     */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean(DocTemplateAiImportExecutor.class)
+    public DocTemplateAiImportExecutor docTemplateAiImportExecutor(DocTemplateProperties properties) {
+        DocTemplateProperties.Ai.Import config = properties.getAi().getImport();
+        return new DocTemplateAiImportExecutor(config.getThreads(), config.getQueueCapacity());
+    }
+
+    /**
+     * AI 导入任务：上传建任务、后台出计划、APPLY 阶段建模板。
+     *
+     * <p>不依赖模型也能装配：{@code planner} 在没有客户端时只是 {@code available()=false}，
+     * 上传、自检、预览这些接口照常工作，{@code start} 会给出「AI 未启用」的明确提示。</p>
+     */
+    @Bean
+    public DocTemplateAiImportService docTemplateAiImportService(
+            DocTemplateAiImportRepository importRepository,
+            DocTemplateAiTraceRepository traceRepository,
+            DocTemplateAnnotateService annotateService,
+            DocTemplateAiPlanner planner,
+            DocTemplateService templates,
+            DocTemplateFileStorage fileStorage,
+            DocTemplateProperties properties,
+            DocTemplateAiImportExecutor importExecutor) {
+        return new DocTemplateAiImportService(importRepository, traceRepository, annotateService, planner,
+                templates, fileStorage, properties, importExecutor);
+    }
+
+    /**
      * 启动收尾：打印横幅与配置摘要，并按需初始化元数据表。
      *
      * <p>放在 {@link SmartInitializingSingleton} 里，等数据源、存储、认证这些 Bean 都就绪后只跑一次，
@@ -239,8 +290,10 @@ public class DocTemplateAutoConfiguration {
             DocTemplateDataSourceResolver dataSourceResolver,
             DocTemplateFileStorage fileStorage,
             ObjectProvider<DocTemplateGuard> guardProvider,
+            ObjectProvider<DocTemplateAiImportService> importService,
             ApplicationContext context) {
-        return new DocTemplateStartupReport(properties, dataSourceResolver, fileStorage, guardProvider, context);
+        return new DocTemplateStartupReport(properties, dataSourceResolver, fileStorage, guardProvider,
+                importService, context);
     }
 
     public record DocumentProviderRegistry(Map<String, DocumentDataProvider> providers) {

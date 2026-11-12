@@ -39,7 +39,7 @@ public class DocTemplateAnnotateController {
      * 页面直接把 {@code error} 显示出来。</p>
      */
     @PostMapping("/annotate/check")
-    public Map<String, Object> check(@PathVariable("id") long id, @RequestBody DocTemplateMarkPlan plan) {
+    public Map<String, Object> check(@PathVariable("id") long id, @RequestBody DocTemplateMarkPlan plan) throws Exception {
         return annotate.check(id, plan);
     }
 

@@ -110,6 +110,68 @@ export interface AiStatus {
   model: string | null;
   max_attempts: number;
   max_input_chars: number;
+  /** 是否记录思维链；关掉时详情页不显示提示词与思考过程 */
+  trace_enabled?: boolean;
+}
+
+/** AI 导入任务（列表行）。上传只产生这一行，分析在后台跑。 */
+export interface AiImportRow {
+  id: number;
+  file_name: string;
+  file_url: string;
+  file_sha256: string | null;
+  file_type: FileType;
+  template_name: string;
+  template_code: string;
+  hint: string | null;
+  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED' | string;
+  stage: string | null;
+  template_id: number | null;
+  error_message: string | null;
+  create_by: string | null;
+  create_time: string | null;
+  start_time: string | null;
+  finish_time: string | null;
+  elapsed_ms: number | null;
+  has_file?: boolean;
+  can_start?: boolean;
+  /** 重新分析：任何不在执行中的任务都能点，已生成模板的会写回原模板 */
+  can_rerun?: boolean;
+  can_delete?: boolean;
+}
+
+/** 一次尝试的记录：提示词、思考过程、回答原文与用量。 */
+export interface AiTraceRow {
+  id: number;
+  import_id: number;
+  attempt: number;
+  stage: string | null;
+  model: string | null;
+  system_prompt: string | null;
+  user_prompt: string | null;
+  reasoning: string | null;
+  content: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  elapsed_ms: number | null;
+  error: string | null;
+  create_time: string | null;
+}
+
+/** 任务详情：比列表多计划原文、失败原因、思维链与阶段顺序。 */
+export interface AiImportDetail extends AiImportRow {
+  plan_json: string | null;
+  stages: string[];
+  failures: { attempt: number; stage: string | null; error: string; elapsed_ms: number }[];
+  traces: AiTraceRow[];
+}
+
+/**
+ * 轮询用的轻量进度：形状与详情一致，但没有计划原文与失败原因汇总，
+ * 思维链也不带 `system_prompt` / `user_prompt`（一次尝试的提示词可达几万字符）。
+ */
+export interface AiImportProgress extends Omit<AiImportDetail, 'plan_json' | 'failures' | 'traces'> {
+  traces: AiTraceRow[];
 }
 
 /** 标记计划里的一块：`shape` 是 `object`（单条）或 `array`（多条）。 */

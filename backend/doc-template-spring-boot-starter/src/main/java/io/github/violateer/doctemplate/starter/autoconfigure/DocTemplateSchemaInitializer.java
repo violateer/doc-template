@@ -24,7 +24,7 @@ final class DocTemplateSchemaInitializer {
 
     private static final List<String> REQUIRED_TABLES = List.of(
             "doc_template", "doc_template_version", "doc_template_data_block", "doc_template_generate_record",
-            "doc_template_dict", "doc_template_dict_item");
+            "doc_template_dict", "doc_template_dict_item", "doc_template_ai_import", "doc_template_ai_trace");
 
     private final DocTemplateProperties properties;
     private final DocTemplateDataSourceResolver dataSourceResolver;

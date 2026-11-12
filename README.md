@@ -145,6 +145,12 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 - `POST /api/doc-template/templates/{id}/annotate`：自检通过后写新版本并按计划建数据块
 - `GET /api/doc-template/ai/status`：模型是否可用、用的哪个模型、最多试几次（不含地址与密钥）
 - `POST /api/doc-template/templates/{id}/ai/plan`：让模型读快照出计划并自检，请求体 `{"hint":"补充要求（可选）"}`
+- `POST /api/doc-template/ai/imports`：新建 AI 导入任务（multipart：文件 + 模板名 + 编码 + 补充要求），只建任务不建模板
+- `GET /api/doc-template/ai/imports`、`GET /api/doc-template/ai/imports/{id}`：任务分页列表 / 详情（状态、阶段、失败原因、计划原文、思维链）
+- `POST /api/doc-template/ai/imports/{id}/start`、`/cancel`：后台执行 / 取消；`DELETE` 删除任务（执行中的不可删，已生成的模板保留）
+- `POST /api/doc-template/ai/imports/{id}/rerun`：重新分析，清掉上一次结果与思维链再跑一遍；已生成模板的结果写回原模板
+- `POST /api/doc-template/ai/imports/batch-delete`：批量删除导入任务，请求体与返回结构同模板的批量删除
+- `POST /api/doc-template/ai/imports/{id}/check`、`/preview`、`/apply`：用改过的计划重新自检 / 预览 / 落库
 - `POST /api/doc-template/templates/{id}/generate`
 - `GET/POST /api/doc-template/data-blocks?templateId={id}`
 - `POST /api/doc-template/data-blocks/preview`：按请求里的配置跑一次取数（不落库），返回 `{ok,data|error,elapsed_ms}`
@@ -422,11 +428,16 @@ doc-template:
 **不需要按模型调参**：输出上限一次给到 32K（它只决定模型能说多久，不按用量计费，想完会自己停），
 服务商自己的上限更小时按它的报错自动降下来；推理模型的思考过程不管放在 `reasoning_content`、
 `reasoning` 还是 `thinking` 里都能读到，思考里已经写出完整 JSON 时直接取用；服务商不认某个可选参数
-（JSON 模式、温度）时会自动去掉它重试一次。确实需要厂商专有开关（关闭思考、调推理强度）时，
+（JSON 模式、温度）时会自动去掉它重试一次。默认走流式返回，思考过程与正文边生成边落进思维链；
+服务端不支持流式时自动退回一次性返回（`doc-template.ai.stream: false` 可强制关闭）。确实需要厂商专有开关（关闭思考、调推理强度）时，
 用 `doc-template.ai.extra-body` 原样透传，键名和取值以服务商文档为准。
 
-管理页模板列表的「**AI 导入**」把这条链路串成一个向导：选文件 → 看识别出的数据块与生成的 SQL（可直接改计划 JSON
-再重新自检）→ 分别预览「落笔后的模板」和「模拟数据的效果」→ 一键保存。向导需要开启模型，未开启时按钮不可点。
+管理页的「**AI 导入**」把这条链路拆成「建任务」和「执行」两步：上传只产生一条任务（不建模板），
+在列表里点「开始导入」后后台跑，列表与详情都自动刷新，能看到当前阶段与耗时，可以取消、失败后重试；
+详情里能看每次尝试的提示词、思考过程与失败原因，思考过程与正文边生成边刷新，改计划 JSON 后重新自检、预览、保存为模板。
+已经生成模板的任务可以「重新分析」，结果写回原模板（新增版本、重建数据块），上一轮的思维链记录一并清掉。
+任务可以单条删除，也可以勾选后批量删除：执行中的不可删，删除只清任务本身（文件与思维链），
+已经生成的模板保留。执行需要开启模型，未开启时「开始导入」会给出配置说明。
 
 ## 🧩 示例模板
 
