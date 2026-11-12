@@ -249,14 +249,25 @@ public class DocTemplateService {
     }
 
     public Map<String, Object> upload(long id, MultipartFile file) throws Exception {
-        DocTemplateEntity t = requireTemplate(id);
+        requireTemplate(id);
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("请选择要上传的文件");
-        String name = StrUtil.blankToDefault(file.getOriginalFilename(), "template");
+        return addVersion(id, StrUtil.blankToDefault(file.getOriginalFilename(), "template"), file.getBytes());
+    }
+
+    /**
+     * 直接用字节写一个新版本。
+     *
+     * <p>上传走 {@link #upload(long, MultipartFile)}，结构化标注落库走这里 —— 标注结果在内存里，
+     * 没有 MultipartFile 可以包，也不该为了复用去造一个假的上传对象。</p>
+     */
+    public Map<String, Object> addVersion(long id, String fileName, byte[] bytes) throws Exception {
+        DocTemplateEntity t = requireTemplate(id);
+        if (bytes == null || bytes.length == 0) throw new IllegalArgumentException("文件内容为空");
+        String name = StrUtil.blankToDefault(fileName, "template");
         String suffix = FileUtil.extName(name);
         String ext = StrUtil.equalsIgnoreCase("docx", suffix) ? "DOCX" : StrUtil.equalsIgnoreCase("xlsx", suffix) ? "XLSX" : "";
         if (ext.isEmpty())
             throw new IllegalArgumentException("不支持该文件类型，只支持 .docx 和 .xlsx");
-        byte[] bytes = file.getBytes();
         String storedLocation = fileStorage.store(id, name, bytes);
         String sha = sha256(bytes);
         DocTemplateVersionEntity latest = versionRepository.findLatest(id);
@@ -275,6 +286,30 @@ public class DocTemplateService {
         t.setUpdateTime(LocalDateTime.now());
         templateRepository.update(t);
         return toMap(v);
+    }
+
+    /** 当前版本的文件内容；没上传过文件时报错，而不是返回空数组。 */
+    public byte[] currentVersionBytes(long templateId) throws Exception {
+        return fileStorage.read(requireCurrentVersion(requireTemplate(templateId)).getFileUrl());
+    }
+
+    public String currentFileName(long templateId) {
+        return requireCurrentVersion(requireTemplate(templateId)).getFileName();
+    }
+
+    public Long currentVersionId(long templateId) {
+        return requireCurrentVersion(requireTemplate(templateId)).getId();
+    }
+
+    public String currentFileType(long templateId) {
+        return requireTemplate(templateId).getFileType();
+    }
+
+    private DocTemplateVersionEntity requireCurrentVersion(DocTemplateEntity template) {
+        Long versionId = template.getCurrentVersionId();
+        if (versionId == null)
+            throw new IllegalArgumentException("该模板尚未上传文件，请先上传 .docx 或 .xlsx 模板");
+        return requireVersion(versionId);
     }
 
     public List<Map<String, Object>> versions(long id) {

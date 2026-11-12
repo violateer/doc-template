@@ -25,6 +25,7 @@ Starter 的静态管理界面随 JAR 发布，宿主前端可以通过 iframe �
 ## ✨ 能做什么
 
 - 🧾 **模板管理**：上传 `.docx` / `.xlsx`，多版本、预览、下载、删除时同步清理云存储
+- 🪄 **从填好的文档生成模板**：给一份已经写好内容的文档，自动识别哪些是变量、落笔成模板并建好数据块；计划可以由大模型出（默认关闭），也可以手写
 - 🔤 **占位符渲染**：`${key}` / `{{key}}`、默认值、点号取嵌套值、转换链
 - 🔁 **明细行循环**：表格行、表格区域、段落块，支持区域嵌套与 `where` 过滤
 - 🧱 **动态列**：列数由数据决定，模板里只留位置，样式照搬标记格
@@ -138,6 +139,18 @@ Vite 会把构建产物输出到 Starter 的 `src/main/resources/META-INF/resour
 - `GET /api/doc-template/templates/versions/{versionId}/download`
 - `GET /api/doc-template/templates/versions/{versionId}/preview`
 - `GET /api/doc-template/templates/{id}/placeholders`
+- `GET /api/doc-template/templates/{id}/snapshot`：当前版本的结构快照（段落、表格、单元格坐标与文字），坐标一律 0 起始
+- `POST /api/doc-template/templates/{id}/annotate/check`：只校验不落库——落笔 + 生成模拟 SQL + 渲染一次，返回 `{ok, blocks, placeholders, unbound, suggestions, warnings}`
+- `POST /api/doc-template/templates/{id}/annotate/preview?mode=template`：下载预览，`mode=template` 看落笔后的标记，默认看模拟数据的渲染效果
+- `POST /api/doc-template/templates/{id}/annotate`：自检通过后写新版本并按计划建数据块
+- `GET /api/doc-template/ai/status`：模型是否可用、用的哪个模型、最多试几次（不含地址与密钥）
+- `POST /api/doc-template/templates/{id}/ai/plan`：让模型读快照出计划并自检，请求体 `{"hint":"补充要求（可选）"}`
+- `POST /api/doc-template/ai/imports`：新建 AI 导入任务（multipart：文件 + 模板名 + 编码 + 补充要求），只建任务不建模板
+- `GET /api/doc-template/ai/imports`、`GET /api/doc-template/ai/imports/{id}`：任务分页列表 / 详情（状态、阶段、失败原因、计划原文、思维链）
+- `POST /api/doc-template/ai/imports/{id}/start`、`/cancel`：后台执行 / 取消；`DELETE` 删除任务（执行中的不可删，已生成的模板保留）
+- `POST /api/doc-template/ai/imports/{id}/rerun`：重新分析，清掉上一次结果与思维链再跑一遍；已生成模板的结果写回原模板
+- `POST /api/doc-template/ai/imports/batch-delete`：批量删除导入任务，请求体与返回结构同模板的批量删除
+- `POST /api/doc-template/ai/imports/{id}/check`、`/preview`、`/apply`：用改过的计划重新自检 / 预览 / 落库
 - `POST /api/doc-template/templates/{id}/generate`
 - `GET/POST /api/doc-template/data-blocks?templateId={id}`
 - `POST /api/doc-template/data-blocks/preview`：按请求里的配置跑一次取数（不落库），返回 `{ok,data|error,elapsed_ms}`
@@ -365,6 +378,66 @@ ${order_no} | ${customer}
 4. **Excel 标记写在非文本单元格**：数字格、公式格里写标记无效，先把单元格格式改成文本。
 5. **图片字段的值不是图片**：空值按文本处理；URL 下载失败或格式不支持（svg / webp）会直接报错，错误信息里带字段名。
 6. **不要指望条件判断**：目前没有 `{{#if}}`，需要按条件显示的内容，用数据块返回不同的数据，或拆成两份模板。
+
+## 🪄 从填好的文档生成模板
+
+手上已经有一份填好内容的报告，不想再从零手敲 `${...}`，可以让模块把它变成「模板 + 数据块」。四步：
+**结构快照 → 标记计划 → 确定性落笔 → 渲染自检**。
+
+- **快照**：读出段落、表格、每个单元格的坐标与文字，附上加粗 / 居中这类判断表头用的信号。坐标一律 0 起始，
+  `cell` 是网格列号（横向合并的格子占多列、只记起始列）。
+- **计划**：一份 JSON，说明哪个格子是变量、叫什么字段、属于哪个数据块。**模型只产出这份 JSON，碰不到文件**，
+  落笔全部由代码按坐标执行，所以写错了能 diff、能重试、能人工改。
+- **落笔**：写进去的就是下文「模板标记写法」里的语法，没有新方言——`${块.字段}`、`{{#each 块}}`、`{{#columns 块 data}}`。
+- **自检**：用文档里的原值当模拟数据真渲染一遍，语法对但取不到数的问题（字段名拼错、数组不存在）只有这一步能发现。
+
+### 标记计划能表达什么
+
+| 写法 | 用途 |
+| --- | --- |
+| `value` | 一个格子或一段正文是变量，写成 `${块.字段}`；落在循环行里写短名 `${字段}` |
+| `loop` | 明细行循环，一行按数组重复；多行样例只留第一行当模板行，其余整行删掉 |
+| `region` | 区域循环，`at.row`~`at.rowTo` 整体重复，一个样品占好几行时用；样例行一行不删 |
+
+`loop` / `region` 还可以带 `merge`（竖向合并列号）、`by`（合并分组键）。
+
+标注只做单层循环：动态列（列数随数据变的交叉表）和嵌套循环（循环套循环、按字段关联过滤）不在范围内，
+计划里出现这两类标记会被跳过，不影响其余标记落笔。它们仍可在模板里手写，只是不由这条链路生成。
+
+### 数据块用什么数据
+
+按字段生成常量查询：`select '2026-0011' as report_no`，不访问任何表、不需要建表、四种数据库都能直接跑
+（Oracle 自动补 `from dual`）。换真实表时自行修改 SQL——生成的块就是普通 SQL 数据块，在管理页里改 SQL 即可。
+
+### 让大模型出计划（默认关闭）
+
+```yaml
+doc-template:
+  ai:
+    enabled: true                 # 开启意味着文档正文会被发到 base-url 指向的服务
+    base-url: https://api.deepseek.com
+    api-key: ${AI_API_KEY}
+    model: deepseek-chat
+    max-attempts: 3               # 自检没过就把错误回灌给模型重来
+```
+
+只支持 OpenAI Chat Completions 兼容协议，换服务商只改地址和模型名（DeepSeek / 通义 / 文心 / Kimi / Azure 都能用）。
+宿主自己注册一个 `DocTemplateAiClient` Bean 就完全接管模型调用，这些配置项都不参与。模型写错时会把
+报错原文（带行号/段号）回灌重试，仍不行就把每次的原因列出来交给人工改。关掉时快照、自检、预览、落库都不受影响。
+
+**不需要按模型调参**：输出上限一次给到 32K（它只决定模型能说多久，不按用量计费，想完会自己停），
+服务商自己的上限更小时按它的报错自动降下来；推理模型的思考过程不管放在 `reasoning_content`、
+`reasoning` 还是 `thinking` 里都能读到，思考里已经写出完整 JSON 时直接取用；服务商不认某个可选参数
+（JSON 模式、温度）时会自动去掉它重试一次。默认走流式返回，思考过程与正文边生成边落进思维链；
+服务端不支持流式时自动退回一次性返回（`doc-template.ai.stream: false` 可强制关闭）。确实需要厂商专有开关（关闭思考、调推理强度）时，
+用 `doc-template.ai.extra-body` 原样透传，键名和取值以服务商文档为准。
+
+管理页的「**AI 导入**」把这条链路拆成「建任务」和「执行」两步：上传只产生一条任务（不建模板），
+在列表里点「开始导入」后后台跑，列表与详情都自动刷新，能看到当前阶段与耗时，可以取消、失败后重试；
+详情里能看每次尝试的提示词、思考过程与失败原因，思考过程与正文边生成边刷新，改计划 JSON 后重新自检、预览、保存为模板。
+已经生成模板的任务可以「重新分析」，结果写回原模板（新增版本、重建数据块），上一轮的思维链记录一并清掉。
+任务可以单条删除，也可以勾选后批量删除：执行中的不可删，删除只清任务本身（文件与思维链），
+已经生成的模板保留。执行需要开启模型，未开启时「开始导入」会给出配置说明。
 
 ## 🧩 示例模板
 
@@ -826,7 +899,7 @@ IDEA 里把同样的参数写进 Program arguments 即可。
 
 ### 📌 注意事项
 
-- 模块**只做认证（你是谁），不做授权（你能干什么）**，所以不需要给宿主菜单/角色配任何权限码，也不需要任何菜单表记录。
+- 模块**只做认证（当前调用方身份），不做授权（可执行的操作）**，所以不需要给宿主菜单/角色配任何权限码，也不需要任何菜单表记录。
 - 模块的拦截器只作用于 `/api/doc-template/**`，静态页面 `/doc-template/**` 永远放行——页面本身不含数据，数据都在接口后面。宿主自己的全局拦截器仍需放行这两个前缀。
 - 配置了 `mode: custom` 但容器里没有 `DocTemplateAuthorizer` Bean 时**启动直接失败**，不会悄悄退化成无认证：
 
@@ -908,7 +981,7 @@ doc-template:
 | `type: local` | 同上，可自定义 `base-path` | 无 |
 | `type: s3` | S3 兼容存储（MinIO / RustFS / 阿里云 OSS 的 S3 接口） | 需要 endpoint、bucket、密钥 |
 
-也就是说，宿主不配 storage 时模块照样能用，文件落在本地目录；要接对象存储，由**宿主自己**配这一小段：
+也就是说，宿主未配置 storage 时模块仍可正常使用，文件落在本地目录；要接对象存储，由**宿主自己**配这一小段：
 
 ```yaml
 doc-template:
@@ -980,6 +1053,10 @@ export DOC_S3_ENDPOINT='http://127.0.0.1:9000'
 export DOC_S3_ACCESS_KEY=your_access_key
 export DOC_S3_SECRET_KEY=your_secret_key
 # 可选：DOC_S3_REGION（默认 us-east-1）、DOC_S3_BUCKET（默认 doc-template）
+# 可选（管理页「AI 导入」用，两个都要给）：只给 key 不给 enabled 不生效
+export DOC_AI_ENABLED=true
+export DOC_AI_API_KEY=your_api_key
+# 可选：DOC_AI_BASE_URL（默认 https://api.deepseek.com）、DOC_AI_MODEL（默认 deepseek-chat）
 ```
 
 `application-dev.yml` 进 git（不含任何真实地址和凭据），`application-local.yml` 已被 `.gitignore` 忽略、只留在本机。两个文件都只属于 example 模块（示例宿主），不会进入 Starter 的 jar；Starter 发布给宿主使用时，宿主的 `spring.datasource` 是什么就连什么。

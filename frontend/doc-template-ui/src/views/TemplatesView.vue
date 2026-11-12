@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
   NButton,
   NCard,
@@ -35,6 +36,8 @@ import BatchBar from '../components/BatchBar.vue';
 
 const message = useMessage();
 const dialog = useDialog();
+const route = useRoute();
+const router = useRouter();
 const rows = ref<TemplateRow[]>([]);
 const loading = ref(false);
 const keyword = ref('');
@@ -340,7 +343,28 @@ const columns = [
 onMounted(() => {
   void load();
   void loadStats();
+  void openFromQuery();
 });
+
+/**
+ * `?open={id}`：从 AI 导入任务或别处跳过来时直接打开这个模板的编辑弹窗。
+ *
+ * <p>打开后把参数清掉，否则刷新页面会再弹一次，用户关掉弹窗再刷新又弹回来。</p>
+ */
+async function openFromQuery() {
+  const raw = route.query.open;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return;
+  const id = Number(value);
+  if (!Number.isFinite(id)) return;
+  try {
+    openEdit(await api<TemplateRow>(`/templates/${id}`));
+  } catch (e: any) {
+    message.error(e.message);
+  } finally {
+    await router.replace({ path: '/templates' });
+  }
+}
 </script>
 
 <template>

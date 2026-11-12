@@ -175,6 +175,10 @@ public class DocTemplateRepository {
         return rs.getObject(column, Long.class);
     }
 
+    static Integer nullableInt(ResultSet rs, String column) throws SQLException {
+        return rs.getObject(column, Integer.class);
+    }
+
     static LocalDateTime nullableTime(ResultSet rs, String column) throws SQLException {
         return rs.getObject(column, LocalDateTime.class);
     }

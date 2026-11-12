@@ -2,6 +2,7 @@ package io.github.violateer.doctemplate.starter.autoconfigure;
 
 import io.github.violateer.doctemplate.starter.auth.AuthMode;
 import io.github.violateer.doctemplate.starter.auth.DocTemplateGuard;
+import io.github.violateer.doctemplate.starter.ai.DocTemplateAiImportService;
 import io.github.violateer.doctemplate.starter.service.DocTemplateFileStorage;
 import io.github.violateer.doctemplate.starter.support.DocTemplateVersion;
 import org.slf4j.Logger;
@@ -46,17 +47,20 @@ final class DocTemplateStartupReport implements SmartInitializingSingleton {
     private final DocTemplateDataSourceResolver dataSourceResolver;
     private final DocTemplateFileStorage fileStorage;
     private final ObjectProvider<DocTemplateGuard> guardProvider;
+    private final ObjectProvider<DocTemplateAiImportService> importService;
     private final ApplicationContext context;
 
     DocTemplateStartupReport(DocTemplateProperties properties,
                              DocTemplateDataSourceResolver dataSourceResolver,
                              DocTemplateFileStorage fileStorage,
                              ObjectProvider<DocTemplateGuard> guardProvider,
+                             ObjectProvider<DocTemplateAiImportService> importService,
                              ApplicationContext context) {
         this.properties = properties;
         this.dataSourceResolver = dataSourceResolver;
         this.fileStorage = fileStorage;
         this.guardProvider = guardProvider;
+        this.importService = importService;
         this.context = context;
     }
 
@@ -66,6 +70,9 @@ final class DocTemplateStartupReport implements SmartInitializingSingleton {
         DocTemplateSchemaInitializer.Status status =
                 new DocTemplateSchemaInitializer(properties, dataSourceResolver).initialize();
         log.info("\n{}", String.join("\n", block(status)));
+        // 表建好了才谈得上恢复：残留的 RUNNING 任务要标失败，过期的思维链要清掉
+        DocTemplateAiImportService imports = importService.getIfAvailable();
+        if (imports != null) imports.recover();
     }
 
     /** 整块拼成一个字符串一次打出去，避免被其他 Bean 的启动日志插进来切断。 */

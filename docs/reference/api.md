@@ -31,6 +31,55 @@
 | --- | --- | --- |
 | `POST` | `/templates/{id}/generate` | 生成文档，body：`{templateVersionId?, exportType?, requestParams?}`；`exportType` 只认 `ORIGINAL` / `PDF`（大小写不敏感），写别的直接报错 |
 
+## 结构化标注
+
+把一份已经填好内容的文档变成「模板 + 数据块」。计划是一份 JSON，字段名固定驼峰（`rowTo`，不是 `row_to`），
+原样回传给后端即可。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/templates/{id}/snapshot` | 当前版本的结构快照：段落、表格、单元格的坐标与文字，坐标一律 0 起始 |
+| `POST` | `/templates/{id}/annotate/check` | 只校验不落库：落笔 + 生成模拟 SQL + 渲染一次，返回 `{ok, blocks, placeholders, unbound, suggestions, warnings, output_bytes}`；计划本身写错返回 400，坐标和文档对不上返回 `ok:false` + `error` |
+| `POST` | `/templates/{id}/annotate/preview` | 下载预览；`?mode=template` 看落笔后的标记，默认看模拟数据的渲染效果 |
+| `POST` | `/templates/{id}/annotate` | 自检通过后写新版本并按计划建数据块；当前版本已经标注过时直接拒绝 |
+| `GET` | `/ai/status` | `{enabled, model, max_attempts, max_input_chars, trace_enabled}`，不含地址与密钥；未开启时 `enabled` 为 `false` |
+| `POST` | `/templates/{id}/ai/plan` | 让模型读快照出计划并自检，body `{hint?}`；成功时把自检结果平铺进来并带 `plan`，失败返回 `ok:false` + `failures`（每次尝试的原因） |
+
+::: tip 计划里的三类标记
+`value`（取值）、`loop`（行循环）、`region`（区域循环）。`loop` / `region` 可带 `merge` / `by`；
+坐标全部 0 起始，`cell` 是网格列号。标注只做单层循环：动态列和嵌套循环（循环套循环、按字段关联过滤）
+不在范围内，计划里出现这两类标记会被跳过，不影响其余标记落笔——它们仍然可以在模板里手写，只是不由这条链路生成。
+:::
+
+## AI 导入任务
+
+上传只产生一条任务，分析在后台线程里跑，模板、版本、数据块在最后一步一次建好；分析失败不会留下
+「只有文件、没有数据块」的草稿。
+
+任务状态：`PENDING`（已上传、未开始）/ `RUNNING` / `SUCCEEDED` / `FAILED` / `CANCELED`。
+执行阶段按顺序推进：`SNAPSHOT`（读结构）→ `PROMPT`（拼提示词）→ `CALL`（调模型）→ `PARSE`（解析计划）→
+`VALIDATE`（校验计划）→ `CHECK`（落笔自检）→ `APPLY`（建模板与数据块）→ `DONE`，每进一个阶段写一次库。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/ai/imports` | 新建任务（multipart：`file`、`templateName`、`templateCode?`、`hint?`）。`templateCode` 留空按文件名生成；**不建模板** |
+| `GET` | `/ai/imports` | 分页列表，`page` / `size` / `status` / `keyword`（文件名、模板名、编码、发起人） |
+| `GET` | `/ai/imports/{id}` | 详情：状态、阶段、阶段顺序、失败原因、计划原文、每次尝试的思维链 |
+| `GET` | `/ai/imports/{id}/progress` | 轮询用的轻量进度：状态、阶段、思维链正文（含流式中间结果），不含提示词与计划原文 |
+| `POST` | `/ai/imports/{id}/start` | 进队列后台执行，立即返回；`PENDING` / `FAILED` / `CANCELED` 可执行 |
+| `POST` | `/ai/imports/{id}/cancel` | 未开始的直接取消；执行中的置取消标志并中断，下一次调模型前停下 |
+| `POST` | `/ai/imports/{id}/rerun` | 重新分析：清掉上一次的阶段、计划、失败原因、耗时与思维链记录，再走一遍完整流程。已生成模板的任务结果写回原模板（新增版本、按新计划重建数据块）；分析失败时模板不变 |
+| `DELETE` | `/ai/imports/{id}` | 删除任务（执行中的不可删），上传的文件与思维链一起清掉；**已生成的模板保留** |
+| `POST` | `/ai/imports/batch-delete` | 批量删除，body `{"ids":[1,2]}`；逐条删，返回 `{deleted, failed:[{id, message}]}`。执行中的会出现在 `failed` 里 |
+| `POST` | `/ai/imports/{id}/check` | 用改过的计划重新自检，body 与 `/annotate/check` 同一份计划 |
+| `POST` | `/ai/imports/{id}/preview` | 下载预览；`?mode=template` 看落笔后的标记，默认看模拟数据的渲染效果 |
+| `POST` | `/ai/imports/{id}/apply` | 按改过的计划建模板与数据块；已经生成过模板的任务不再接受 |
+
+::: warning 单实例前提
+取消、队列、残留任务恢复都按单实例设计：服务重启时残留的 `RUNNING` 一律标为失败（原因「服务重启，任务中断」），
+不自动续跑。多实例部署时同一个任务可能被别的实例领走，需要宿主自己加分布式互斥。
+:::
+
 ## 数据块
 
 | 方法 | 路径 | 说明 |

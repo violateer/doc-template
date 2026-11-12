@@ -38,6 +38,7 @@ final class TestDatabases {
 
     /** 删表顺序：先子表后主表（表上没建外键，顺序只是为了读起来顺）。 */
     private static final List<String> TABLES = List.of(
+            "doc_template_ai_trace", "doc_template_ai_import",
             "doc_template_dict_item", "doc_template_dict", "doc_template_generate_record",
             "doc_template_data_block", "doc_template_version", "doc_template");
 

@@ -58,6 +58,37 @@
 | `max-timeout-ms` | `15000` | API 数据块允许的最大超时 |
 | `allowed-hosts` | `[]` | 允许访问的接口主机，为空不限制；支持精确匹配与 `*.example.com` 后缀匹配 |
 
+## `doc-template.ai`
+
+让模型读文档结构、给出标记计划（结构化标注的第 ② 步）。**默认关闭**：开启意味着文档正文会被发到
+`base-url` 指向的服务。只支持 OpenAI Chat Completions 兼容协议，换服务商只改地址和模型名。
+
+不针对具体厂商做适配：输出上限一次给足，超过服务商允许值时按它的报错自动降低；推理过程不认字段名
+（`reasoning_content`、`reasoning`、`thinking` 都读）、正文是文本块数组时也能拼；服务商不认某个可选字段
+（`response_format`、`temperature`）时自动去掉该字段重试一次。厂商私有开关走 `extra-body`。
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `enabled` | `false` | 关闭时 `/ai/plan` 直接说明怎么开，其余标注能力不受影响 |
+| `base-url` | —— | 接口地址，通常写域名即可（`https://api.deepseek.com`）；写成 `.../v1` 或整条 `.../v1/chat/completions` 也能识别，不会拼重复 |
+| `api-key` | —— | 密钥，建议用环境变量占位符 |
+| `model` | `deepseek-chat` | 模型名 |
+| `temperature` | `0` | 生成结构化产物建议 0：同样的输入要得到同样的计划。设为负数表示不发送该字段（部分推理模型不接受这个参数） |
+| `max-tokens` | `32768` | 单次输出上限。推理模型的思考也计入这里，给小了正文还没开始就被截断（`finish_reason=length`）；它只决定模型能说多久，不按用量计费，模型想完会自己停。服务商自己的上限更小时（8K / 16K / 32K / 64K 不等），会按报错里的数值自动降下来。`0` 表示不发送、完全由服务端默认值决定，通常偏小 |
+| `completions-path` | `/v1/chat/completions` | 兼容接口的路径 |
+| `timeout-ms` | `120000` | 单次请求超时。推理模型的思考时间不可控，不要设得太小 |
+| `json-mode` | `true` | 是否带 `response_format: {"type":"json_object"}`；不认这个字段的服务商会在 400 后被自动去掉，也可直接关掉 |
+| `max-input-chars` | `60000` | 快照字符上限，超了从末尾丢内容（先段落、再表格、再工作表）并告警 |
+| `max-attempts` | `3` | 含首次在内的最大尝试次数：自检没过就把错误回灌给模型重来 |
+| `trace-enabled` | `true` | 是否记录每次尝试的提示词、思考过程、回答原文与用量。提示词里是文档全文，可能含业务数据，涉敏时关掉；关掉只影响详情页展示 |
+| `trace-retention-days` | `30` | 思维链保留天数，`0` 表示不清理。启动时删一次过期记录，不引定时任务 |
+| `stream` | `true` | 是否用流式响应调模型。开启后思考过程与正文边生成边落进思维链，详情里能看到内容持续增长；服务端不认 `stream` 时自动退回一次性返回 |
+| `import.threads` | `1` | AI 导入任务的后台线程数。一次导入要跑几十秒到几分钟，并发几路只会互相抢限流 |
+| `import.queue-capacity` | `50` | 导入队列长度；满了直接拒绝（任务保持未开始），不会把内存堆起来 |
+| `extra-body` | 空 | 原样并入请求体的厂商私有字段，用于关闭思考、调推理强度、传 `chat_template_kwargs` 这类只有某家认的开关。键名和取值以服务商文档为准，各家互不通用；`messages` 与 `stream` 不允许覆盖 |
+
+宿主注册一个 `DocTemplateAiClient` Bean 就完全接管模型调用，这一整段配置都不参与。
+
 ## 完整示例
 
 ```yaml
@@ -93,4 +124,13 @@ doc-template:
     allowed-hosts:
       - api.internal.example.com
       - "*.example.com"
+
+  # ai 整段不配 = 不启用「让模型出标记计划」（推荐默认）
+  ai:
+    enabled: true
+    base-url: https://api.deepseek.com
+    api-key: ${AI_API_KEY}
+    model: deepseek-chat
+    max-attempts: 3
+    stream: true
 ```
