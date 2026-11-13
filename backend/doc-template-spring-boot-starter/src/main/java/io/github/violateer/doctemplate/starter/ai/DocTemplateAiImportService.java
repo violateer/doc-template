@@ -345,8 +345,9 @@ public class DocTemplateAiImportService {
      */
     public Map<String, Object> apply(long id, DocTemplateMarkPlan plan) throws Exception {
         DocTemplateAiImportEntity task = require(id);
-        if (task.getTemplateId() != null)
-            throw new IllegalArgumentException("该任务已生成模板（ID " + task.getTemplateId()
+        Long resolved = resolveTemplateId(task);
+        if (resolved != null)
+            throw new IllegalArgumentException("该任务已生成模板（ID " + resolved
                     + "），如需调整请在模板里重新标注");
         if ("RUNNING".equals(task.getStatus()))
             throw new IllegalArgumentException("该任务正在执行，请等待完成或先取消");
@@ -590,8 +591,9 @@ public class DocTemplateAiImportService {
     private Map<String, Object> applyTemplate(DocTemplateAiImportEntity task,
                                               DocTemplateAnnotateService.Source source,
                                               DocTemplateMarkPlan plan) throws Exception {
-        if (task.getTemplateId() == null) return applyNewTemplate(task, source, plan);
-        long templateId = task.getTemplateId();
+        Long resolved = resolveTemplateId(task);
+        if (resolved == null) return applyNewTemplate(task, source, plan);
+        long templateId = resolved;
         Map<String, Object> precheck = annotate.check(source.bytes(), source.fileType(), plan);
         if (!Boolean.TRUE.equals(precheck.get("ok")))
             throw new IllegalArgumentException("模板自检没通过，没有写回：" + precheck.get("error"));
@@ -603,6 +605,37 @@ public class DocTemplateAiImportService {
         log.info("AI 导入结果写回已有模板：id={}，templateId={}，{} 个数据块",
                 task.getId(), templateId, plan.blocks().size());
         return applied;
+    }
+
+    /**
+     * 这次落库该写回哪个模板。
+     *
+     * <p>正常情况就是任务上的 {@code template_id}。它为空（失败、取消过的老任务会丢关联）或指向的模板
+     * 已经被删掉时，按任务上的模板编码再找一次：编码在创建任务时就校验过全局唯一，同编码的模板
+     * 只可能是这条任务自己建出来的，找回后照常写回，不再新建一个同编码模板。</p>
+     */
+    private Long resolveTemplateId(DocTemplateAiImportEntity task) {
+        Long linked = task.getTemplateId();
+        if (linked != null && templateExists(linked)) return linked;
+        String code = task.getTemplateCode();
+        if (StrUtil.isBlank(code)) return null;
+        for (Map<String, Object> template : templates.templates()) {
+            if (!code.equalsIgnoreCase(String.valueOf(template.get("template_code")))) continue;
+            long found = Long.parseLong(String.valueOf(template.get("id")));
+            log.warn("AI 导入任务 {} 的模板关联已失效（templateId={}），按模板编码 {} 找回模板 {}",
+                    task.getId(), linked, code, found);
+            return found;
+        }
+        return null;
+    }
+
+    private boolean templateExists(long templateId) {
+        try {
+            templates.template(templateId);
+            return true;
+        } catch (NoSuchElementException gone) {
+            return false;
+        }
     }
 
     /* ------------------------------------------------------------ 内部工具 */

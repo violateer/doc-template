@@ -1,12 +1,4 @@
-import type {
-  AiImportDetail,
-  AiImportProgress,
-  AiImportRow,
-  AiStatus,
-  CheckResult,
-  MarkPlan,
-  PageResult
-} from './types';
+import type { AiImportDetail, AiImportProgress, AiImportRow, AiStatus, PageResult } from './types';
 
 declare global {
   interface Window {
@@ -126,16 +118,6 @@ export async function apiBlob(path: string): Promise<Blob> {
 }
 
 /**
- * 带 JSON body 的二进制接口。
- *
- * <p>标注预览是 POST（计划在 body 里），没法用地址拼出来，所以单独开一个。</p>
- */
-export async function apiPostBlob(path: string, body: unknown): Promise<Blob> {
-  const response = await request(path, { method: 'POST', body: JSON.stringify(body) });
-  return response.blob();
-}
-
-/**
  * 当前运行的后端（Starter）版本号，显示在左侧栏底部。
  * 老版本 Starter 没有这个接口，取不到时返回空串，页面只显示「Starter」。
  */
@@ -217,14 +199,3 @@ export const rerunAiImport = (id: number | string) =>
 
 export const deleteAiImport = (id: number | string) =>
   api(`/ai/imports/${id}`, { method: 'DELETE' });
-
-/** 改完计划后重新自检（落笔 + 生成 SQL + 渲染一次，都在任务文件上做）。 */
-export const checkAiImport = (id: number | string, plan: MarkPlan) =>
-  api<CheckResult>(`/ai/imports/${id}/check`, { method: 'POST', body: JSON.stringify(plan) });
-
-export const previewAiImport = (id: number | string, mode: 'template' | 'render', plan: MarkPlan) =>
-  apiPostBlob(`/ai/imports/${id}/preview?mode=${mode}`, plan);
-
-/** 按改过的计划落库：建模板、版本与数据块。 */
-export const applyAiImport = (id: number | string, plan: MarkPlan) =>
-  api<AiImportDetail>(`/ai/imports/${id}/apply`, { method: 'POST', body: JSON.stringify(plan) });

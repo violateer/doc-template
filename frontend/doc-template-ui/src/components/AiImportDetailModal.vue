@@ -4,7 +4,6 @@ import {
   NAlert,
   NButton,
   NEmpty,
-  NInput,
   NModal,
   NSpace,
   NSpin,
@@ -12,25 +11,15 @@ import {
   useDialog,
   useMessage
 } from 'naive-ui';
-import {
-  applyAiImport,
-  cancelAiImport,
-  checkAiImport,
-  fetchAiImport,
-  fetchAiImportProgress,
-  previewAiImport,
-  rerunAiImport,
-  startAiImport
-} from '../api';
-import type { AiImportDetail, AiImportProgress, AiTraceRow, CheckResult, MarkPlan } from '../types';
+import { cancelAiImport, fetchAiImport, fetchAiImportProgress, rerunAiImport, startAiImport } from '../api';
+import type { AiImportDetail, AiImportProgress, AiTraceRow } from '../types';
 import { AI_STAGES, aiStatusMeta, formatElapsed, stageIndex, stageLabel } from '../aiImport';
-import { formatTime, prettyJson, tryParseJson } from '../utils';
-import FilePreviewModal from './FilePreviewModal.vue';
+import { formatTime } from '../utils';
 
 /**
- * 导入任务详情：看阶段、看失败原因、改计划、预览、落库。
+ * 导入任务详情：看状态与阶段、看失败原因、看每次尝试的思维链。
  *
- * <p>执行期间每 1.5 秒拉一次详情，进入终态就停 —— 不引 SSE / WebSocket，
+ * <p>执行期间每秒拉一次详情，进入终态就停 —— 不引 SSE / WebSocket，
  * 一次导入最多几分钟，轮询的代价远小于多一套长连接。点「开始导入 / 重新分析」之后
  * 后台线程还没接手时任务仍是 {@code PENDING}，所以这一小段也要继续拉，
  * 否则页面会停在「待开始」，只能靠手动刷新才看到进度。</p>
@@ -52,15 +41,7 @@ const visible = computed({
 
 const detail = ref<AiImportDetail | null>(null);
 const loading = ref(false);
-const planText = ref('');
-const planError = ref('');
-const checked = ref<CheckResult | null>(null);
-const checking = ref(false);
-const applying = ref(false);
 const acting = ref(false);
-const previewShow = ref(false);
-const previewBlob = ref<Blob | null>(null);
-const previewName = ref('');
 /** 刚点过「开始导入 / 重新分析」，后台线程尚未接手（任务还是 PENDING） */
 const watching = ref(false);
 /**
@@ -78,18 +59,19 @@ let autoExpandedId = 0;
 const bodyRef = ref<HTMLElement | null>(null);
 /** 已经补齐过提示词的尝试 id（轮询接口不带提示词，新尝试要单独取一次） */
 const promptFilled = new Set<number>();
-/** 上一次从服务端读到的计划原文，用来判断要不要覆盖文本框里的内容 */
-let lastPlanJson: string | null = null;
 
 /**
  * 打字机显示：轮询一次拿到一整段（后端每 800ms 落一次库），直接渲染就是一大块文字跳出来。
  *
  * <p>这里把目标文本按帧铺开：每帧露出剩余长度的一部分，大致用一秒追平一次轮询间隔，
  * 看起来就是模型在一个字一个字往外写。{@code traceId} 是当前打的是哪一次尝试，
- * 放进同一个响应式对象里，切换时模板才会跟着换。</p>
+ * 放进同一个响应式对象里，切换时模板才会跟着换。生成结束的那一次轮询不再逐帧追，
+ * 未铺开的尾部直接补齐，避免任务完成后还要等一秒才看到全文。</p>
  */
 const typed = reactive({ traceId: 0, reasoning: '', content: '' });
 let typedTarget = { reasoning: '', content: '' };
+/** 两块文本上一轮对齐到的目标长度，用来判断这一轮有没有新增内容 */
+let typedKnown = { reasoning: 0, content: 0 };
 let typeTimer: ReturnType<typeof setTimeout> | null = null;
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,16 +107,52 @@ function toggleTrace(id: number) {
     : [...openTraceIds.value, id];
 }
 
-/** 把正在输出的那块内容滚到底。用户自己往上翻过就不要再抢滚动位置。 */
-async function stickToBottom() {
+/** 正在输出的那次尝试里的文本块；找不到时退回最后一个尝试。 */
+function tracePreList(): HTMLPreElement[] {
+  const body = bodyRef.value;
+  if (!body) return [];
+  const live = body.querySelector('.trace-item.is-typing .trace-body');
+  if (live) return [...live.querySelectorAll('pre')];
+  const items = body.querySelectorAll('.trace-item');
+  if (!items.length) return [];
+  return [...items[items.length - 1].querySelectorAll('.trace-body pre')];
+}
+
+/**
+ * 把思维链内容滚到底。
+ *
+ * <p>非 {@code force} 时只在原本就贴底的情况下跟到底，用户自己往上翻过就不抢位置。
+ * {@code force} 不做任何判断：一次性补齐一大段之后 {@code scrollHeight} 会突然变长，
+ * 事后的间距已经无法区分「补齐」和「用户翻过」；补齐后浏览器还要重排一次，
+ * 所以等一帧再补滚一次。</p>
+ */
+async function stickToBottom(force = false) {
   await nextTick();
-  const body = bodyRef.value?.querySelector('.trace-item.is-typing .trace-body');
-  if (!body) return;
-  body.querySelectorAll('pre').forEach((pre) => {
-    const gap = pre.scrollHeight - pre.scrollTop - pre.clientHeight;
-    if (gap > 60) return;
+  scrollTraceToBottom(force);
+  if (!force) return;
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  scrollTraceToBottom(true);
+}
+
+function scrollTraceToBottom(force: boolean) {
+  tracePreList().forEach((pre) => {
+    if (!force) {
+      const gap = pre.scrollHeight - pre.scrollTop - pre.clientHeight;
+      if (gap > 60) return;
+    }
     pre.scrollTop = pre.scrollHeight;
   });
+  if (!force) return;
+  // 补齐后整块可能超出弹窗可视区，正文容器一并到底
+  const body = bodyRef.value;
+  if (body) body.scrollTop = body.scrollHeight;
+}
+
+/** 当前是否贴在底部：必须在内容变长之前调用，事后再测就分不清是补齐还是用户翻过。 */
+function isAtBottom() {
+  const list = tracePreList();
+  if (!list.length) return true;
+  return list.every((pre) => pre.scrollHeight - pre.scrollTop - pre.clientHeight <= 60);
 }
 
 /** 流式中的那次尝试显示打字机文本，其余直接显示落库内容。 */
@@ -168,8 +186,9 @@ function typeTick() {
     typed[key] = target.slice(0, shown.length + step);
     moving = true;
   });
+  if (!moving) return;
   void stickToBottom();
-  if (moving) typeTimer = setTimeout(typeTick, 16);
+  typeTimer = setTimeout(typeTick, 16);
 }
 
 function startTyping() {
@@ -187,6 +206,7 @@ function stopTyping() {
 function resetTyped() {
   typed.traceId = 0;
   typedTarget = { reasoning: '', content: '' };
+  typedKnown = { reasoning: 0, content: 0 };
   typed.reasoning = '';
   typed.content = '';
   stopTyping();
@@ -195,7 +215,9 @@ function resetTyped() {
 /**
  * 每次拿到新详情后对齐打字机。
  *
- * <p>已经开始的尝试即使本轮生成结束也继续把剩下的字打完，不然结尾会突然整段跳出来；
+ * <p>只有「这一轮确实新增了内容」的那一块才逐帧铺开；没有新增的块直接补齐。
+ * 这样思考过程写完、回答开始输出之后，思考过程立刻完整显示，不会在回答往外冒的
+ * 同时还在一个字一个字地补。本轮生成结束（任务不再运行或该次尝试已报错）时两块都补齐；
  * 打开一个早已结束的任务则直接用落库内容，不重放一遍。</p>
  */
 function syncTyped() {
@@ -205,16 +227,39 @@ function syncTyped() {
     resetTyped();
     return;
   }
+  const streaming = isStreaming(last);
   if (typed.traceId !== last.id) {
-    if (!isStreaming(last)) {
+    if (!streaming) {
       resetTyped();
       return;
     }
     typed.traceId = last.id;
     typed.reasoning = '';
     typed.content = '';
+    typedKnown = { reasoning: 0, content: 0 };
   }
-  typedTarget = { reasoning: last.reasoning ?? '', content: last.content ?? '' };
+  const nextTarget = { reasoning: last.reasoning ?? '', content: last.content ?? '' };
+  // 补齐前先记下是否贴底：补一大段之后间距必然变大，事后再测就分不清是补齐还是用户翻过
+  const stuck = isAtBottom();
+  // 回答原文已经开始输出，说明模型已经进入作答阶段，思考过程视为定型
+  const answering = nextTarget.content.length > 0;
+  let settled = false;
+  (['reasoning', 'content'] as const).forEach((key) => {
+    const target = nextTarget[key];
+    const grown = target.length > typedKnown[key];
+    typedKnown[key] = target.length;
+    const settle = !streaming || !grown || (key === 'reasoning' && answering);
+    if (!settle) return;
+    if (typed[key] !== target) settled = true;
+    typed[key] = target;
+  });
+  typedTarget = nextTarget;
+  // 生成结束（接口返回终态）无条件滚到底；生成中的补齐仍尊重「用户翻过就不抢」
+  if (settled) void stickToBottom(!streaming || stuck);
+  if (!streaming) {
+    stopTyping();
+    return;
+  }
   startTyping();
 }
 
@@ -255,9 +300,6 @@ const canRerun = computed(
 const canCancel = computed(
   () => !!detail.value && (detail.value.status === 'PENDING' || detail.value.status === 'RUNNING')
 );
-const canApply = computed(
-  () => !!detail.value && detail.value.template_id === null && detail.value.status !== 'RUNNING'
-);
 /** 正文里的操作区：右上角只放重新分析与查看模板，删除只在列表页做 */
 const hasBodyActions = computed(() => canStart.value || canCancel.value);
 
@@ -270,10 +312,6 @@ watch(
       return;
     }
     watching.value = false;
-    lastPlanJson = null;
-    planText.value = '';
-    checked.value = null;
-    planError.value = '';
     openTraceIds.value = [];
     autoExpandedId = 0;
     promptFilled.clear();
@@ -292,14 +330,6 @@ function stopPolling() {
     clearTimeout(pollTimer);
     pollTimer = null;
   }
-}
-
-/** 计划原文变了才覆盖文本框，否则用户改到一半的内容会被轮询冲掉。 */
-function syncPlanText(planJson: string | null) {
-  if (!planJson || planJson === lastPlanJson) return;
-  lastPlanJson = planJson;
-  const parsed = tryParseJson(planJson);
-  planText.value = parsed.ok ? prettyJson(parsed.value) : planJson;
 }
 
 /**
@@ -384,13 +414,16 @@ async function load(id: number, silent = false) {
       const data = await fetchAiImport(id);
       detail.value = data;
       data.traces.forEach((trace) => promptFilled.add(trace.id));
-      syncPlanText(data.plan_json);
     }
     const data = detail.value;
     if (!data) return;
     autoExpandLatest();
     syncTyped();
-    void stickToBottom();
+    // 轮询拿到终态：无条件滚到底，保证一次性补齐的最后一段一定可见；
+    // 首次打开（非轮询）保持原位，让用户从头看
+    const finished =
+      data.status === 'SUCCEEDED' || data.status === 'FAILED' || data.status === 'CANCELED';
+    void stickToBottom(silent && finished);
     // 轮询里出现没取过提示词的尝试，单独补一次
     const missing = data.traces.find(
       (trace) => !promptFilled.has(trace.id) && !trace.user_prompt && !trace.system_prompt
@@ -449,10 +482,6 @@ async function rerun() {
     try {
       await rerunAiImport(detail.value.id);
       watching.value = true;
-      lastPlanJson = null;
-      planText.value = '';
-      checked.value = null;
-      planError.value = '';
       // 上一轮的思维链已经被后端清掉，本地展开状态、提示词缓存与打字机一并复位，
       // 否则新一次尝试会继承旧 id 的展开状态，提示词也会被当成「已经取过」
       openTraceIds.value = [];
@@ -502,68 +531,6 @@ async function cancel() {
   }
 }
 
-/** 把文本框里的 JSON 解析成计划；写错了就地把原因显示出来，不发请求。 */
-function parsePlan(): MarkPlan | null {
-  const parsed = tryParseJson(planText.value);
-  if (!parsed.ok) {
-    planError.value = `计划不是合法 JSON：${parsed.error}`;
-    return null;
-  }
-  planError.value = '';
-  return parsed.value as MarkPlan;
-}
-
-async function recheck() {
-  if (!detail.value) return;
-  const plan = parsePlan();
-  if (!plan) return;
-  checking.value = true;
-  try {
-    const result = await checkAiImport(detail.value.id, plan);
-    checked.value = result;
-    if (result.ok) {
-      message.success('自检通过');
-    } else {
-      planError.value = result.error ?? '自检没通过';
-    }
-  } catch (e: any) {
-    planError.value = e.message;
-  } finally {
-    checking.value = false;
-  }
-}
-
-async function openPreview(mode: 'template' | 'render') {
-  if (!detail.value) return;
-  const plan = parsePlan();
-  if (!plan) return;
-  try {
-    previewBlob.value = await previewAiImport(detail.value.id, mode, plan);
-    previewName.value = mode === 'template' ? '模板（标记可见）' : '效果预览';
-    previewShow.value = true;
-  } catch (e: any) {
-    message.error(e.message);
-  }
-}
-
-async function apply() {
-  if (!detail.value) return;
-  const plan = parsePlan();
-  if (!plan) return;
-  applying.value = true;
-  try {
-    const updated = await applyAiImport(detail.value.id, plan);
-    detail.value = updated;
-    lastPlanJson = updated.plan_json;
-    message.success('已保存：模板、版本与数据块已创建');
-    emit('changed');
-  } catch (e: any) {
-    message.error(e.message);
-  } finally {
-    applying.value = false;
-  }
-}
-
 function openTemplate() {
   if (detail.value?.template_id) emit('open-template', detail.value.template_id);
 }
@@ -610,26 +577,29 @@ function traceChars(trace: AiTraceRow) {
 
     <NSpin :show="loading">
       <div v-if="detail" ref="bodyRef" class="modal-body">
-        <div class="detail-head">
-          <NTag size="small" :bordered="false" :type="statusMeta.type">{{ statusMeta.label }}</NTag>
-          <span class="stage-text">{{ stageText }}</span>
-          <span v-if="currentStage" class="stage-step">{{ stepIndex }} / {{ AI_STAGES.length }}</span>
-          <span class="head-sep" />
-          <span class="muted">耗时 {{ formatElapsed(detail.elapsed_ms) }}</span>
-          <span class="head-sep" />
-          <span class="muted">创建 {{ formatTime(detail.create_time) }}</span>
-        </div>
+        <!-- 状态与阶段固定在顶部：详情很长，滚到计划 JSON 或思维链时仍要能看见当前在哪一步 -->
+        <div class="detail-top">
+          <div class="detail-head">
+            <NTag size="small" :bordered="false" :type="statusMeta.type">{{ statusMeta.label }}</NTag>
+            <span class="stage-text">{{ stageText }}</span>
+            <span v-if="currentStage" class="stage-step">{{ stepIndex }} / {{ AI_STAGES.length }}</span>
+            <span class="head-sep" />
+            <span class="muted">耗时 {{ formatElapsed(detail.elapsed_ms) }}</span>
+            <span class="head-sep" />
+            <span class="muted">创建 {{ formatTime(detail.create_time) }}</span>
+          </div>
 
-        <div class="stage-rail" :class="{ 'is-succeeded': succeeded }">
-          <span
-            v-for="segment in segments"
-            :key="segment.stage"
-            class="rail-seg"
-            :class="`is-${segment.state}`"
-            :title="segment.label"
-          >
-            <i class="rail-fill" />
-          </span>
+          <div class="stage-rail" :class="{ 'is-succeeded': succeeded }">
+            <span
+              v-for="segment in segments"
+              :key="segment.stage"
+              class="rail-seg"
+              :class="`is-${segment.state}`"
+              :title="segment.label"
+            >
+              <i class="rail-fill" />
+            </span>
+          </div>
         </div>
 
         <NAlert v-if="detail.error_message" type="error" :bordered="false" style="margin: 12px 0">
@@ -657,66 +627,6 @@ function traceChars(trace: AiTraceRow) {
             <NTag size="small" :bordered="false">第 {{ item.attempt }} 次 · {{ stageLabel(item.stage) }}</NTag>
             <span>{{ item.error }}</span>
           </div>
-        </template>
-
-        <div class="section-title">计划 JSON（可改，改完点「重新自检」）</div>
-        <NAlert v-if="planError" type="error" :bordered="false" style="margin-bottom: 10px">
-          {{ planError }}
-        </NAlert>
-        <NInput
-          v-model:value="planText"
-          type="textarea"
-          :autosize="{ minRows: 10, maxRows: 22 }"
-          class="plan-input"
-          placeholder="模型给出计划后显示在这里；也可以按快照手写一份"
-        />
-        <NSpace style="margin-top: 10px">
-          <NButton size="small" :loading="checking" :disabled="!planText.trim()" @click="recheck">
-            重新自检
-          </NButton>
-          <NButton size="small" :disabled="!planText.trim()" @click="openPreview('template')">
-            看模板（标记可见）
-          </NButton>
-          <NButton size="small" :disabled="!planText.trim()" @click="openPreview('render')">
-            看效果（模拟数据）
-          </NButton>
-          <NButton
-            v-if="canApply"
-            type="primary"
-            size="small"
-            :loading="applying"
-            :disabled="!planText.trim()"
-            @click="apply"
-          >
-            保存为模板
-          </NButton>
-        </NSpace>
-
-        <template v-if="checked">
-          <NAlert v-if="checked.ok" type="success" :bordered="false" style="margin-top: 12px">
-            自检通过：{{ checked.blocks?.length ?? 0 }} 个数据块，{{ checked.placeholders?.length ?? 0 }} 个占位符
-          </NAlert>
-          <NAlert
-            v-for="(warning, index) in checked.warnings ?? []"
-            :key="`w-${index}`"
-            type="warning"
-            :bordered="false"
-            style="margin-top: 8px"
-          >
-            {{ warning }}
-          </NAlert>
-          <NAlert v-if="checked.unbound?.length" type="info" :bordered="false" style="margin-top: 8px">
-            以下占位符不属于任何数据块，生成时需手工填写：{{ checked.unbound.join('、') }}
-          </NAlert>
-          <NAlert
-            v-for="(item, index) in checked.suggestions ?? []"
-            :key="`s-${index}`"
-            type="success"
-            :bordered="false"
-            style="margin-top: 8px"
-          >
-            {{ item.block }}.{{ item.field }}：{{ item.reason }}
-          </NAlert>
         </template>
 
         <div class="section-title">思维链（{{ detail.traces.length }} 次尝试）</div>
@@ -765,13 +675,6 @@ function traceChars(trace: AiTraceRow) {
         <NButton @click="visible = false">关闭</NButton>
       </NSpace>
     </template>
-
-    <FilePreviewModal
-      v-model:show="previewShow"
-      src=""
-      :blob="previewBlob"
-      :filename="`${detail?.template_name || 'preview'}.${(detail?.file_type || 'docx').toLowerCase()}`"
-    />
   </NModal>
 </template>
 
@@ -781,6 +684,16 @@ function traceChars(trace: AiTraceRow) {
   max-height: calc(100vh - 260px);
   overflow-y: auto;
   padding-right: 6px;
+}
+/* 状态与阶段吸在内容区顶部：滚到计划 JSON 或思维链时仍看得见当前在哪一步。
+   底色与卡片一致，否则下面的内容会从字缝里透出来 */
+.detail-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--panel);
 }
 /* 标题栏右侧的小按钮：重新分析 / 查看模板 */
 .head-actions {
@@ -815,7 +728,7 @@ function traceChars(trace: AiTraceRow) {
 .stage-rail {
   display: flex;
   gap: 4px;
-  margin: 10px 0 16px;
+  margin: 10px 0 0;
 }
 .rail-seg {
   position: relative;
@@ -898,10 +811,6 @@ function traceChars(trace: AiTraceRow) {
   align-items: flex-start;
   margin-bottom: 6px;
   font-size: 13px;
-}
-.plan-input :deep(textarea) {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
 }
 .trace-label {
   margin: 8px 0 4px;

@@ -116,18 +116,26 @@ public class DocTemplateAiImportRepository {
     /**
      * 结束任务。计划单独用 {@link #updatePlan(long, String)} 写，所以这里不动它 ——
      * 失败时反而要保留上一次自检通过的计划，供人改完重试。
+     *
+     * <p>{@code templateId} 为 {@code null} 时不动 {@code template_id} 这一列：失败与取消不能抹掉
+     * 「这条任务已经产出过哪个模板」，否则再点「重新分析」会被当成新任务去建模板，
+     * 撞上模板编码唯一约束。</p>
      */
     public void finish(long id, String status, Long templateId, String errorMessage,
                        LocalDateTime finishTime, Long elapsedMs) {
-        jdbc.update("UPDATE doc_template_ai_import SET status = :status, template_id = :templateId,"
-                        + " error_message = :errorMessage, finish_time = :finishTime,"
-                        + " elapsed_ms = :elapsedMs WHERE id = :id",
-                new MapSqlParameterSource("id", id)
-                        .addValue("status", status)
-                        .addValue("templateId", templateId, Types.BIGINT)
-                        .addValue("errorMessage", errorMessage, Types.VARCHAR)
-                        .addValue("finishTime", finishTime, Types.TIMESTAMP)
-                        .addValue("elapsedMs", elapsedMs, Types.BIGINT));
+        MapSqlParameterSource params = new MapSqlParameterSource("id", id)
+                .addValue("status", status)
+                .addValue("errorMessage", errorMessage, Types.VARCHAR)
+                .addValue("finishTime", finishTime, Types.TIMESTAMP)
+                .addValue("elapsedMs", elapsedMs, Types.BIGINT);
+        String setTemplate = "";
+        if (templateId != null) {
+            setTemplate = ", template_id = :templateId";
+            params.addValue("templateId", templateId, Types.BIGINT);
+        }
+        jdbc.update("UPDATE doc_template_ai_import SET status = :status" + setTemplate
+                        + ", error_message = :errorMessage, finish_time = :finishTime,"
+                        + " elapsed_ms = :elapsedMs WHERE id = :id", params);
     }
 
     /**
