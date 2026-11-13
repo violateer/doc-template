@@ -65,7 +65,7 @@
 | `POST` | `/ai/imports` | 新建任务（multipart：`file`、`templateName`、`templateCode?`、`hint?`）。`templateCode` 留空按文件名生成；**不建模板** |
 | `GET` | `/ai/imports` | 分页列表，`page` / `size` / `status` / `keyword`（文件名、模板名、编码、发起人） |
 | `GET` | `/ai/imports/{id}` | 详情：状态、阶段、阶段顺序、失败原因、计划原文、每次尝试的思维链 |
-| `GET` | `/ai/imports/{id}/progress` | 轮询用的轻量进度：状态、阶段、思维链正文（含流式中间结果），不含提示词与计划原文 |
+| `GET` | `/ai/imports/{id}/progress` | 轮询用的轻量进度：状态、阶段、思维链正文（含流式中间结果），不含计划原文 |
 | `POST` | `/ai/imports/{id}/start` | 进队列后台执行，立即返回；`PENDING` / `FAILED` / `CANCELED` 可执行 |
 | `POST` | `/ai/imports/{id}/cancel` | 未开始的直接取消；执行中的置取消标志并中断，下一次调模型前停下 |
 | `POST` | `/ai/imports/{id}/rerun` | 重新分析：清掉上一次的阶段、计划、失败原因、耗时与思维链记录，再走一遍完整流程。已生成模板的任务结果写回原模板（新增版本、按新计划重建数据块）；分析失败时模板不变 |

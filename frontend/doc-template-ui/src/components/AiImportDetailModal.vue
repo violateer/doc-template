@@ -57,8 +57,6 @@ const openTraceIds = ref<number[]>([]);
 let autoExpandedId = 0;
 /** 弹窗正文容器：自动滚动要在这个范围内找流式块 */
 const bodyRef = ref<HTMLElement | null>(null);
-/** 已经补齐过提示词的尝试 id（轮询接口不带提示词，新尝试要单独取一次） */
-const promptFilled = new Set<number>();
 
 /**
  * 打字机显示：轮询一次拿到一整段（后端每 800ms 落一次库），直接渲染就是一大块文字跳出来。
@@ -314,7 +312,6 @@ watch(
     watching.value = false;
     openTraceIds.value = [];
     autoExpandedId = 0;
-    promptFilled.clear();
     resetTyped();
     void load(id);
   }
@@ -335,22 +332,12 @@ function stopPolling() {
 /**
  * 把轮询拿到的轻量进度合并进当前详情。
  *
- * <p>进度里没有提示词与计划原文（一次尝试的 user 提示词可达几万字符），
- * 所以提示词按思维链行的 id 从上一份详情里继承；失败原因由带 error 的行现算，
+ * <p>进度里没有计划原文，沿用上一份详情里的值；失败原因由带 error 的行现算，
  * 与后端那个查询是同一份数据。</p>
  */
 function mergeProgress(progress: AiImportProgress): AiImportDetail {
   const current = detail.value;
-  const previous = new Map((current?.traces ?? []).map((trace) => [trace.id, trace]));
-  const traces = (progress.traces ?? []).map((trace) => {
-    const old = previous.get(trace.id);
-    if (!old) return trace;
-    return {
-      ...trace,
-      system_prompt: trace.system_prompt ?? old.system_prompt,
-      user_prompt: trace.user_prompt ?? old.user_prompt
-    };
-  });
+  const traces = progress.traces ?? [];
   const failures = traces
     .filter((trace) => trace.error)
     .map((trace) => ({
@@ -361,36 +348,6 @@ function mergeProgress(progress: AiImportProgress): AiImportDetail {
     }));
   const base = current ?? ({ plan_json: null } as unknown as AiImportDetail);
   return { ...base, ...progress, traces, failures };
-}
-
-/**
- * 补齐提示词：轻量进度接口不带提示词，新尝试（尤其是重新分析之后）本地也没有旧值可继承。
- *
- * <p>按思维链行的 id 记一次，每行只补一次；把整份详情取回来只取提示词两列，
- * 正文仍用轮询里的新值，避免用旧快照盖掉正在增长的内容。</p>
- */
-async function fillPrompts(importId: number, traceId: number) {
-  try {
-    const full = await fetchAiImport(importId);
-    const sources = new Map(full.traces.map((trace) => [trace.id, trace]));
-    const current = detail.value;
-    if (!current) return;
-    detail.value = {
-      ...current,
-      traces: current.traces.map((trace) => {
-        const source = sources.get(trace.id);
-        if (!source) return trace;
-        return {
-          ...trace,
-          system_prompt: trace.system_prompt ?? source.system_prompt,
-          user_prompt: trace.user_prompt ?? source.user_prompt
-        };
-      })
-    };
-  } catch {
-    // 取不到就让下一次轮询再试
-    promptFilled.delete(traceId);
-  }
 }
 
 /** 新一轮尝试开始时把它的折叠项展开一次，让流式内容直接可见。 */
@@ -411,9 +368,7 @@ async function load(id: number, silent = false) {
     if (silent) {
       detail.value = mergeProgress(await fetchAiImportProgress(id));
     } else {
-      const data = await fetchAiImport(id);
-      detail.value = data;
-      data.traces.forEach((trace) => promptFilled.add(trace.id));
+      detail.value = await fetchAiImport(id);
     }
     const data = detail.value;
     if (!data) return;
@@ -424,14 +379,6 @@ async function load(id: number, silent = false) {
     const finished =
       data.status === 'SUCCEEDED' || data.status === 'FAILED' || data.status === 'CANCELED';
     void stickToBottom(silent && finished);
-    // 轮询里出现没取过提示词的尝试，单独补一次
-    const missing = data.traces.find(
-      (trace) => !promptFilled.has(trace.id) && !trace.user_prompt && !trace.system_prompt
-    );
-    if (missing) {
-      promptFilled.add(missing.id);
-      void fillPrompts(id, missing.id);
-    }
     if (data.status === 'SUCCEEDED' || data.status === 'FAILED' || data.status === 'CANCELED') {
       watching.value = false;
     }
@@ -482,11 +429,10 @@ async function rerun() {
     try {
       await rerunAiImport(detail.value.id);
       watching.value = true;
-      // 上一轮的思维链已经被后端清掉，本地展开状态、提示词缓存与打字机一并复位，
-      // 否则新一次尝试会继承旧 id 的展开状态，提示词也会被当成「已经取过」
+      // 上一轮的思维链已经被后端清掉，本地展开状态与打字机一并复位，
+      // 否则新一次尝试会继承旧 id 的展开状态
       openTraceIds.value = [];
       autoExpandedId = 0;
-      promptFilled.clear();
       resetTyped();
       message.success('已重新提交，后台分析中');
       await load(detail.value.id);
@@ -656,13 +602,6 @@ function traceChars(trace: AiTraceRow) {
               <pre class="trace-block" :class="{ 'is-live': isStreaming(trace) }">{{ shownReasoning(trace) }}</pre>
               <div class="trace-label">回答原文</div>
               <pre class="trace-block" :class="{ 'is-live': isStreaming(trace) }">{{ shownContent(trace) }}</pre>
-              <details class="prompt-block">
-                <summary>提示词（system / user）</summary>
-                <div class="trace-label">system</div>
-                <pre class="trace-block">{{ trace.system_prompt || '（空）' }}</pre>
-                <div class="trace-label">user</div>
-                <pre class="trace-block">{{ trace.user_prompt || '（空）' }}</pre>
-              </details>
             </div>
           </div>
         </div>
@@ -923,24 +862,5 @@ function traceChars(trace: AiTraceRow) {
 /* 流式中的内容块左侧描一道主色，和已经结束的区分开 */
 .trace-block.is-live {
   border-left: 2px solid var(--primary);
-}
-/* 提示词用原生折叠：套一层 NCollapse 会叠出上下各一大段留白 */
-.prompt-block {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid #eef1f5;
-}
-.prompt-block > summary {
-  cursor: pointer;
-  color: #33404f;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.6;
-}
-.prompt-block > summary:hover {
-  color: #2f6fed;
-}
-.prompt-block .trace-label {
-  margin: 10px 0 4px;
 }
 </style>

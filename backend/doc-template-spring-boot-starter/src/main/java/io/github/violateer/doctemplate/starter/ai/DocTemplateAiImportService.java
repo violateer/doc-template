@@ -173,16 +173,16 @@ public class DocTemplateAiImportService {
     }
 
     /**
-     * 轻量进度：轮询用，形状与详情一致但<b>不含提示词</b>。
+     * 轻量进度：轮询用，形状与详情一致但不带计划原文。
      *
-     * <p>一次尝试的 user 提示词是整份文档快照，可达几万字符；流式期间页面每秒拉一次详情，
-     * 把这些内容重复传一遍既占带宽也拖慢渲染。提示词只在打开弹窗时取一次，之后用这个接口跟进。</p>
+     * <p>流式期间页面每秒拉一次，计划原文只在上一次落库时才变，重复传没有意义；
+     * 思维链正文要跟着涨，所以保留。</p>
      */
     public Map<String, Object> progress(long id) {
         DocTemplateAiImportEntity task = require(id);
         Map<String, Object> data = rowMap(task);
         data.put("stages", STAGES);
-        data.put("traces", traces.findByImportId(id).stream().map(this::liveTraceMap).toList());
+        data.put("traces", traces.findByImportId(id).stream().map(this::traceMap).toList());
         return data;
     }
 
@@ -659,12 +659,13 @@ public class DocTemplateAiImportService {
         return map;
     }
 
+    /**
+     * 思维链行：提示词只落库，不经接口返回。
+     *
+     * <p>提示词里是整份文档快照与内部系统说明，属于实现细节：页面不展示，接口也不返回，
+     * 需要排查时直接查表。</p>
+     */
     private Map<String, Object> traceMap(DocTemplateAiTraceEntity trace) {
-        return DocTemplateJson.toMap(trace);
-    }
-
-    /** 轮询用的思维链行：去掉提示词，其余与详情一致。 */
-    private Map<String, Object> liveTraceMap(DocTemplateAiTraceEntity trace) {
         Map<String, Object> map = DocTemplateJson.toMap(trace);
         map.remove("system_prompt");
         map.remove("user_prompt");

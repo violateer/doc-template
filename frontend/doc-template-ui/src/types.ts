@@ -110,7 +110,7 @@ export interface AiStatus {
   model: string | null;
   max_attempts: number;
   max_input_chars: number;
-  /** 是否记录思维链；关掉时详情页不显示提示词与思考过程 */
+  /** 是否记录思维链；关掉时详情页不显示思考过程与回答原文 */
   trace_enabled?: boolean;
 }
 
@@ -140,15 +140,13 @@ export interface AiImportRow {
   can_delete?: boolean;
 }
 
-/** 一次尝试的记录：提示词、思考过程、回答原文与用量。 */
+/** 一次尝试的记录：思考过程、回答原文与用量。提示词只落库，接口不返回。 */
 export interface AiTraceRow {
   id: number;
   import_id: number;
   attempt: number;
   stage: string | null;
   model: string | null;
-  system_prompt: string | null;
-  user_prompt: string | null;
   reasoning: string | null;
   content: string | null;
   prompt_tokens: number | null;
@@ -168,7 +166,7 @@ export interface AiImportDetail extends AiImportRow {
 
 /**
  * 轮询用的轻量进度：形状与详情一致，但没有计划原文与失败原因汇总，
- * 思维链也不带 `system_prompt` / `user_prompt`（一次尝试的提示词可达几万字符）。
+ * 失败原因由前端按带 `error` 的思维链行现算。
  */
 export interface AiImportProgress extends Omit<AiImportDetail, 'plan_json' | 'failures' | 'traces'> {
   traces: AiTraceRow[];

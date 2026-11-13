@@ -182,7 +182,7 @@ export function createAiImport(
 export const fetchAiImports = (query: string) => api<PageResult<AiImportRow>>(`/ai/imports?${query}`);
 export const fetchAiImport = (id: number | string) => api<AiImportDetail>(`/ai/imports/${id}`);
 
-/** 轮询用的轻量进度：不含提示词与计划原文，流式期间每秒拉一次也不重。 */
+/** 轮询用的轻量进度：不含计划原文，流式期间每秒拉一次也不重。 */
 export const fetchAiImportProgress = (id: number | string) =>
   api<AiImportProgress>(`/ai/imports/${id}/progress`);
 
