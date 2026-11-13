@@ -1,19 +1,5 @@
 # 变更日志
 
-> 只记录**发布物**的变化：`doc-template-core`、`doc-template-spring-boot-starter`，
-> 以及随 Starter 一起发布的内嵌管理页（`frontend/doc-template-ui` 的产物打进
-> `META-INF/resources/doc-template/`，宿主升级 Starter 即生效）。
->
-> 写法约定：**按功能写，不写实现**。不出现类名、方法名、表名、SQL、配置项内部结构，
-> 管理页的条目同样不写组件名和 CSS 类名，只说「使用方能感知到什么变了」。
-> 判断标准是：宿主升级后需要做什么、能多用出什么能力；管理页写「页面上能做什么了」。
->
-> 不进这里的：`doc-template-example`（示例宿主，不在包范围）、文档站、部署脚本——
-> 这些随主仓提交即可。管理页源码的内部重构（拆组件、调样式、改类型定义）也不单独记，
-> 只有功能变化和问题修复才写一条。
->
-> 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
-
 ## [Unreleased]
 
 ### 修复
